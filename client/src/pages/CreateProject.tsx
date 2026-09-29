@@ -56,6 +56,14 @@ export default function CreateProject() {
 
   const update = (key: string, value: string | string[]) => setForm((f) => ({ ...f, [key]: value }));
 
+  // Switching project type must also reset property type to a valid option for
+  // that type — otherwise a leftover value (e.g. "Condominium" on a Commercial
+  // project) stays selected and gets submitted.
+  const selectProjectType = (type: string) => {
+    const firstProp = propertyTypes[type as keyof typeof propertyTypes]?.[0] ?? "";
+    setForm((f) => ({ ...f, projectType: type, propertyType: firstProp }));
+  };
+
   // Customers still in the pipeline (not already awarded) can seed a new project.
   const eligibleCustomers = inquiries.filter(
     (i) => !i.awardedProjectId && (i.stage === "new-inquiry" || i.stage === "showroom-meet"),
@@ -138,7 +146,7 @@ export default function CreateProject() {
     <div className="mobile-container">
       <AppHeader title="New Project" subtitle="CREATE PROJECT" showBack compact />
 
-      <div className="px-4 pb-32">
+      <div className="px-4 pb-32 lg:pb-6">
         {/* Step indicator */}
         <div className="py-4">
           <div className="flex items-center justify-between mb-3">
@@ -233,7 +241,7 @@ export default function CreateProject() {
                     {projectTypes.map((t) => (
                       <button
                         key={t}
-                        onClick={() => update("projectType", t)}
+                        onClick={() => selectProjectType(t)}
                         className="flex-1 py-2.5 rounded-xl text-xs font-label"
                         style={{
                           background: form.projectType === t ? "var(--acc-bright)" : "var(--s-2)",
