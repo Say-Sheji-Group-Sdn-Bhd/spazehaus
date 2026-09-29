@@ -103,17 +103,21 @@ export default function CreateQuotation() {
     setItems((prev) => prev.map((i) => i.id === id ? { ...i, [field]: value } : i));
   };
 
-  /** Pick the next available QT-YYYY-NNN id, looking at what's already in the DB. */
-  function nextQuotationId(prefix: "QT" | "INV" | "PI", year: number): string {
+  // Client numbering scheme (Sep 2026): <PREFIX><YY>-<NNN>, sequence starting 801.
+  // Quotations use "ID" (e.g. ID26-801); invoices "INV", proforma "PI".
+  const SERIES_START = 801;
+
+  /** Pick the next available <PREFIX><YY>-NNN id (e.g. ID26-801), based on the DB. */
+  function nextQuotationId(prefix: "ID" | "INV" | "PI", year: number): string {
     const padded = (n: number) => String(n).padStart(3, "0");
-    const yearPrefix = `${prefix}-${year}-`;
+    const seriesPrefix = `${prefix}${String(year % 100).padStart(2, "0")}-`; // e.g. ID26-
     const existing = existingQuotations
       .map((q) => q.id)
-      .filter((id) => id.startsWith(yearPrefix))
-      .map((id) => Number(id.slice(yearPrefix.length)))
+      .filter((id) => id.startsWith(seriesPrefix))
+      .map((id) => Number(id.slice(seriesPrefix.length)))
       .filter((n) => !Number.isNaN(n));
-    const next = (existing.length ? Math.max(...existing) : 0) + 1;
-    return `${yearPrefix}${padded(next)}`;
+    const next = existing.length ? Math.max(...existing) + 1 : SERIES_START;
+    return `${seriesPrefix}${padded(next)}`;
   }
 
   const handleSubmit = async () => {
@@ -126,7 +130,7 @@ export default function CreateQuotation() {
       return;
     }
     const year = new Date().getFullYear();
-    const prefix = docInfo.type === "Invoice" ? "INV" : docInfo.type === "Proforma Invoice" ? "PI" : "QT";
+    const prefix = docInfo.type === "Invoice" ? "INV" : docInfo.type === "Proforma Invoice" ? "PI" : "ID";
     const newId = nextQuotationId(prefix, year);
 
     try {

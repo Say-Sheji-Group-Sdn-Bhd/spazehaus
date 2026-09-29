@@ -1567,7 +1567,7 @@ export function useUpdateQuotationStatus() {
 }
 
 export type CreateQuotationArgs = {
-  id: string;                             // QT-YYYY-NNN
+  id: string;                             // ID26-801 (ID/INV/PI + 2-digit year + seq from 801)
   projectId: string;
   docType: QuotationRow["doc_type"];
   clientName: string;
