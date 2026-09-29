@@ -37,6 +37,10 @@ import type {
   ContactLogEntryDb,
   ProjectTaskRow,
   ProjectReviewRow,
+  SpacologyResultRow,
+  SpacologyAnswer,
+  SpacologyScores,
+  SpaceType,
   CustomerCategory,
   CustomerTier,
   InquiryStage,
@@ -283,6 +287,7 @@ export const qk = {
   sitePhotos: ["site_photos"] as const,
   projectSitePhotos: (id: string) => ["site_photos", id] as const,
   auditLog: (filters?: AuditLogFilters) => ["audit_log", filters ?? {}] as const,
+  spacologyResults: ["spacology_results"] as const,
 };
 
 // ─── AUDIT LOG ──────────────────────────────────────────────────────────────
@@ -2405,6 +2410,175 @@ export async function getSitePhotoUrl(storagePath: string, expiresInSec = 3600):
     .createSignedUrl(storagePath, expiresInSec);
   if (error || !data) return null;
   return data.signedUrl;
+}
+
+// ─── SPACOLOGY QUIZ RESULTS ─────────────────────────────────────────────────
+// Submissions from the public quiz on the marketing site (spazehaus.com/
+// spacology-quiz). Staff read them here; the rows themselves are written by the
+// `submit_spacology_result` RPC and are immutable except for `notes` and
+// `inquiry_id`. See migration 20260827000000_spacology_results.sql.
+
+/** Newest-first, capped — the page paginates client-side like the other lists.
+ *  1,000 is far above the realistic volume for a 5-question marketing quiz and
+ *  keeps a single fetch well inside PostgREST's default limits. */
+export function useSpacologyResults() {
+  return useQuery({
+    queryKey: qk.spacologyResults,
+    queryFn: async (): Promise<SpacologyResultRow[]> => {
+      const { data, error } = await supabase
+        .from("spacology_results")
+        .select("*")
+        .order("submitted_at", { ascending: false })
+        .limit(1000);
+      if (error) throw error;
+      return (data ?? []) as SpacologyResultRow[];
+    },
+  });
+}
+
+/** Staff annotation. The DB guard trigger rejects any attempt to touch the
+ *  submitted answers, so this is deliberately narrow. */
+export function useUpdateSpacologyNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; notes: string | null }): Promise<void> => {
+      const { data, error } = await supabase
+        .from("spacology_results")
+        .update({ notes: args.notes?.trim() || null })
+        .eq("id", args.id)
+        .select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("You don't have permission to annotate Spacology results.");
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.spacologyResults }),
+  });
+}
+
+/** Admin-tier only (spam / test submissions). RLS returns zero rows rather than
+ *  an error when the caller isn't admin, so we surface that as a real message. */
+export function useDeleteSpacologyResult() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      const { data, error } = await supabase.from("spacology_results").delete().eq("id", id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Only an admin can delete Spacology submissions.");
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.spacologyResults }),
+  });
+}
+
+/** Mirrors the `spacology_results_delete_admin` policy (`is_admin_tier()`), so
+ *  the UI hides a button the database would refuse anyway. The DB remains the
+ *  actual gate — this is presentation only. */
+export function canDeleteSpacologyResult(role: StaffRow["role"] | null | undefined): boolean {
+  if (!role) return false;
+  return role === "principal" || role === "admin" || role === "admin_exec";
+}
+
+export type SpacologySummary = {
+  total: number;
+  last7: number;
+  last30: number;
+  withContact: number;
+  /** Answered "yes" to renovating in the next 3–6 months — the follow-up queue. */
+  renovatingSoon: number;
+  byType: Record<SpaceType, number>;
+  topType: SpaceType | null;
+  avgDurationMs: number | null;
+  topSource: string | null;
+};
+
+/** A row counts as a lead once we know how to reach the person. Rows submitted
+ *  before the quiz gained its contact gate have none, and never will. */
+export function isSpacologyLead(row: SpacologyResultRow): boolean {
+  return Boolean(row.name || row.email || row.phone);
+}
+
+/** `wa.me` wants digits only — no `+`, spaces or dashes. */
+export function whatsappHref(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 7 ? `https://wa.me/${digits}` : null;
+}
+
+export function computeSpacologySummary(rows: SpacologyResultRow[]): SpacologySummary {
+  const now = Date.now();
+  const DAY = 86_400_000;
+
+  const byType: Record<SpaceType, number> = { fruit: 0, flower: 0, leaf: 0, wood: 0, root: 0 };
+  let last7 = 0;
+  let last30 = 0;
+  let withContact = 0;
+  let renovatingSoon = 0;
+  let durationSum = 0;
+  let durationCount = 0;
+  const sourceCounts = new Map<string, number>();
+
+  for (const r of rows) {
+    if (r.result_type in byType) byType[r.result_type as SpaceType] += 1;
+
+    const age = now - new Date(r.submitted_at).getTime();
+    if (age <= 7 * DAY) last7 += 1;
+    if (age <= 30 * DAY) last30 += 1;
+
+    if (isSpacologyLead(r)) withContact += 1;
+    if (r.planning_renovation === true) renovatingSoon += 1;
+
+    if (typeof r.duration_ms === "number" && r.duration_ms > 0) {
+      durationSum += r.duration_ms;
+      durationCount += 1;
+    }
+
+    const src = r.utm_source?.trim() || r.source?.trim();
+    if (src) sourceCounts.set(src, (sourceCounts.get(src) ?? 0) + 1);
+  }
+
+  let topType: SpaceType | null = null;
+  for (const t of Object.keys(byType) as SpaceType[]) {
+    if (byType[t] > 0 && (topType === null || byType[t] > byType[topType])) topType = t;
+  }
+
+  let topSource: string | null = null;
+  let topSourceCount = 0;
+  sourceCounts.forEach((n, src) => {
+    if (n > topSourceCount) {
+      topSource = src;
+      topSourceCount = n;
+    }
+  });
+
+  return {
+    total: rows.length,
+    last7,
+    last30,
+    withContact,
+    renovatingSoon,
+    byType,
+    topType,
+    avgDurationMs: durationCount > 0 ? Math.round(durationSum / durationCount) : null,
+    topSource,
+  };
+}
+
+/** `answers` is jsonb — validated on insert by the RPC, but a hand-edited or
+ *  future-version row could still be anything, so parse defensively. */
+export function parseSpacologyAnswers(value: unknown): SpacologyAnswer[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((a): a is SpacologyAnswer => typeof a === "object" && a !== null);
+}
+
+export function parseSpacologyScores(value: unknown): SpacologyScores {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const out: SpacologyScores = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === "number") out[k as SpaceType] = v;
+  }
+  return out;
 }
 
 // ─── ANALYTICS / COMPUTED VIEWS ─────────────────────────────────────────────

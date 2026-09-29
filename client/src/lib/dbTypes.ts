@@ -63,6 +63,7 @@ export type KpiRecordRow = Tables<"kpi_records">;
 export type LifecycleStageRow = Tables<"lifecycle_stages">;
 export type ProjectTaskRow = Tables<"project_tasks">;
 export type ProjectReviewRow = Tables<"project_reviews">;
+export type SpacologyResultRow = Tables<"spacology_results">;
 
 // ─── EMBEDDED JSON SHAPES ───────────────────────────────────────────────────
 // inquiry.contact_log is typed as JSON in the Database schema, but the app
@@ -74,6 +75,23 @@ export type ContactLogEntryDb = {
   type: "call" | "email" | "whatsapp" | "meet" | "site-visit";
   note: string;
   by: string;
+};
+
+// spacology_results.scores + .answers are jsonb. The submit RPC validates their
+// shape on the way in, so readers can rely on these structures.
+
+export type SpaceType = "fruit" | "flower" | "leaf" | "wood" | "root";
+
+export type SpacologyScores = Partial<Record<SpaceType, number>>;
+
+export type SpacologyAnswer = {
+  index: number;                 // 0-based question position
+  question_en?: string;          // question text as it read at submission time
+  question_cn?: string;
+  option_index: number;          // 0-based option position
+  option_en?: string;
+  option_cn?: string;
+  scores?: SpacologyScores;      // what this option contributed
 };
 
 // ─── RE-EXPORT `Database` ITSELF (for advanced callers) ─────────────────────

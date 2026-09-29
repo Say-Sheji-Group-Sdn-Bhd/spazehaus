@@ -85,6 +85,7 @@ const CreateStaff      = lazyWithReload(() => import("./pages/CreateStaff"));
 const Notifications    = lazyWithReload(() => import("./pages/Notifications"));
 const Security         = lazyWithReload(() => import("./pages/Security"));
 const Help             = lazyWithReload(() => import("./pages/Help"));
+const SpacologyResults = lazyWithReload(() => import("./pages/SpacologyResults"));
 // Public — reachable without a Supabase Auth session via /portal/:token.
 const ClientPortal     = lazyWithReload(() => import("./pages/ClientPortal"));
 
@@ -163,6 +164,9 @@ function AppLayout() {
 
             {/* Reminders — Daily site photo + Weekly cadence SOP */}
             <Route path="/reminders" component={RemindersPage} />
+
+            {/* Spacology — public quiz submissions from the marketing site */}
+            <Route path="/spacology" component={SpacologyResults} />
 
             {/* Performance Report — Sales/GP targets + project timeline */}
             <Route path="/performance" component={PerformanceReport} />

@@ -1093,6 +1093,101 @@ export type Database = {
           },
         ]
       }
+      spacology_results: {
+        Row: {
+          answer_count: number
+          answers: Json
+          created_at: string
+          duration_ms: number | null
+          email: string | null
+          id: string
+          inquiry_id: string | null
+          is_tie: boolean
+          landing_path: string | null
+          locale: string | null
+          name: string | null
+          notes: string | null
+          phone: string | null
+          planning_renovation: boolean | null
+          quiz_version: string
+          referrer: string | null
+          result_name_cn: string | null
+          result_name_en: string | null
+          result_type: string
+          scores: Json
+          source: string
+          submitted_at: string
+          user_agent: string | null
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          answer_count?: number
+          answers?: Json
+          created_at?: string
+          duration_ms?: number | null
+          email?: string | null
+          id: string
+          inquiry_id?: string | null
+          is_tie?: boolean
+          landing_path?: string | null
+          locale?: string | null
+          name?: string | null
+          notes?: string | null
+          phone?: string | null
+          planning_renovation?: boolean | null
+          quiz_version?: string
+          referrer?: string | null
+          result_name_cn?: string | null
+          result_name_en?: string | null
+          result_type: string
+          scores?: Json
+          source?: string
+          submitted_at?: string
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          answer_count?: number
+          answers?: Json
+          created_at?: string
+          duration_ms?: number | null
+          email?: string | null
+          id?: string
+          inquiry_id?: string | null
+          is_tie?: boolean
+          landing_path?: string | null
+          locale?: string | null
+          name?: string | null
+          notes?: string | null
+          phone?: string | null
+          planning_renovation?: boolean | null
+          quiz_version?: string
+          referrer?: string | null
+          result_name_cn?: string | null
+          result_name_en?: string | null
+          result_type?: string
+          scores?: Json
+          source?: string
+          submitted_at?: string
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spacology_results_inquiry_id_fkey"
+            columns: ["inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "inquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       staff: {
         Row: {
           auth_user_id: string | null
@@ -1306,6 +1401,30 @@ export type Database = {
           p_token: string
         }
         Returns: undefined
+      }
+      submit_spacology_result: {
+        Args: {
+          p_answers?: Json
+          p_duration_ms?: number
+          p_email?: string
+          p_is_tie?: boolean
+          p_landing_path?: string
+          p_locale?: string
+          p_name?: string
+          p_phone?: string
+          p_planning_renovation?: boolean
+          p_quiz_version?: string
+          p_referrer?: string
+          p_result_name_cn?: string
+          p_result_name_en?: string
+          p_result_type: string
+          p_scores: Json
+          p_user_agent?: string
+          p_utm_campaign?: string
+          p_utm_medium?: string
+          p_utm_source?: string
+        }
+        Returns: string
       }
     }
     Enums: {

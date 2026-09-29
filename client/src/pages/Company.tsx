@@ -5,7 +5,7 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import { Users, CalendarCheck, UserSearch, BarChart3, Megaphone, ChevronRight, TrendingUp, ShieldCheck } from "lucide-react";
+import { Users, CalendarCheck, UserSearch, BarChart3, Megaphone, ChevronRight, TrendingUp, ShieldCheck, Sparkles } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import {
   useAllStaff,
@@ -15,6 +15,7 @@ import {
   useInquiries,
   useQuotations,
   useSalesTargets,
+  useSpacologyResults,
   computeTeamPerformance,
   computeCompanyPerformance,
   canViewAuditLog,
@@ -42,6 +43,7 @@ export default function Company() {
   const { data: inquiries = [] } = useInquiries();
   const { data: quotations = [] } = useQuotations();
   const { data: targets = [] } = useSalesTargets();
+  const { data: spacology = [] } = useSpacologyResults();
   const showAudit = canViewAuditLog(me?.role);
 
   const company = useMemo(() => {
@@ -56,6 +58,7 @@ export default function Company() {
     { id: "recruitment",   title: "Recruitment",         subtitle: "Talent pipeline & candidates",  icon: UserSearch,   color: "oklch(0.45 0.10 55)",  bg: "oklch(0.65 0.10 55 / 10%)",  path: "/company/recruitment",   stat: `${candidates.length} candidate${candidates.length === 1 ? "" : "s"}` },
     { id: "kpi",           title: "KPI & Performance",   subtitle: "Monthly scores & reviews",      icon: BarChart3,    color: "oklch(0.38 0.09 145)", bg: "oklch(0.55 0.09 145 / 10%)", path: "/company/kpi",           stat: "Monthly review" },
     { id: "announcements", title: "Announcements",       subtitle: "Company news & updates",        icon: Megaphone,    color: "oklch(0.45 0.10 25)",  bg: "oklch(0.60 0.10 25 / 10%)",  path: "/company/announcements", stat: `${announcements.length} post${announcements.length === 1 ? "" : "s"}` },
+    { id: "spacology",     title: "Spacology Results",   subtitle: "Website quiz · space personalities", icon: Sparkles,     color: "oklch(0.52 0.13 55)", bg: "oklch(0.66 0.13 55 / 10%)",  path: "/spacology",             stat: `${spacology.length} submission${spacology.length === 1 ? "" : "s"}` },
     ...(showAudit
       ? [{ id: "audit", title: "Audit Log", subtitle: "System activity history (admin)", icon: ShieldCheck, color: "var(--acc-ink)", bg: "oklch(0.62 0.09 68 / 10%)", path: "/company/audit", stat: "Admin only" }]
       : []),
