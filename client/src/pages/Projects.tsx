@@ -275,6 +275,9 @@ export default function Projects() {
                       <div className="flex-1 min-w-0">
                         <h3 className="text-sm font-semibold leading-snug" style={{ color: "var(--t-1)" }}>{project.name}</h3>
                         <p className="text-xs mt-0.5" style={{ color: "var(--t-5)" }}>{project.client}</p>
+                        {project.projectCode && (
+                          <p className="text-[10px] font-label mt-0.5" style={{ color: "var(--acc)", letterSpacing: "0.06em" }}>{project.projectCode}</p>
+                        )}
                       </div>
                       <div className="flex flex-col items-end gap-1.5 shrink-0">
                         <span className="status-pill" style={{ background: ls.bg, color: ls.color }}>

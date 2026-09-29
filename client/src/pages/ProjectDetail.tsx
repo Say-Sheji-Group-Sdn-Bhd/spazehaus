@@ -239,7 +239,7 @@ export default function ProjectDetail() {
     <div className="mobile-container" style={{ background: "var(--s-page)" }}>
       <AppHeader
         title={project.name}
-        subtitle={project.type.toUpperCase()}
+        subtitle={project.projectCode ? `${project.projectCode} · ${project.type.toUpperCase()}` : project.type.toUpperCase()}
         showBack
         compact
         rightAction={

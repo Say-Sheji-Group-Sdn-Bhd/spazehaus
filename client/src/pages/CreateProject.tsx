@@ -50,6 +50,7 @@ export default function CreateProject() {
   const [form, setForm] = useState({
     clientName: "", clientContact: "", clientEmail: "",
     projectName: "", projectType: "Residential", propertyType: "Condominium",
+    serviceType: "Design", // "Design" | "Renovation" — drives the SD/SR project number
     location: "", size: "", budget: "", startDate: "", targetDate: "",
     notes: "",
   });
@@ -112,6 +113,7 @@ export default function CreateProject() {
         clientEmail: form.clientEmail.trim() || null,
         type: form.projectType,
         propertyType: form.propertyType,
+        serviceType: form.serviceType as "Design" | "Renovation",
         location: form.location.trim(),
         size: form.size ? Number(form.size) : 0,
         budget: form.budget ? Number(form.budget) : 0,
@@ -256,6 +258,29 @@ export default function CreateProject() {
                   </div>
                 </div>
                 <div>
+                  <label style={labelStyle}>SERVICE TYPE *</label>
+                  <div className="flex gap-2">
+                    {["Design", "Renovation"].map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => update("serviceType", t)}
+                        className="flex-1 py-2.5 rounded-xl text-xs font-label"
+                        style={{
+                          background: form.serviceType === t ? "var(--acc-bright)" : "var(--s-2)",
+                          color: form.serviceType === t ? "oklch(1 0 0)" : "var(--t-5)",
+                          border: form.serviceType === t ? "none" : "1px solid var(--b-1)",
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] mt-1.5" style={{ color: "var(--t-5)" }}>
+                    Sets the project number — Design → SD26-801, Renovation → SR26-801.
+                  </p>
+                </div>
+                <div>
                   <label style={labelStyle}>PROPERTY TYPE *</label>
                   <div className="flex flex-wrap gap-2">
                     {(propertyTypes[form.projectType as keyof typeof propertyTypes] || []).map((t) => (
@@ -354,7 +379,7 @@ export default function CreateProject() {
               <div className="space-y-3">
                 {[
                   { title: "Client Details", fields: [{ label: "Client Name", value: form.clientName || "—" }, { label: "Contact", value: form.clientContact || "—" }, { label: "Email", value: form.clientEmail || "—" }] },
-                  { title: "Project Details", fields: [{ label: "Project Name", value: form.projectName || "—" }, { label: "Type", value: `${form.projectType} · ${form.propertyType}` }, { label: "Location", value: form.location || "—" }, { label: "Size", value: form.size ? `${form.size} sqft` : "—" }, { label: "Budget", value: form.budget ? `RM ${Number(form.budget).toLocaleString()}` : "—" }] },
+                  { title: "Project Details", fields: [{ label: "Project Name", value: form.projectName || "—" }, { label: "Type", value: `${form.projectType} · ${form.propertyType}` }, { label: "Service", value: form.serviceType }, { label: "Location", value: form.location || "—" }, { label: "Size", value: form.size ? `${form.size} sqft` : "—" }, { label: "Budget", value: form.budget ? `RM ${Number(form.budget).toLocaleString()}` : "—" }] },
                 ].map((section, si) => (
                   <div key={si} className="rounded-2xl p-4" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
                     <div className="flex items-center justify-between mb-3">

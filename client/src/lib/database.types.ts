@@ -718,8 +718,10 @@ export type Database = {
           pm_id: string | null
           priority: Database["public"]["Enums"]["project_priority"]
           progress: number
+          project_code: string | null
           project_type: string
           property_type: string
+          service_type: string | null
           size_sqft: number
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"]
@@ -751,8 +753,10 @@ export type Database = {
           pm_id?: string | null
           priority?: Database["public"]["Enums"]["project_priority"]
           progress?: number
+          project_code?: string | null
           project_type: string
           property_type: string
+          service_type?: string | null
           size_sqft: number
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
@@ -784,8 +788,10 @@ export type Database = {
           pm_id?: string | null
           priority?: Database["public"]["Enums"]["project_priority"]
           progress?: number
+          project_code?: string | null
           project_type?: string
           property_type?: string
+          service_type?: string | null
           size_sqft?: number
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]

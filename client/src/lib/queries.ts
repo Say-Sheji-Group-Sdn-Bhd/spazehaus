@@ -77,6 +77,8 @@ export type Project = {
   clientEmail?: string;
   type: string;
   propertyType: string;
+  serviceType: string | null;  // "Design" | "Renovation" — drives the SD/SR project code
+  projectCode: string | null;  // e.g. SD26-801 / SR26-801 (client-facing number; id stays PRJ0xx)
   location: string;
   size: number;
   budget: number;
@@ -175,6 +177,8 @@ function mapProject(row: ProjectWithStaffJoin): Project {
     clientEmail: row.client_email ?? undefined,
     type: row.project_type,
     propertyType: row.property_type,
+    serviceType: row.service_type ?? null,
+    projectCode: row.project_code ?? null,
     location: row.location,
     size: row.size_sqft,
     budget: Number(row.budget),
@@ -481,6 +485,7 @@ export type CreateProjectArgs = {
   clientEmail?: string | null;
   type: string;                    // → project_type
   propertyType: string;
+  serviceType: "Design" | "Renovation"; // → service_type; picks the SD/SR project code
   location: string;
   size?: number;                   // → size_sqft (NOT NULL → default 0)
   budget?: number;                 // NOT NULL → default 0
@@ -503,12 +508,21 @@ export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: CreateProjectArgs): Promise<ProjectRow> => {
-      const { data: existing, error: listErr } = await supabase.from("projects").select("id");
+      const { data: existing, error: listErr } = await supabase.from("projects").select("id, project_code");
       if (listErr) throw listErr;
       const maxNum = (existing ?? []).reduce((max, r) => {
         const m = /^PRJ(\d+)$/.exec(r.id);
         return m ? Math.max(max, parseInt(m[1], 10)) : max;
       }, 0);
+
+      // Client-facing code: SD (Design) / SR (Renovation) + 2-digit year + seq from 801.
+      const CODE_START = 801;
+      const codePrefix = `${args.serviceType === "Design" ? "SD" : "SR"}${String(new Date().getFullYear() % 100).padStart(2, "0")}-`;
+      const maxCode = (existing ?? []).reduce((max, r) => {
+        if (!r.project_code?.startsWith(codePrefix)) return max;
+        const n = Number(r.project_code.slice(codePrefix.length));
+        return Number.isNaN(n) ? max : Math.max(max, n);
+      }, CODE_START - 1);
 
       const base: Omit<TablesInsert<"projects">, "id"> = {
         name: args.name,
@@ -517,6 +531,7 @@ export function useCreateProject() {
         client_email: args.clientEmail ?? null,
         project_type: args.type,
         property_type: args.propertyType,
+        service_type: args.serviceType,
         location: args.location,
         size_sqft: args.size ?? 0,
         budget: args.budget ?? 0,
@@ -533,9 +548,10 @@ export function useCreateProject() {
       let created: ProjectRow | null = null;
       for (let attempt = 0; attempt < 5; attempt++) {
         const id = `PRJ${String(maxNum + 1 + attempt).padStart(3, "0")}`;
+        const project_code = `${codePrefix}${String(maxCode + 1 + attempt).padStart(3, "0")}`;
         const { data, error } = await supabase
           .from("projects")
-          .insert({ ...base, id })
+          .insert({ ...base, id, project_code })
           .select()
           .single();
         if (!error) { created = data as ProjectRow; break; }
