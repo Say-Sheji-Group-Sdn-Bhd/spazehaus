@@ -1,6 +1,6 @@
 /*
  * SPAZEHAUS CREATE PROJECT WIZARD
- * Multi-step form: Client Details → Project Details → Areas & Tasks → Review
+ * Multi-step form: Client Details → Project Details → Cover & Notes → Review
  */
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,17 +18,16 @@ const categoryToType = (cat: string): string =>
 const steps = [
   { id: 1, title: "Client Details", subtitle: "Who is this project for?" },
   { id: 2, title: "Project Details", subtitle: "What are we designing?" },
-  { id: 3, title: "Areas & Tasks", subtitle: "Define scope of work" },
+  { id: 3, title: "Cover & Notes", subtitle: "Add a cover image and any notes" },
   { id: 4, title: "Review & Submit", subtitle: "Confirm everything" },
 ];
 
 const projectTypes = ["Residential", "Commercial", "Community"];
 const propertyTypes = {
-  Residential: ["Condominium", "Apartment", "Landed", "Semi-D", "Bungalow"],
-  Commercial: ["Office", "Retail", "F&B", "Hotel", "Clinic"],
+  Residential: ["Condominium", "Apartment", "Cluster House", "Terrace House", "Semi-D", "Bungalow", "Others"],
+  Commercial: ["Office", "Retail", "F&B", "Hotel", "Clinic", "Others"],
   Community: ["Showroom", "Gallery", "Mixed-use", "Community Centre"],
 };
-const roomOptions = ["Living Room", "Master Bedroom", "Bedroom 2", "Bedroom 3", "Kitchen", "Dining Area", "Master Bathroom", "Bathroom 2", "Study Room", "Balcony", "Entrance/Foyer", "Utility Room", "Reception", "Meeting Room", "Open Office", "Pantry"];
 
 export default function CreateProject() {
   const [, navigate] = useLocation();
@@ -52,7 +51,6 @@ export default function CreateProject() {
     clientName: "", clientContact: "", clientEmail: "",
     projectName: "", projectType: "Residential", propertyType: "Condominium",
     location: "", size: "", budget: "", startDate: "", targetDate: "",
-    selectedRooms: [] as string[],
     notes: "",
   });
 
@@ -85,13 +83,6 @@ export default function CreateProject() {
     }));
   };
 
-  const toggleRoom = (room: string) => {
-    const rooms = form.selectedRooms.includes(room)
-      ? form.selectedRooms.filter((r) => r !== room)
-      : [...form.selectedRooms, room];
-    update("selectedRooms", rooms);
-  };
-
   const handleSubmit = async () => {
     // Required-field guard (mirrors the * markers in the wizard).
     const missing =
@@ -100,7 +91,6 @@ export default function CreateProject() {
       !form.projectName.trim() ? "Project name" :
       !form.propertyType ? "Property type" :
       !form.location.trim() ? "Location" :
-      form.selectedRooms.length === 0 ? "At least one area/room" :
       null;
     if (missing) {
       toast.error(`${missing} is required`);
@@ -119,7 +109,7 @@ export default function CreateProject() {
         budget: form.budget ? Number(form.budget) : 0,
         startDate: form.startDate.trim() || null,
         targetDate: form.targetDate.trim() || null,
-        areas: form.selectedRooms,
+        areas: [],
         description: form.notes.trim() || null,
         linkInquiryId: linkInquiryId || null,
         imageFile,
@@ -341,28 +331,6 @@ export default function CreateProject() {
                   )}
                 </div>
                 <div>
-                  <label style={labelStyle}>SELECT AREAS / ROOMS *</label>
-                  <div className="flex flex-wrap gap-2">
-                    {roomOptions.map((room) => (
-                      <button
-                        key={room}
-                        onClick={() => toggleRoom(room)}
-                        className="px-3 py-1.5 rounded-full text-xs font-label"
-                        style={{
-                          background: form.selectedRooms.includes(room) ? "oklch(0.62 0.09 68 / 15%)" : "var(--s-2)",
-                          color: form.selectedRooms.includes(room) ? "var(--acc-ink)" : "var(--t-4)",
-                          border: form.selectedRooms.includes(room) ? "1px solid oklch(0.72 0.09 68 / 40%)" : "1px solid var(--b-1)",
-                        }}
-                      >
-                        {form.selectedRooms.includes(room) ? "✓ " : ""}{room}
-                      </button>
-                    ))}
-                  </div>
-                  {form.selectedRooms.length > 0 && (
-                    <p className="text-xs mt-2" style={{ color: "var(--acc)" }}>{form.selectedRooms.length} areas selected</p>
-                  )}
-                </div>
-                <div>
                   <label style={labelStyle}>ADDITIONAL NOTES</label>
                   <textarea
                     style={{ ...inputStyle, minHeight: "100px", resize: "none" }}
@@ -379,7 +347,6 @@ export default function CreateProject() {
                 {[
                   { title: "Client Details", fields: [{ label: "Client Name", value: form.clientName || "—" }, { label: "Contact", value: form.clientContact || "—" }, { label: "Email", value: form.clientEmail || "—" }] },
                   { title: "Project Details", fields: [{ label: "Project Name", value: form.projectName || "—" }, { label: "Type", value: `${form.projectType} · ${form.propertyType}` }, { label: "Location", value: form.location || "—" }, { label: "Size", value: form.size ? `${form.size} sqft` : "—" }, { label: "Budget", value: form.budget ? `RM ${Number(form.budget).toLocaleString()}` : "—" }] },
-                  { title: "Areas & Scope", fields: [{ label: "Areas Selected", value: form.selectedRooms.length > 0 ? form.selectedRooms.join(", ") : "—" }] },
                 ].map((section, si) => (
                   <div key={si} className="rounded-2xl p-4" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
                     <div className="flex items-center justify-between mb-3">
