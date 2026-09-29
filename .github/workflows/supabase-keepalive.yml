@@ -1,0 +1,60 @@
+name: Supabase keep-alive
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Free-tier Supabase pauses a project after 7 DAYS with no API activity.
+# This workflow pings the project's REST API twice a week, which registers as
+# activity and resets that 7-day timer — so the project never auto-pauses.
+#
+# It calls `staff_email_exists` (a SECURITY DEFINER RPC granted to `anon`), which
+# does a genuine database round-trip and returns HTTP 200. A dashboard/pg_cron
+# job would NOT prevent pausing — the ping must come from outside the project.
+#
+# SETUP (one-time):
+#   Repo → Settings → Secrets and variables → Actions → New repository secret
+#     Name:  SUPABASE_ANON_KEY
+#     Value: the project's anon/public key (VITE_SUPABASE_ANON_KEY in WebApp/.env)
+#   Then run it once: Actions tab → "Supabase keep-alive" → Run workflow.
+#
+# NOTE: GitHub disables *scheduled* workflows after ~60 days of no repo commits.
+# As long as the repo sees activity within any 60-day window, the schedule keeps
+# running. You can always trigger it manually from the Actions tab.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    - cron: "0 3 * * 1,4"   # 03:00 UTC every Monday & Thursday (≈2 pings/week)
+  workflow_dispatch: {}      # allow manual runs from the Actions tab
+
+# Keep-alive requests are read-only; no repo write permissions needed.
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Spazehaus Supabase (exajkbvaqjqdedqavbvs)
+        env:
+          SUPABASE_URL: "https://exajkbvaqjqdedqavbvs.supabase.co"
+          ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ANON_KEY:-}" ]; then
+            echo "::error::SUPABASE_ANON_KEY secret is not set. Add it in Settings → Secrets → Actions."
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/out -w "%{http_code}" --max-time 30 --retry 3 --retry-delay 10 \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/staff_email_exists" \
+            -H "apikey: $ANON_KEY" \
+            -H "Authorization: Bearer $ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"p_email":"keepalive@noop.invalid"}')
+          echo "HTTP $code — $(cat /tmp/out 2>/dev/null || true)"
+          case "$code" in
+            2*) echo "✅ Keep-alive OK — project activity registered." ;;
+            *)  echo "::error::Unexpected status $code (project may be paused, key wrong, or endpoint changed)."; exit 1 ;;
+          esac
