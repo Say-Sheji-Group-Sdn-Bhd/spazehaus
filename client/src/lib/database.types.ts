@@ -1362,6 +1362,7 @@ export type Database = {
           p_priority: string
           p_project_name: string
           p_proposal_deposit: number
+          p_service_type?: string
           p_start_date: string
           p_target_date: string
         }

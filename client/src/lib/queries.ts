@@ -1357,6 +1357,7 @@ export type ConvertInquiryArgs = {
   priority: "high" | "medium" | "low";
   areas: string[];
   proposalDeposit: number;
+  serviceType: "Design" | "Renovation"; // → p_service_type; picks the SD/SR project code
   assignedToAvatar?: string;
 };
 
@@ -1386,6 +1387,7 @@ export function useConvertInquiry() {
         p_priority: args.priority,
         p_areas: args.areas,
         p_proposal_deposit: args.proposalDeposit,
+        p_service_type: args.serviceType,
         // RPC arg is optional `string | undefined` (CLI Args shape) — pass
         // undefined (omit) when caller didn't specify, never `null`.
         p_assigned_to_avatar: args.assignedToAvatar ?? undefined,

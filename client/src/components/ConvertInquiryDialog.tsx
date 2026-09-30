@@ -30,6 +30,7 @@ type FormState = {
   budget: string;          // string for input control
   proposalDeposit: string;
   priority: Priority;
+  serviceType: "Design" | "Renovation"; // drives the SD/SR project code
   areas: string;           // comma-separated
 };
 
@@ -82,6 +83,7 @@ export default function ConvertInquiryDialog({
     budget: String(defaultBudget),
     proposalDeposit: String(defaultDeposit),
     priority: "medium",
+    serviceType: "Design",
     areas: "",
   }));
 
@@ -123,6 +125,7 @@ export default function ConvertInquiryDialog({
           .map((s) => s.trim())
           .filter(Boolean),
         proposalDeposit: depositNum,
+        serviceType: form.serviceType,
         assignedToAvatar: inquiry.assignedTo,
       });
 
@@ -257,6 +260,30 @@ export default function ConvertInquiryDialog({
                   prefix="RM"
                   hint="Booking fee for the design phase. Sets gate ① as collected."
                 />
+              </FieldGroup>
+
+              <FieldGroup label="SERVICE TYPE">
+                <div className="grid grid-cols-2 gap-2">
+                  {(["Design", "Renovation"] as const).map((st) => {
+                    const active = form.serviceType === st;
+                    return (
+                      <button
+                        key={st}
+                        onClick={() => setForm({ ...form, serviceType: st })}
+                        className="py-2 rounded-lg text-xs font-label"
+                        style={{
+                          background: active ? "oklch(0.62 0.09 68 / 12%)" : "var(--s-page)",
+                          color: active ? "var(--acc-ink)" : "var(--t-5)",
+                          border: active ? "1.5px solid var(--acc-ink)" : "1px solid var(--b-1)",
+                          letterSpacing: "0.06em",
+                          fontWeight: active ? 700 : 500,
+                        }}
+                      >
+                        {st.toUpperCase()}
+                      </button>
+                    );
+                  })}
+                </div>
               </FieldGroup>
 
               <FieldGroup label="PRIORITY">
