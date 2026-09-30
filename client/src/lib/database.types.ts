@@ -198,6 +198,33 @@ export type Database = {
           },
         ]
       }
+      calendar_google_links: {
+        Row: {
+          etag: string | null
+          event_id: string
+          google_calendar_id: string
+          google_event_id: string
+          last_synced_at: string
+          user_id: string
+        }
+        Insert: {
+          etag?: string | null
+          event_id: string
+          google_calendar_id?: string
+          google_event_id: string
+          last_synced_at?: string
+          user_id: string
+        }
+        Update: {
+          etag?: string | null
+          event_id?: string
+          google_calendar_id?: string
+          google_event_id?: string
+          last_synced_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       candidates: {
         Row: {
           applied_date: string

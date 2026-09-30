@@ -9,7 +9,9 @@ import { useCalendarEvents, useCalendarEventStaff, useCreateCalendarEvent, useAl
 import { useAuth } from "@/contexts/AuthContext";
 import type { CalendarEventType } from "@/lib/dbTypes";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Plus, X, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw } from "lucide-react";
+import { googleConfigured } from "@/lib/google/gis";
+import { exportEvents } from "@/lib/google/sync";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -38,8 +40,26 @@ export default function CalendarPage() {
   const { data: calendarEvents = [] } = useCalendarEvents();
   const { data: eventStaff = [] } = useCalendarEventStaff();
   const { data: allStaff = [] } = useAllStaff();
-  const { staff: me } = useAuth();
+  const { staff: me, user } = useAuth();
   const [composeOpen, setComposeOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  // One-way push of the calendar into the signed-in user's own Google Calendar.
+  // Per-user consent (GIS), so it works for any @gmail.com or Workspace account.
+  const handleGoogleSync = async () => {
+    if (!user) { toast.error("Please sign in first"); return; }
+    setSyncing(true);
+    try {
+      const r = await exportEvents(user.id, calendarEvents);
+      toast.success("Synced to Google Calendar", {
+        description: `${r.created} added · ${r.updated} updated · ${r.removed} removed`,
+      });
+    } catch (err) {
+      toast.error(`Google sync failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // eventId → assigned staff rows (from the multi-staff junction table).
   const staffById = new Map(allStaff.map((s) => [s.id, s]));
@@ -85,14 +105,27 @@ export default function CalendarPage() {
         subtitle="SCHEDULE"
         compact
         rightAction={
-          <button
-            data-testid="new-event-btn"
-            onClick={() => setComposeOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-label font-semibold"
-            style={{ background: "var(--acc-strong)", color: "oklch(1 0 0)", letterSpacing: "0.04em" }}
-          >
-            <Plus size={14} /> Event
-          </button>
+          <div className="flex items-center gap-2">
+            {googleConfigured && (
+              <button
+                data-testid="google-sync-btn"
+                onClick={handleGoogleSync}
+                disabled={syncing}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-label font-semibold"
+                style={{ background: "var(--s-2)", color: "var(--t-2)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: syncing ? 0.6 : 1 }}
+              >
+                <RefreshCw size={14} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : "Sync Google"}
+              </button>
+            )}
+            <button
+              data-testid="new-event-btn"
+              onClick={() => setComposeOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-label font-semibold"
+              style={{ background: "var(--acc-strong)", color: "oklch(1 0 0)", letterSpacing: "0.04em" }}
+            >
+              <Plus size={14} /> Event
+            </button>
+          </div>
         }
       />
 

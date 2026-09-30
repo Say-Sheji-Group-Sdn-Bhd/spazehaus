@@ -1,0 +1,69 @@
+// Google Identity Services (GIS) OAuth token client — browser only.
+// Obtains a short-lived access token for the calendar.events scope. No backend,
+// no refresh token. Per-user consent, so it works for ANY Google account
+// (personal @gmail.com and Workspace alike). Ported from the SayWorks app.
+
+const SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? "";
+
+/** True when a Client ID is configured (build-time public env var). */
+export const googleConfigured = Boolean(CLIENT_ID);
+
+let scriptPromise: Promise<void> | null = null;
+function loadGis(): Promise<void> {
+  if (typeof window === "undefined") return Promise.reject(new Error("GIS is browser-only"));
+  const w = window as unknown as { google?: { accounts?: { oauth2?: unknown } } };
+  if (w.google?.accounts?.oauth2) return Promise.resolve();
+  if (scriptPromise) return scriptPromise;
+  scriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Google Identity Services"));
+    document.head.appendChild(script);
+  });
+  return scriptPromise;
+}
+
+let cachedToken: string | null = null;
+let tokenExpiry = 0;
+
+/** True while a still-valid access token is cached (≥1min headroom). */
+export function hasGoogleToken(): boolean {
+  return Boolean(cachedToken && Date.now() < tokenExpiry - 60_000);
+}
+
+export function clearGoogleToken(): void {
+  cachedToken = null;
+  tokenExpiry = 0;
+}
+
+/** Resolve an access token, prompting the Google consent popup when needed. */
+export async function requestAccessToken(): Promise<string> {
+  if (!CLIENT_ID) throw new Error("Google Client ID not configured (VITE_GOOGLE_CLIENT_ID)");
+  if (hasGoogleToken()) return cachedToken as string;
+  await loadGis();
+
+  const oauth2 = (window as unknown as {
+    google: { accounts: { oauth2: { initTokenClient: (c: unknown) => { requestAccessToken: (o?: unknown) => void } } } };
+  }).google.accounts.oauth2;
+
+  return new Promise<string>((resolve, reject) => {
+    const client = oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPE,
+      callback: (resp: { access_token?: string; expires_in?: number; error?: string }) => {
+        if (resp.error || !resp.access_token) {
+          reject(new Error(resp.error || "Google authorization failed"));
+          return;
+        }
+        cachedToken = resp.access_token;
+        tokenExpiry = Date.now() + Number(resp.expires_in ?? 3600) * 1000;
+        resolve(resp.access_token);
+      },
+    });
+    client.requestAccessToken();
+  });
+}
