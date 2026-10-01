@@ -2,7 +2,7 @@
  * SPAZEHAUS CALENDAR PAGE
  * Design: Dark premium calendar with event overlay
  */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import AppHeader from "@/components/AppHeader";
 import { useCalendarEvents, useCalendarEventStaff, useCreateCalendarEvent, useAllStaff, useProjects, CALENDAR_EVENT_COLORS } from "@/lib/queries";
@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { CalendarEventType } from "@/lib/dbTypes";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw } from "lucide-react";
-import { googleConfigured, hasGoogleToken } from "@/lib/google/gis";
+import { googleConfigured } from "@/lib/google/gis";
 import { exportEvents } from "@/lib/google/sync";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -49,7 +49,6 @@ export default function CalendarPage() {
   // Not persisted: the Google token lives only in memory, so after a reload the
   // user must click Sync again (a browser-blocked popup can't be opened silently).
   const [syncedOk, setSyncedOk] = useState(false);
-  const syncedSigRef = useRef<string | null>(null);
 
   // One-way push of the calendar into the signed-in user's OWN Google Calendar.
   // Per-user consent (GIS) + login_hint → their account. `silent` = background
@@ -74,20 +73,6 @@ export default function CalendarPage() {
     }
   };
   const handleGoogleSync = () => runGoogleSync(false);
-
-  // Auto-sync on event change — ONLY while we already hold a live Google token
-  // (i.e. shortly after a manual "Sync Google" click this session). Browsers
-  // block the Google auth popup unless it's opened from a click, so we NEVER
-  // trigger a popup here — that's the manual button's job. This means: click Sync
-  // once, then create/edit/delete events and they push automatically for ~1 hour.
-  useEffect(() => {
-    if (!googleConfigured || !user || !eventsLoaded || !hasGoogleToken()) return;
-    const sig = calendarEvents.map((e) => `${e.id}:${e.updated_at ?? ""}`).join("|");
-    if (syncedSigRef.current === sig) return;
-    syncedSigRef.current = sig;
-    void runGoogleSync(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarEvents, syncedOk, user, eventsLoaded]);
 
   // eventId → assigned staff rows (from the multi-staff junction table).
   const staffById = new Map(allStaff.map((s) => [s.id, s]));
