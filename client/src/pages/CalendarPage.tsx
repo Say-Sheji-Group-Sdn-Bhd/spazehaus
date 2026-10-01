@@ -2,7 +2,7 @@
  * SPAZEHAUS CALENDAR PAGE
  * Design: Dark premium calendar with event overlay
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import AppHeader from "@/components/AppHeader";
 import { useCalendarEvents, useCalendarEventStaff, useCreateCalendarEvent, useAllStaff, useProjects, CALENDAR_EVENT_COLORS } from "@/lib/queries";
@@ -37,31 +37,58 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(4); // May = 4
   const [selectedDate, setSelectedDate] = useState<string | null>("2026-05-12");
 
-  const { data: calendarEvents = [] } = useCalendarEvents();
+  const { data: calendarEvents = [], isSuccess: eventsLoaded } = useCalendarEvents();
   const { data: eventStaff = [] } = useCalendarEventStaff();
   const { data: allStaff = [] } = useAllStaff();
   const { staff: me, user } = useAuth();
   const [composeOpen, setComposeOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const autoSyncedRef = useRef(false);
 
-  // One-way push of the calendar into the signed-in user's own Google Calendar.
-  // Per-user consent (GIS), so it works for any @gmail.com or Workspace account.
-  const handleGoogleSync = async () => {
-    if (!user) { toast.error("Please sign in first"); return; }
-    setSyncing(true);
+  // localStorage flag: set once a user has connected Google (first manual sync),
+  // so later app-opens can silently auto-sync without a popup. Wrapped — storage
+  // can throw in private mode.
+  const GCAL_CONNECTED_KEY = "spz_gcal_connected";
+  const markConnected = () => { try { localStorage.setItem(GCAL_CONNECTED_KEY, "1"); } catch { /* ignore */ } };
+
+  // One-way push of the calendar into the signed-in user's OWN Google Calendar.
+  // Per-user consent (GIS) + login_hint → their account. `silent` = background
+  // auto-sync (no popup, no toasts); loud = the manual button.
+  const runGoogleSync = async (silent: boolean) => {
+    if (!user) { if (!silent) toast.error("Please sign in first"); return; }
+    if (!silent) setSyncing(true);
     try {
-      // Pass the signed-in email as login_hint → syncs to THEIR Google account
-      // (their own calendar), not a chooser.
-      const r = await exportEvents(user.id, calendarEvents, user.email ?? me?.email ?? undefined);
-      toast.success("Synced to Google Calendar", {
-        description: `${r.created} added · ${r.updated} updated · ${r.removed} removed`,
-      });
+      const r = await exportEvents(
+        user.id, calendarEvents, user.email ?? me?.email ?? undefined, { silent },
+      );
+      markConnected();
+      if (!silent) {
+        toast.success("Synced to Google Calendar", {
+          description: `${r.created} added · ${r.updated} updated · ${r.removed} removed`,
+        });
+      }
     } catch (err) {
-      toast.error(`Google sync failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      // Silent attempts fail quietly (no consent yet / expired session) — the
+      // manual "Sync Google" button is the fallback.
+      if (!silent) toast.error(`Google sync failed: ${err instanceof Error ? err.message : "unknown error"}`);
     } finally {
-      setSyncing(false);
+      if (!silent) setSyncing(false);
     }
   };
+  const handleGoogleSync = () => runGoogleSync(false);
+
+  // Background auto-sync on app open — once per mount, only for users who've
+  // connected Google before and only after events have loaded (so we never
+  // reconcile against an empty set mid-load).
+  useEffect(() => {
+    if (autoSyncedRef.current || !googleConfigured || !user || !eventsLoaded) return;
+    let connected = false;
+    try { connected = localStorage.getItem(GCAL_CONNECTED_KEY) === "1"; } catch { /* ignore */ }
+    if (!connected) return;
+    autoSyncedRef.current = true;
+    void runGoogleSync(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, eventsLoaded]);
 
   // eventId → assigned staff rows (from the multi-staff junction table).
   const staffById = new Map(allStaff.map((s) => [s.id, s]));

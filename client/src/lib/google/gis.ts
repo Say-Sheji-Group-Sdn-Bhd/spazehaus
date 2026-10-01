@@ -47,7 +47,7 @@ export function clearGoogleToken(): void {
  * account chooser — and skips the chooser entirely when they're already signed
  * into it.
  */
-export async function requestAccessToken(hint?: string): Promise<string> {
+export async function requestAccessToken(hint?: string, opts?: { silent?: boolean }): Promise<string> {
   if (!CLIENT_ID) throw new Error("Google Client ID not configured (VITE_GOOGLE_CLIENT_ID)");
   if (hasGoogleToken()) return cachedToken as string;
   await loadGis();
@@ -61,6 +61,9 @@ export async function requestAccessToken(hint?: string): Promise<string> {
       client_id: CLIENT_ID,
       scope: SCOPE,
       ...(hint ? { hint } : {}),
+      // silent: no popup — succeeds only if the user already consented and has a
+      // live Google session (used for background auto-sync on app open).
+      ...(opts?.silent ? { prompt: "" } : {}),
       callback: (resp: { access_token?: string; expires_in?: number; error?: string }) => {
         if (resp.error || !resp.access_token) {
           reject(new Error(resp.error || "Google authorization failed"));
@@ -69,6 +72,11 @@ export async function requestAccessToken(hint?: string): Promise<string> {
         cachedToken = resp.access_token;
         tokenExpiry = Date.now() + Number(resp.expires_in ?? 3600) * 1000;
         resolve(resp.access_token);
+      },
+      // Fires when the popup is dismissed or a silent attempt can't complete —
+      // reject so the caller (esp. the silent path) can swallow it quietly.
+      error_callback: (err: { type?: string; message?: string }) => {
+        reject(new Error(err?.message || err?.type || "Google authorization cancelled"));
       },
     });
     client.requestAccessToken();
