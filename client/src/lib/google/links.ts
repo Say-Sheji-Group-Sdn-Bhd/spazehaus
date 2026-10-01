@@ -13,7 +13,13 @@ export interface GoogleLink {
 /** All of the current user's event → Google-event links, keyed by app event id. */
 export async function loadGoogleLinks(): Promise<Record<string, GoogleLink>> {
   const { data, error } = await supabase.from("calendar_google_links").select("*");
-  if (error) throw error;
+  if (error) {
+    throw new Error(
+      error.code === "PGRST205" || error.message?.includes("calendar_google_links")
+        ? "The calendar_google_links table is missing — run its migration in Supabase."
+        : `Loading Google links failed: ${error.message}`,
+    );
+  }
   const map: Record<string, GoogleLink> = {};
   for (const row of data ?? []) {
     map[row.event_id] = {
@@ -34,7 +40,7 @@ export async function upsertGoogleLink(userId: string, link: GoogleLink): Promis
     google_event_id: link.googleEventId,
     etag: link.etag,
   });
-  if (error) throw error;
+  if (error) throw new Error(`Saving a Google link failed: ${error.message}`);
 }
 
 export async function deleteGoogleLink(eventId: string, userId: string): Promise<void> {
@@ -43,5 +49,5 @@ export async function deleteGoogleLink(eventId: string, userId: string): Promise
     .delete()
     .eq("event_id", eventId)
     .eq("user_id", userId);
-  if (error) throw error;
+  if (error) throw new Error(`Deleting a Google link failed: ${error.message}`);
 }
