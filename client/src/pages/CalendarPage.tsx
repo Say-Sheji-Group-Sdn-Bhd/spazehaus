@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { CalendarEventType } from "@/lib/dbTypes";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw } from "lucide-react";
-import { googleConfigured } from "@/lib/google/gis";
+import { googleConfigured, hasGoogleToken } from "@/lib/google/gis";
 import { exportEvents } from "@/lib/google/sync";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -45,19 +45,11 @@ export default function CalendarPage() {
   const { staff: me, user } = useAuth();
   const [composeOpen, setComposeOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  // localStorage flag: set once a user has connected Google (first manual sync),
-  // so later app-opens can silently auto-sync without a popup, and the button can
-  // show a "Synced" state. Wrapped — storage can throw in private mode.
-  const GCAL_CONNECTED_KEY = "spz_gcal_connected";
-  const [connected, setConnected] = useState<boolean>(() => {
-    try { return localStorage.getItem(GCAL_CONNECTED_KEY) === "1"; } catch { return false; }
-  });
+  // True once a sync has succeeded THIS session (drives the green "Synced" badge).
+  // Not persisted: the Google token lives only in memory, so after a reload the
+  // user must click Sync again (a browser-blocked popup can't be opened silently).
+  const [syncedOk, setSyncedOk] = useState(false);
   const syncedSigRef = useRef<string | null>(null);
-
-  const markConnected = () => {
-    try { localStorage.setItem(GCAL_CONNECTED_KEY, "1"); } catch { /* ignore */ }
-    setConnected(true);
-  };
 
   // One-way push of the calendar into the signed-in user's OWN Google Calendar.
   // Per-user consent (GIS) + login_hint → their account. `silent` = background
@@ -69,15 +61,13 @@ export default function CalendarPage() {
       const r = await exportEvents(
         user.id, calendarEvents, user.email ?? me?.email ?? undefined, { silent },
       );
-      markConnected();
+      setSyncedOk(true);
       if (!silent) {
         toast.success("Synced to Google Calendar", {
           description: `${r.created} added · ${r.updated} updated · ${r.removed} removed`,
         });
       }
     } catch (err) {
-      // Silent attempts fail quietly (no consent yet / expired session) — the
-      // manual "Sync Google" button is the fallback.
       if (!silent) toast.error(`Google sync failed: ${err instanceof Error ? err.message : "unknown error"}`);
     } finally {
       if (!silent) setSyncing(false);
@@ -85,19 +75,19 @@ export default function CalendarPage() {
   };
   const handleGoogleSync = () => runGoogleSync(false);
 
-  // Keep Google in sync automatically (silently) once connected: on app open AND
-  // whenever events change (create / edit / delete). First consent is still the
-  // manual button; after that, changes push without a click. Gated on events
-  // being loaded so we never reconcile against an empty set mid-load. A content
-  // signature avoids redundant syncs when nothing actually changed.
+  // Auto-sync on event change — ONLY while we already hold a live Google token
+  // (i.e. shortly after a manual "Sync Google" click this session). Browsers
+  // block the Google auth popup unless it's opened from a click, so we NEVER
+  // trigger a popup here — that's the manual button's job. This means: click Sync
+  // once, then create/edit/delete events and they push automatically for ~1 hour.
   useEffect(() => {
-    if (!googleConfigured || !connected || !user || !eventsLoaded) return;
+    if (!googleConfigured || !user || !eventsLoaded || !hasGoogleToken()) return;
     const sig = calendarEvents.map((e) => `${e.id}:${e.updated_at ?? ""}`).join("|");
     if (syncedSigRef.current === sig) return;
     syncedSigRef.current = sig;
     void runGoogleSync(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarEvents, connected, user, eventsLoaded]);
+  }, [calendarEvents, syncedOk, user, eventsLoaded]);
 
   // eventId → assigned staff rows (from the multi-staff junction table).
   const staffById = new Map(allStaff.map((s) => [s.id, s]));
@@ -149,17 +139,17 @@ export default function CalendarPage() {
                 data-testid="google-sync-btn"
                 onClick={handleGoogleSync}
                 disabled={syncing}
-                title={connected ? "Google Calendar connected — click to re-sync now" : "Connect & sync to your Google Calendar"}
+                title={syncedOk ? "Synced to your Google Calendar — click to re-sync" : "Sync to your Google Calendar"}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-label font-semibold"
                 style={
-                  connected && !syncing
+                  syncedOk && !syncing
                     ? { background: "oklch(0.55 0.12 150 / 12%)", color: "oklch(0.48 0.13 150)", border: "1px solid oklch(0.55 0.12 150 / 40%)", letterSpacing: "0.04em" }
                     : { background: "var(--s-2)", color: "var(--t-2)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: syncing ? 0.6 : 1 }
                 }
               >
                 {syncing ? (
                   <><RefreshCw size={14} className="animate-spin" /> Syncing…</>
-                ) : connected ? (
+                ) : syncedOk ? (
                   <><Check size={14} /> Synced</>
                 ) : (
                   <><RefreshCw size={14} /> Sync Google</>
