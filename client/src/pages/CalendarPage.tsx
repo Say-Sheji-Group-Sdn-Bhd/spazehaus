@@ -43,13 +43,19 @@ export default function CalendarPage() {
   const { staff: me, user } = useAuth();
   const [composeOpen, setComposeOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  // localStorage flag: set once a user has connected Google (first manual sync),
+  // so later app-opens can silently auto-sync without a popup, and the button can
+  // show a "Synced" state. Wrapped — storage can throw in private mode.
+  const GCAL_CONNECTED_KEY = "spz_gcal_connected";
+  const [connected, setConnected] = useState<boolean>(() => {
+    try { return localStorage.getItem(GCAL_CONNECTED_KEY) === "1"; } catch { return false; }
+  });
   const autoSyncedRef = useRef(false);
 
-  // localStorage flag: set once a user has connected Google (first manual sync),
-  // so later app-opens can silently auto-sync without a popup. Wrapped — storage
-  // can throw in private mode.
-  const GCAL_CONNECTED_KEY = "spz_gcal_connected";
-  const markConnected = () => { try { localStorage.setItem(GCAL_CONNECTED_KEY, "1"); } catch { /* ignore */ } };
+  const markConnected = () => {
+    try { localStorage.setItem(GCAL_CONNECTED_KEY, "1"); } catch { /* ignore */ }
+    setConnected(true);
+  };
 
   // One-way push of the calendar into the signed-in user's OWN Google Calendar.
   // Per-user consent (GIS) + login_hint → their account. `silent` = background
@@ -140,10 +146,21 @@ export default function CalendarPage() {
                 data-testid="google-sync-btn"
                 onClick={handleGoogleSync}
                 disabled={syncing}
+                title={connected ? "Google Calendar connected — click to re-sync now" : "Connect & sync to your Google Calendar"}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-label font-semibold"
-                style={{ background: "var(--s-2)", color: "var(--t-2)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: syncing ? 0.6 : 1 }}
+                style={
+                  connected && !syncing
+                    ? { background: "oklch(0.55 0.12 150 / 12%)", color: "oklch(0.48 0.13 150)", border: "1px solid oklch(0.55 0.12 150 / 40%)", letterSpacing: "0.04em" }
+                    : { background: "var(--s-2)", color: "var(--t-2)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: syncing ? 0.6 : 1 }
+                }
               >
-                <RefreshCw size={14} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : "Sync Google"}
+                {syncing ? (
+                  <><RefreshCw size={14} className="animate-spin" /> Syncing…</>
+                ) : connected ? (
+                  <><Check size={14} /> Synced</>
+                ) : (
+                  <><RefreshCw size={14} /> Sync Google</>
+                )}
               </button>
             )}
             <button
