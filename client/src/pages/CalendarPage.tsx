@@ -32,10 +32,12 @@ const eventTypeLabels: Record<string, string> = {
 
 export default function CalendarPage() {
   const today = new Date();
-  // Default to the demo window — the seeded events cluster around May 2026.
-  const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(4); // May = 4
-  const [selectedDate, setSelectedDate] = useState<string | null>("2026-05-12");
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const todayIso = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+  // Open on the current month / today.
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth());
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayIso);
 
   const { data: calendarEvents = [], isSuccess: eventsLoaded } = useCalendarEvents();
   const { data: eventStaff = [] } = useCalendarEventStaff();
@@ -50,7 +52,7 @@ export default function CalendarPage() {
   const [connected, setConnected] = useState<boolean>(() => {
     try { return localStorage.getItem(GCAL_CONNECTED_KEY) === "1"; } catch { return false; }
   });
-  const autoSyncedRef = useRef(false);
+  const syncedSigRef = useRef<string | null>(null);
 
   const markConnected = () => {
     try { localStorage.setItem(GCAL_CONNECTED_KEY, "1"); } catch { /* ignore */ }
@@ -83,18 +85,19 @@ export default function CalendarPage() {
   };
   const handleGoogleSync = () => runGoogleSync(false);
 
-  // Background auto-sync on app open — once per mount, only for users who've
-  // connected Google before and only after events have loaded (so we never
-  // reconcile against an empty set mid-load).
+  // Keep Google in sync automatically (silently) once connected: on app open AND
+  // whenever events change (create / edit / delete). First consent is still the
+  // manual button; after that, changes push without a click. Gated on events
+  // being loaded so we never reconcile against an empty set mid-load. A content
+  // signature avoids redundant syncs when nothing actually changed.
   useEffect(() => {
-    if (autoSyncedRef.current || !googleConfigured || !user || !eventsLoaded) return;
-    let connected = false;
-    try { connected = localStorage.getItem(GCAL_CONNECTED_KEY) === "1"; } catch { /* ignore */ }
-    if (!connected) return;
-    autoSyncedRef.current = true;
+    if (!googleConfigured || !connected || !user || !eventsLoaded) return;
+    const sig = calendarEvents.map((e) => `${e.id}:${e.updated_at ?? ""}`).join("|");
+    if (syncedSigRef.current === sig) return;
+    syncedSigRef.current = sig;
     void runGoogleSync(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, eventsLoaded]);
+  }, [calendarEvents, connected, user, eventsLoaded]);
 
   // eventId → assigned staff rows (from the multi-staff junction table).
   const staffById = new Map(allStaff.map((s) => [s.id, s]));
@@ -123,8 +126,8 @@ export default function CalendarPage() {
 
   const selectedEvents = selectedDate ? getEventsForDate(selectedDate) : [];
 
-  // "Upcoming this week" — events on or after today, soonest first
-  const todayIso = today.toISOString().slice(0, 10);
+  // "Upcoming this week" — events on or after today, soonest first (todayIso
+  // is the local-date string defined at the top).
   const upcoming = [...calendarEvents]
     .filter((e) => e.event_date >= todayIso)
     .slice(0, 4);
