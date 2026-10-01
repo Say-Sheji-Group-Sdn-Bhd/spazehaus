@@ -20,8 +20,8 @@ export interface SyncResult {
  * Reconcile `events` into the user's Google Calendar. Prompts the Google consent
  * popup on first run via requestAccessToken(). `userId` = the Supabase auth user id.
  */
-export async function exportEvents(userId: string, events: CalendarEventRow[]): Promise<SyncResult> {
-  const token = await requestAccessToken();
+export async function exportEvents(userId: string, events: CalendarEventRow[], hint?: string): Promise<SyncResult> {
+  const token = await requestAccessToken(hint);
   const links = await loadGoogleLinks();
   const currentIds = new Set(events.map((e) => e.id));
   const result: SyncResult = { created: 0, updated: 0, removed: 0 };

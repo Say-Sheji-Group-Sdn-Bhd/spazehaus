@@ -40,8 +40,14 @@ export function clearGoogleToken(): void {
   tokenExpiry = 0;
 }
 
-/** Resolve an access token, prompting the Google consent popup when needed. */
-export async function requestAccessToken(): Promise<string> {
+/**
+ * Resolve an access token, prompting the Google consent popup when needed.
+ * `hint` = the signed-in staff's email. Passed to Google as `login_hint` so the
+ * popup targets THAT Google account (their own calendar) instead of showing an
+ * account chooser — and skips the chooser entirely when they're already signed
+ * into it.
+ */
+export async function requestAccessToken(hint?: string): Promise<string> {
   if (!CLIENT_ID) throw new Error("Google Client ID not configured (VITE_GOOGLE_CLIENT_ID)");
   if (hasGoogleToken()) return cachedToken as string;
   await loadGis();
@@ -54,6 +60,7 @@ export async function requestAccessToken(): Promise<string> {
     const client = oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPE,
+      ...(hint ? { hint } : {}),
       callback: (resp: { access_token?: string; expires_in?: number; error?: string }) => {
         if (resp.error || !resp.access_token) {
           reject(new Error(resp.error || "Google authorization failed"));

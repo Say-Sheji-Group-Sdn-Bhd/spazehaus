@@ -50,7 +50,9 @@ export default function CalendarPage() {
     if (!user) { toast.error("Please sign in first"); return; }
     setSyncing(true);
     try {
-      const r = await exportEvents(user.id, calendarEvents);
+      // Pass the signed-in email as login_hint → syncs to THEIR Google account
+      // (their own calendar), not a chooser.
+      const r = await exportEvents(user.id, calendarEvents, user.email ?? me?.email ?? undefined);
       toast.success("Synced to Google Calendar", {
         description: `${r.created} added · ${r.updated} updated · ${r.removed} removed`,
       });
