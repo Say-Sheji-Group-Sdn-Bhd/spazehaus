@@ -322,7 +322,10 @@ export function useAllStaff() {
     queryFn: async (): Promise<StaffRow[]> => {
       const { data, error } = await supabase.from("staff").select("*").order("id");
       if (error) throw error;
-      return (data ?? []) as StaffRow[];
+      // Developers (Kasey/Edbert) stay in `staff` for auth + FK integrity but are
+      // excluded from every staff list. `is_developer` is undefined until its
+      // migration runs, so this is a no-op until then.
+      return (data ?? []).filter((r) => !(r as { is_developer?: boolean }).is_developer) as StaffRow[];
     },
   });
 }
