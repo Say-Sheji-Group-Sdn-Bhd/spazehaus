@@ -2187,8 +2187,12 @@ export function useDeleteCalendarEvent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const { error } = await supabase.from("calendar_events").delete().eq("id", id);
+      const { data, error } = await supabase.from("calendar_events").delete().eq("id", id).select("id");
       if (error) throw error;
+      // RLS silently deletes 0 rows when the user isn't allowed — surface that.
+      if (!data || data.length === 0) {
+        throw new Error("You don't have permission to delete this event (admins only).");
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.calendarEvents });
