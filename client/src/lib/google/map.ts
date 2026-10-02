@@ -54,8 +54,11 @@ export function toGoogleEvent(event: CalendarEventRow, timeZone: string = APP_TI
         ? event.end_time.slice(0, 5)
         : addMinutes(startTime, DEFAULT_DURATION_MIN);
     if (endTime <= startTime) endTime = "23:59";
+    // A timed event can still span multiple days — use end_date for the end
+    // when it's later than the start day (otherwise it collapses to one day).
+    const endDay = event.end_date && event.end_date > event.event_date ? event.end_date : event.event_date;
     start = { dateTime: `${event.event_date}T${startTime}:00`, timeZone };
-    end = { dateTime: `${event.event_date}T${endTime}:00`, timeZone };
+    end = { dateTime: `${endDay}T${endTime}:00`, timeZone };
   }
 
   const body: GoogleEventBody = {
