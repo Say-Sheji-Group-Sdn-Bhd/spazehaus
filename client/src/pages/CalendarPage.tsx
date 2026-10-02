@@ -5,11 +5,11 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import AppHeader from "@/components/AppHeader";
-import { useCalendarEvents, useCalendarEventStaff, useCreateCalendarEvent, useAllStaff, useProjects, CALENDAR_EVENT_COLORS } from "@/lib/queries";
+import { useCalendarEvents, useCalendarEventStaff, useCreateCalendarEvent, useUpdateCalendarEvent, useDeleteCalendarEvent, useAllStaff, useProjects, CALENDAR_EVENT_COLORS } from "@/lib/queries";
 import { useAuth } from "@/contexts/AuthContext";
-import type { CalendarEventType } from "@/lib/dbTypes";
+import type { CalendarEventType, CalendarEventRow } from "@/lib/dbTypes";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { googleConfigured } from "@/lib/google/gis";
 import { exportEvents } from "@/lib/google/sync";
 
@@ -44,6 +44,8 @@ export default function CalendarPage() {
   const { data: allStaff = [] } = useAllStaff();
   const { staff: me, user } = useAuth();
   const [composeOpen, setComposeOpen] = useState(false);
+  const [editing, setEditing] = useState<{ event: CalendarEventRow; staffIds: string[] } | null>(null);
+  const deleteEvent = useDeleteCalendarEvent();
   const [syncing, setSyncing] = useState(false);
   // True once a sync has succeeded THIS session (drives the green "Synced" badge).
   // Not persisted: the Google token lives only in memory, so after a reload the
@@ -84,6 +86,20 @@ export default function CalendarPage() {
     arr.push(s);
     staffByEvent.set(link.event_id, arr);
   }
+
+  // Open the dialog in edit mode, pre-loading the event's current staff.
+  const openEdit = (event: CalendarEventRow) => {
+    setEditing({ event, staffIds: (staffByEvent.get(event.id) ?? []).map((s) => s.id) });
+  };
+  const handleDeleteEvent = async (event: CalendarEventRow) => {
+    if (!window.confirm(`Delete "${event.title}"?\nIt's also removed from Google Calendar on your next sync.`)) return;
+    try {
+      await deleteEvent.mutateAsync(event.id);
+      toast.success("Event deleted", { description: "Click Sync Google to remove it from your calendar." });
+    } catch (err) {
+      toast.error(`Could not delete: ${err instanceof Error ? err.message : "unknown error"}`);
+    }
+  };
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
@@ -278,6 +294,14 @@ export default function CalendarPage() {
                             ))}
                           </div>
                         )}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => openEdit(event)} title="Edit event" className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "var(--s-2)", border: "1px solid var(--b-1)" }}>
+                            <Pencil size={12} style={{ color: "var(--t-4)" }} />
+                          </button>
+                          <button onClick={() => handleDeleteEvent(event)} title="Delete event" className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "var(--s-2)", border: "1px solid var(--b-1)" }}>
+                            <Trash2 size={12} style={{ color: "oklch(0.55 0.16 25)" }} />
+                          </button>
+                        </div>
                       </motion.div>
                     ))}
                   </div>
@@ -325,11 +349,12 @@ export default function CalendarPage() {
       </div>
 
       <CreateEventDialog
-        open={composeOpen}
+        open={composeOpen || !!editing}
+        editEvent={editing}
         defaultDate={selectedDate ?? todayIso}
         authorId={me?.id ?? ""}
         staffOptions={allStaff.filter((s) => s.status !== "inactive")}
-        onClose={() => setComposeOpen(false)}
+        onClose={() => { setComposeOpen(false); setEditing(null); }}
       />
     </div>
   );
@@ -347,17 +372,20 @@ const EVENT_TYPES: { value: CalendarEventType; label: string }[] = [
 ];
 
 function CreateEventDialog({
-  open, defaultDate, authorId, staffOptions, onClose,
+  open, editEvent, defaultDate, authorId, staffOptions, onClose,
 }: {
   open: boolean;
+  editEvent?: { event: CalendarEventRow; staffIds: string[] } | null;
   defaultDate: string;
   authorId: string;
   staffOptions: { id: string; name: string; avatar_code: string }[];
   onClose: () => void;
 }) {
   const createEvent = useCreateCalendarEvent();
+  const updateEvent = useUpdateCalendarEvent();
   const { data: projects = [] } = useProjects();
-  const pending = createEvent.isPending;
+  const isEdit = !!editEvent;
+  const pending = createEvent.isPending || updateEvent.isPending;
 
   const [title, setTitle] = useState("");
   const [eventType, setEventType] = useState<CalendarEventType>("meeting");
@@ -371,9 +399,17 @@ function CreateEventDialog({
 
   useEffect(() => {
     if (!open) return;
-    setTitle(""); setEventType("meeting"); setEventDate(defaultDate); setEndDate("");
-    setStartTime(""); setEndTime(""); setProjectId(""); setStaffIds([]); setNotes("");
-  }, [open, defaultDate]);
+    if (editEvent) {
+      const ev = editEvent.event;
+      setTitle(ev.title); setEventType(ev.event_type); setEventDate(ev.event_date);
+      setEndDate(ev.end_date ?? ""); setStartTime(ev.start_time?.slice(0, 5) ?? "");
+      setEndTime(ev.end_time?.slice(0, 5) ?? ""); setProjectId(ev.project_id ?? "");
+      setStaffIds(editEvent.staffIds); setNotes(ev.notes ?? "");
+    } else {
+      setTitle(""); setEventType("meeting"); setEventDate(defaultDate); setEndDate("");
+      setStartTime(""); setEndTime(""); setProjectId(""); setStaffIds([]); setNotes("");
+    }
+  }, [open, defaultDate, editEvent]);
 
   const toggleStaff = (id: string) =>
     setStaffIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
@@ -390,23 +426,28 @@ function CreateEventDialog({
     if (!eventDate) return toast.error("Date is required");
     if (!authorId) return toast.error("Could not resolve your staff record");
     if (endDate && endDate < eventDate) return toast.error("End date can't be before the start date");
+    const common = {
+      title: title.trim(),
+      eventDate,
+      endDate: endDate || null,
+      startTime: startTime || null,
+      endTime: endTime || null,
+      eventType,
+      projectId: projectId || null,
+      staffIds,
+      notes: notes.trim() || null,
+    };
     try {
-      await createEvent.mutateAsync({
-        title: title.trim(),
-        eventDate,
-        endDate: endDate || null,
-        startTime: startTime || null,
-        endTime: endTime || null,
-        eventType,
-        projectId: projectId || null,
-        staffIds,
-        notes: notes.trim() || null,
-        createdBy: authorId,
-      });
-      toast.success("Event scheduled");
+      if (editEvent) {
+        await updateEvent.mutateAsync({ id: editEvent.event.id, ...common });
+        toast.success("Event updated", { description: "Click Sync Google to push the change." });
+      } else {
+        await createEvent.mutateAsync({ ...common, createdBy: authorId });
+        toast.success("Event scheduled");
+      }
       onClose();
     } catch (err) {
-      toast.error(`Could not schedule: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(`Could not save: ${err instanceof Error ? err.message : "unknown error"}`);
     }
   };
 
@@ -435,8 +476,8 @@ function CreateEventDialog({
                   <Plus size={16} className="text-white" />
                 </div>
                 <div>
-                  <p className="font-display text-base font-semibold leading-tight" style={{ color: "var(--t-1)" }}>New Event</p>
-                  <p className="text-[11px]" style={{ color: "var(--t-5)" }}>Schedule with a date range + team</p>
+                  <p className="font-display text-base font-semibold leading-tight" style={{ color: "var(--t-1)" }}>{isEdit ? "Edit Event" : "New Event"}</p>
+                  <p className="text-[11px]" style={{ color: "var(--t-5)" }}>{isEdit ? "Update this event" : "Schedule with a date range + team"}</p>
                 </div>
               </div>
               <button onClick={onClose} disabled={pending} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "var(--s-2)", opacity: pending ? 0.5 : 1 }}>
@@ -512,7 +553,7 @@ function CreateEventDialog({
                 Cancel
               </button>
               <motion.button whileTap={pending ? undefined : { scale: 0.96 }} onClick={handleSubmit} disabled={pending} data-testid="event-submit" className="flex-1 py-3 rounded-xl text-sm font-label font-semibold flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, var(--acc-strong), var(--acc-2))", color: "oklch(1 0 0)", letterSpacing: "0.04em", opacity: pending ? 0.7 : 1 }}>
-                {pending ? <span>Scheduling…</span> : (<><Check size={15} />Schedule</>)}
+                {pending ? <span>Saving…</span> : (<><Check size={15} />{isEdit ? "Save Changes" : "Schedule"}</>)}
               </motion.button>
             </div>
           </motion.div>

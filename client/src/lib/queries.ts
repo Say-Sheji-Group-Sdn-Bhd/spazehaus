@@ -2128,6 +2128,75 @@ export function useCreateCalendarEvent() {
   });
 }
 
+export type UpdateCalendarEventArgs = {
+  id: string;
+  title: string;
+  eventDate: string;
+  endDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  eventType: CalendarEventType;
+  projectId?: string | null;
+  staffIds?: string[];
+  notes?: string | null;
+};
+
+/** Edit an existing calendar event + reconcile its staff assignments. RLS allows
+ *  the creator/assignee (update-self) or any admin to edit; delete+re-insert the
+ *  calendar_event_staff rows to match the new selection. */
+export function useUpdateCalendarEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: UpdateCalendarEventArgs): Promise<void> => {
+      const staffIds = args.staffIds ?? [];
+      const { error: upErr } = await supabase
+        .from("calendar_events")
+        .update({
+          title: args.title.trim(),
+          event_type: args.eventType,
+          color: CALENDAR_EVENT_COLORS[args.eventType],
+          event_date: args.eventDate,
+          end_date: args.endDate && args.endDate > args.eventDate ? args.endDate : null,
+          start_time: args.startTime || null,
+          end_time: args.endTime || null,
+          project_id: args.projectId || null,
+          notes: args.notes?.trim() || null,
+          staff_id: staffIds[0] ?? null,
+        })
+        .eq("id", args.id);
+      if (upErr) throw upErr;
+      const { error: delErr } = await supabase.from("calendar_event_staff").delete().eq("event_id", args.id);
+      if (delErr) throw delErr;
+      if (staffIds.length > 0) {
+        const { error: insErr } = await supabase
+          .from("calendar_event_staff")
+          .insert(staffIds.map((sid) => ({ event_id: args.id, staff_id: sid })));
+        if (insErr) throw insErr;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.calendarEvents });
+      qc.invalidateQueries({ queryKey: qk.calendarEventStaff });
+    },
+  });
+}
+
+/** Delete a calendar event (cascades its staff rows). Its Google link survives
+ *  so the next Google sync removes the matching event from the user's calendar. */
+export function useDeleteCalendarEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      const { error } = await supabase.from("calendar_events").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.calendarEvents });
+      qc.invalidateQueries({ queryKey: qk.calendarEventStaff });
+    },
+  });
+}
+
 // ─── STAFF (single) ─────────────────────────────────────────────────────────
 
 export function useStaffById(id: string | undefined) {
