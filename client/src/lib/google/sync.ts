@@ -60,3 +60,18 @@ export async function exportEvents(
 
   return result;
 }
+
+/**
+ * Remove a single event from the user's Google Calendar immediately (used right
+ * after a delete). Only call when a live token is already cached (hasGoogleToken)
+ * so it never opens a popup. No-op if the event was never synced.
+ */
+export async function removeEventFromGoogle(userId: string, eventId: string): Promise<boolean> {
+  const links = await loadGoogleLinks();
+  const link = links[eventId];
+  if (!link) return false;
+  const token = await requestAccessToken(); // cached — caller ensured hasGoogleToken()
+  await deleteGoogleEvent(token, link.googleCalendarId, link.googleEventId);
+  await deleteGoogleLink(eventId, userId);
+  return true;
+}

@@ -10,8 +10,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { CalendarEventType, CalendarEventRow } from "@/lib/dbTypes";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw, Pencil, Trash2 } from "lucide-react";
-import { googleConfigured } from "@/lib/google/gis";
-import { exportEvents } from "@/lib/google/sync";
+import { googleConfigured, hasGoogleToken } from "@/lib/google/gis";
+import { exportEvents, removeEventFromGoogle } from "@/lib/google/sync";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -92,10 +92,20 @@ export default function CalendarPage() {
     setEditing({ event, staffIds: (staffByEvent.get(event.id) ?? []).map((s) => s.id) });
   };
   const handleDeleteEvent = async (event: CalendarEventRow) => {
-    if (!window.confirm(`Delete "${event.title}"?\nIt's also removed from Google Calendar on your next sync.`)) return;
+    if (!window.confirm(`Delete "${event.title}"?\nIt's also removed from your Google Calendar.`)) return;
     try {
       await deleteEvent.mutateAsync(event.id);
-      toast.success("Event deleted", { description: "Click Sync Google to remove it from your calendar." });
+      // If a live Google token exists (synced this session), remove it from
+      // Google right away — no popup. Otherwise it goes on the next Sync click.
+      let removedFromGoogle = false;
+      if (googleConfigured && hasGoogleToken() && user) {
+        try { removedFromGoogle = await removeEventFromGoogle(user.id, event.id); } catch { /* fall back to Sync */ }
+      }
+      toast.success("Event deleted", {
+        description: removedFromGoogle
+          ? "Removed from Google Calendar too."
+          : "Click Sync Google to remove it from your calendar.",
+      });
     } catch (err) {
       toast.error(`Could not delete: ${err instanceof Error ? err.message : "unknown error"}`);
     }
