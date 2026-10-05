@@ -123,14 +123,17 @@ export default function CalendarPage() {
     else setMonth((m) => m + 1);
   };
 
-  const getEventsForDate = (dateStr: string) => calendarEvents.filter((e) => e.event_date === dateStr);
+  // A multi-day event (event_date..end_date) shows on EVERY day in its range, not
+  // just its start day. ISO YYYY-MM-DD strings compare correctly lexicographically.
+  const getEventsForDate = (dateStr: string) =>
+    calendarEvents.filter((e) => e.event_date <= dateStr && (e.end_date ?? e.event_date) >= dateStr);
 
   const selectedEvents = selectedDate ? getEventsForDate(selectedDate) : [];
 
-  // "Upcoming this week" — events on or after today, soonest first (todayIso
-  // is the local-date string defined at the top).
+  // "Upcoming this week" — events still active (ending today or later, which keeps
+  // in-progress multi-day events), soonest first. todayIso is defined at the top.
   const upcoming = [...calendarEvents]
-    .filter((e) => e.event_date >= todayIso)
+    .filter((e) => (e.end_date ?? e.event_date) >= todayIso)
     .slice(0, 4);
 
   const cells = [];
@@ -471,11 +474,13 @@ function CreateEventDialog({
             className="fixed inset-0 z-40"
             style={{ background: "oklch(0.11 0.004 285 / 0.45)", backdropFilter: "blur(4px)" }}
           />
+          {/* maxHeight 92dvh (not vh): on mobile, vh counts the area behind the browser
+              toolbar, which pushed the pinned footer off-screen; dvh = visible viewport. */}
           <motion.div
             initial={{ y: "100%", opacity: 0.5 }} animate={{ y: 0, opacity: 1 }} exit={{ y: "100%", opacity: 0.5 }}
             transition={{ type: "spring", damping: 32, stiffness: 320 }}
             className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[460px] z-50 flex flex-col lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2"
-            style={{ maxHeight: "92vh", background: "var(--s-card)", borderRadius: "24px 24px 0 0", boxShadow: "0 -12px 48px oklch(0 0 0 / 0.18)" }}
+            style={{ maxHeight: "92dvh", background: "var(--s-card)", borderRadius: "24px 24px 0 0", boxShadow: "0 -12px 48px oklch(0 0 0 / 0.18)" }}
           >
             <div className="flex justify-center pt-2.5 pb-1.5 shrink-0 lg:hidden">
               <div className="w-10 h-1 rounded-full" style={{ background: "var(--b-strong)" }} />
@@ -558,7 +563,7 @@ function CreateEventDialog({
               </div>
             </div>
 
-            <div className="px-4 py-3 flex gap-2 shrink-0" style={{ borderTop: "1px solid var(--b-2)" }}>
+            <div className="px-4 py-3 flex gap-2 shrink-0" style={{ borderTop: "1px solid var(--b-2)", paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}>
               <button onClick={onClose} disabled={pending} className="flex-1 py-3 rounded-xl text-sm font-label" style={{ background: "var(--s-2)", color: "var(--acc-ink)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: pending ? 0.5 : 1 }}>
                 Cancel
               </button>
