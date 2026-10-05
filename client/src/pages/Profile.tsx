@@ -7,8 +7,10 @@ import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { useStaffKpiRecords } from "@/lib/queries";
 import { useAuth } from "@/contexts/AuthContext";
-import { ChevronRight, Bell, Shield, HelpCircle, LogOut, Moon, Sun } from "lucide-react";
+import { ChevronRight, Bell, Shield, HelpCircle, LogOut, Moon, Sun, Calendar } from "lucide-react";
 import { useTheme } from "@/lib/theme";
+import { connectGoogleCalendar } from "@/lib/google/connect";
+import { googleConfigured } from "@/lib/google/gis";
 import { toast } from "sonner";
 
 const menuItems: { icon: typeof Bell; label: string; subtitle: string; color: string; to?: string }[] = [
@@ -21,9 +23,27 @@ const menuItems: { icon: typeof Bell; label: string; subtitle: string; color: st
 export default function Profile() {
   const [, navigate] = useLocation();
   const { theme, toggle: toggleTheme } = useTheme();
-  const { staff, signOut } = useAuth();
+  const { staff, user, signOut } = useAuth();
   const { data: kpiRecords = [] } = useStaffKpiRecords(staff?.id);
   const [signingOut, setSigningOut] = useState(false);
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
+
+  async function handleConnectGoogle() {
+    if (!user) { toast.error("Please sign in first"); return; }
+    setConnectingGoogle(true);
+    try {
+      const r = await connectGoogleCalendar(user.email ?? undefined);
+      toast.success("Google Calendar connected", {
+        description: r.gotRefreshToken
+          ? "Your events will sync to your Google Calendar automatically."
+          : "Connected to your Google account.",
+      });
+    } catch (err) {
+      toast.error(`Connect failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    } finally {
+      setConnectingGoogle(false);
+    }
+  }
 
   // Auth gate guarantees staff is non-null in this view, but TS doesn't know
   if (!staff) return null;
@@ -145,6 +165,27 @@ export default function Profile() {
             );
           })}
         </div>
+
+        {/* Google Calendar connection */}
+        {googleConfigured && (
+          <button
+            onClick={handleConnectGoogle}
+            disabled={connectingGoogle}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left rounded-2xl mb-3"
+            style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", opacity: connectingGoogle ? 0.6 : 1 }}
+          >
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--s-2)" }}>
+              <Calendar size={15} style={{ color: "oklch(0.55 0.12 150)" }} />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm text-[color:var(--t-1)]">Connect Google Calendar</p>
+              <p className="text-xs" style={{ color: "var(--t-5)" }}>
+                {connectingGoogle ? "Connecting…" : "Allow once — then your events sync automatically"}
+              </p>
+            </div>
+            <ChevronRight size={14} style={{ color: "var(--t-5)" }} />
+          </button>
+        )}
 
         {/* Logout */}
         <motion.button

@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { googleConfigured, hasGoogleToken } from "@/lib/google/gis";
 import { exportEvents, removeEventFromGoogle } from "@/lib/google/sync";
-import { connectGoogleCalendar } from "@/lib/google/connect";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -76,26 +75,6 @@ export default function CalendarPage() {
     }
   };
   const handleGoogleSync = () => runGoogleSync(false);
-
-  // Phase 1 of server-side auto-sync: one-time "Connect" that saves a refresh
-  // token server-side so the backend can sync without further clicks.
-  const [connecting, setConnecting] = useState(false);
-  const handleConnectGoogle = async () => {
-    if (!user) { toast.error("Please sign in first"); return; }
-    setConnecting(true);
-    try {
-      const r = await connectGoogleCalendar(user.email ?? me?.email ?? undefined);
-      toast.success("Google Calendar connected", {
-        description: r.gotRefreshToken
-          ? "Offline access saved — auto-sync can run for your account."
-          : "Connected. (No refresh token returned — may already be authorized.)",
-      });
-    } catch (err) {
-      toast.error(`Connect failed: ${err instanceof Error ? err.message : "unknown error"}`);
-    } finally {
-      setConnecting(false);
-    }
-  };
 
   // eventId → assigned staff rows (from the multi-staff junction table).
   const staffById = new Map(allStaff.map((s) => [s.id, s]));
@@ -166,17 +145,6 @@ export default function CalendarPage() {
         compact
         rightAction={
           <div className="flex items-center gap-2">
-            {googleConfigured && (
-              <button
-                onClick={handleConnectGoogle}
-                disabled={connecting}
-                title="Connect Google Calendar for automatic sync"
-                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-label font-semibold"
-                style={{ background: "var(--s-2)", color: "var(--t-2)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: connecting ? 0.6 : 1 }}
-              >
-                {connecting ? "Connecting…" : "Connect Google"}
-              </button>
-            )}
             {googleConfigured && (
               <button
                 data-testid="google-sync-btn"
