@@ -82,3 +82,38 @@ export async function requestAccessToken(hint?: string, opts?: { silent?: boolea
     client.requestAccessToken();
   });
 }
+
+/**
+ * Run the GIS *authorization-code* flow (for server-side offline access). Returns
+ * a one-time auth code that a backend exchanges (with the client secret) for a
+ * REFRESH token. Opens a consent popup → must be called from a user click.
+ * `hint` pre-selects the user's Google account.
+ */
+export async function requestAuthCode(hint?: string): Promise<string> {
+  if (!CLIENT_ID) throw new Error("Google Client ID not configured (VITE_GOOGLE_CLIENT_ID)");
+  await loadGis();
+
+  const oauth2 = (window as unknown as {
+    google: { accounts: { oauth2: { initCodeClient: (c: unknown) => { requestCode: () => void } } } };
+  }).google.accounts.oauth2;
+
+  return new Promise<string>((resolve, reject) => {
+    const client = oauth2.initCodeClient({
+      client_id: CLIENT_ID,
+      scope: SCOPE,
+      ux_mode: "popup",
+      ...(hint ? { hint } : {}),
+      callback: (resp: { code?: string; error?: string }) => {
+        if (resp.error || !resp.code) {
+          reject(new Error(resp.error || "Google authorization failed"));
+          return;
+        }
+        resolve(resp.code);
+      },
+      error_callback: (err: { type?: string; message?: string }) => {
+        reject(new Error(err?.message || err?.type || "Google authorization cancelled"));
+      },
+    });
+    client.requestCode();
+  });
+}
