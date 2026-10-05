@@ -30,6 +30,19 @@ const eventTypeLabels: Record<string, string> = {
   event: "Company Event",
 };
 
+// Format an event's date span. Multi-day → "6 Oct – 7 Oct"; single-day → "6 Oct"
+// (or "Tue, 6 Oct" when weekdaySingle is set). The range always shows BOTH ends.
+function formatEventDateRange(startIso: string, endIso?: string | null, opts?: { weekdaySingle?: boolean }): string {
+  const fmt = (iso: string, withWeekday: boolean) =>
+    new Date(iso + "T00:00:00").toLocaleDateString("en-MY", {
+      ...(withWeekday ? { weekday: "short" as const } : {}),
+      day: "numeric",
+      month: "short",
+    });
+  if (endIso && endIso !== startIso) return `${fmt(startIso, false)} – ${fmt(endIso, false)}`;
+  return fmt(startIso, Boolean(opts?.weekdaySingle));
+}
+
 export default function CalendarPage() {
   const today = new Date();
   const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -288,7 +301,7 @@ export default function CalendarPage() {
                           <p className="text-[10px] mt-0.5 font-label" style={{ color: "var(--t-5)", letterSpacing: "0.04em" }}>
                             {eventTypeLabels[event.event_type] || event.event_type}
                             {event.end_date && event.end_date !== event.event_date && (
-                              <> · until {new Date(event.end_date + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short" })}</>
+                              <> · {formatEventDateRange(event.event_date, event.end_date)}</>
                             )}
                             {(event.start_time) && <> · {event.start_time?.slice(0, 5)}{event.end_time ? `–${event.end_time.slice(0, 5)}` : ""}</>}
                           </p>
@@ -348,7 +361,7 @@ export default function CalendarPage() {
                     <div className="flex-1">
                       <p className="text-sm text-[color:var(--t-1)]">{event.title}</p>
                       <p className="text-[10px] mt-0.5" style={{ color: "var(--t-5)" }}>
-                        {new Date(event.event_date + "T00:00:00").toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" })}
+                        {formatEventDateRange(event.event_date, event.end_date, { weekdaySingle: true })}
                       </p>
                     </div>
                     <div className="w-2 h-2 rounded-full shrink-0" style={{ background: event.color }} />
