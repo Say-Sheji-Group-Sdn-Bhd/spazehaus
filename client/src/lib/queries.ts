@@ -2089,6 +2089,51 @@ export const CALENDAR_EVENT_COLORS: Record<CalendarEventType, string> = {
   event: "#FCB900",
 };
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+
+/**
+ * P3 auto-sync trigger. After an event is created/edited/deleted, push the
+ * change to the Google Calendar of EVERY affected staff member (the creator and
+ * all assignees) — not just the actor — by invoking the google-calendar-sync
+ * Edge Function. The function reconciles each user's full creator/assignee set,
+ * so a single call per user covers inserts, updates and removals.
+ *
+ * - Input is STAFF ids; the Edge Function targets AUTH user ids, so we resolve
+ *   staff.auth_user_id here first. Staff who never connected Google simply come
+ *   back as "not_connected" server-side (a no-op).
+ * - Fire-and-forget: we never block the mutation's success or surface a Google
+ *   error to the UI. The pg_cron safety-net (P4) catches anything missed here
+ *   (e.g. an assignee removed on edit, whose stale event the next run clears).
+ */
+async function triggerGoogleSync(staffIds: Array<string | null | undefined>): Promise<void> {
+  const unique = Array.from(new Set(staffIds.filter((s): s is string => Boolean(s))));
+  if (unique.length === 0) return;
+  try {
+    const { data: staffRows } = await supabase.from("staff").select("auth_user_id").in("id", unique);
+    const userIds = Array.from(
+      new Set((staffRows ?? []).map((r) => r.auth_user_id).filter((id): id is string => Boolean(id))),
+    );
+    if (userIds.length === 0) return;
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return;
+
+    // Don't await the reconcile — it can take a few seconds per user and must
+    // not delay the UI. keepalive lets it finish even if the tab navigates away.
+    void fetch(`${SUPABASE_URL}/functions/v1/google-calendar-sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ userIds }),
+      keepalive: true,
+    }).catch(() => {
+      /* best-effort — the pg_cron safety-net will reconcile later */
+    });
+  } catch {
+    /* resolving staff → auth failed; leave it to the safety-net */
+  }
+}
+
 export type CreateCalendarEventArgs = {
   title: string;
   eventDate: string;               // YYYY-MM-DD (start day)
@@ -2124,9 +2169,11 @@ export function useCreateCalendarEvent() {
       if (error) throw error;
       return data as CalendarEventRow;
     },
-    onSuccess: () => {
+    onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: qk.calendarEvents });
       qc.invalidateQueries({ queryKey: qk.calendarEventStaff });
+      // Auto-sync Google for the creator + every assignee.
+      void triggerGoogleSync([args.createdBy, ...(args.staffIds ?? [])]);
     },
   });
 }
@@ -2150,9 +2197,11 @@ export type UpdateCalendarEventArgs = {
 export function useUpdateCalendarEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: UpdateCalendarEventArgs): Promise<void> => {
+    mutationFn: async (args: UpdateCalendarEventArgs): Promise<{ createdBy: string | null }> => {
       const staffIds = args.staffIds ?? [];
-      const { error: upErr } = await supabase
+      // `.select("created_by")` returns the event's creator so onSuccess can
+      // sync their Google Calendar too (the creator isn't in staffIds).
+      const { data: upRow, error: upErr } = await supabase
         .from("calendar_events")
         .update({
           title: args.title.trim(),
@@ -2166,7 +2215,9 @@ export function useUpdateCalendarEvent() {
           notes: args.notes?.trim() || null,
           staff_id: staffIds[0] ?? null,
         })
-        .eq("id", args.id);
+        .eq("id", args.id)
+        .select("created_by")
+        .maybeSingle();
       if (upErr) throw upErr;
       const { error: delErr } = await supabase.from("calendar_event_staff").delete().eq("event_id", args.id);
       if (delErr) throw delErr;
@@ -2176,10 +2227,14 @@ export function useUpdateCalendarEvent() {
           .insert(staffIds.map((sid) => ({ event_id: args.id, staff_id: sid })));
         if (insErr) throw insErr;
       }
+      return { createdBy: (upRow?.created_by as string | null) ?? null };
     },
-    onSuccess: () => {
+    onSuccess: (result, args) => {
       qc.invalidateQueries({ queryKey: qk.calendarEvents });
       qc.invalidateQueries({ queryKey: qk.calendarEventStaff });
+      // Auto-sync Google for the creator + the current assignees. (Assignees
+      // removed in this edit are reconciled by the pg_cron safety-net.)
+      void triggerGoogleSync([result.createdBy, ...(args.staffIds ?? [])]);
     },
   });
 }
@@ -2189,17 +2244,34 @@ export function useUpdateCalendarEvent() {
 export function useDeleteCalendarEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string): Promise<void> => {
+    mutationFn: async (id: string): Promise<{ affectedStaff: string[] }> => {
+      // Capture creator + assignees BEFORE deleting — the calendar_event_staff
+      // rows cascade away with the event, so afterwards we can't tell who to sync.
+      const [{ data: ev }, { data: asg }] = await Promise.all([
+        supabase.from("calendar_events").select("created_by, staff_id").eq("id", id).maybeSingle(),
+        supabase.from("calendar_event_staff").select("staff_id").eq("event_id", id),
+      ]);
+
       const { data, error } = await supabase.from("calendar_events").delete().eq("id", id).select("id");
       if (error) throw error;
       // RLS silently deletes 0 rows when the user isn't allowed — surface that.
       if (!data || data.length === 0) {
         throw new Error("You don't have permission to delete this event (admins only).");
       }
+
+      const affectedStaff = [
+        ev?.created_by as string | null,
+        ev?.staff_id as string | null,
+        ...((asg ?? []).map((r) => r.staff_id) as string[]),
+      ].filter((s): s is string => Boolean(s));
+      return { affectedStaff };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: qk.calendarEvents });
       qc.invalidateQueries({ queryKey: qk.calendarEventStaff });
+      // Auto-sync Google for everyone who had the event → the Edge Function sees
+      // it's gone from their creator/assignee set and removes it from Google.
+      void triggerGoogleSync(result.affectedStaff);
     },
   });
 }
