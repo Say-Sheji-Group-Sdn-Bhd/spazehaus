@@ -88,6 +88,8 @@ const Help             = lazyWithReload(() => import("./pages/Help"));
 const SpacologyResults = lazyWithReload(() => import("./pages/SpacologyResults"));
 // Public — reachable without a Supabase Auth session via /portal/:token.
 const ClientPortal     = lazyWithReload(() => import("./pages/ClientPortal"));
+// Public — /privacy, used as the Google OAuth privacy-policy link (no auth).
+const Privacy          = lazyWithReload(() => import("./pages/Privacy"));
 
 // Pages that show bottom nav
 const BOTTOM_NAV_PATHS = ["/", "/projects", "/company", "/calendar", "/profile"];
@@ -209,6 +211,17 @@ function AuthGate() {
         <Switch>
           <Route path="/portal/:token" component={ClientPortal} />
         </Switch>
+      </Suspense>
+    );
+  }
+
+  // /privacy is FULLY public too (Google OAuth policy link). Short-circuit
+  // before auth so it loads for anyone and never bounces to /login — and so a
+  // signed-in staff member viewing it isn't redirected to the dashboard.
+  if (location === "/privacy") {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <Privacy />
       </Suspense>
     );
   }

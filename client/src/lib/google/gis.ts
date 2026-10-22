@@ -102,6 +102,13 @@ export async function requestAuthCode(hint?: string): Promise<string> {
       client_id: CLIENT_ID,
       scope: SCOPE,
       ux_mode: "popup",
+      // Offline access = Google returns a REFRESH token (durable, server-held).
+      // prompt:"consent" forces the consent screen every time so Google re-issues
+      // the refresh token even for a user who already consented once — without it,
+      // a prior consenter's code exchanges to NO refresh token and server auto-sync
+      // can never run on its own.
+      access_type: "offline",
+      prompt: "consent",
       ...(hint ? { hint } : {}),
       callback: (resp: { code?: string; error?: string }) => {
         if (resp.error || !resp.code) {
