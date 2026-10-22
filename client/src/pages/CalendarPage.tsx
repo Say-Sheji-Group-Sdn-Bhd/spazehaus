@@ -117,7 +117,7 @@ export default function CalendarPage() {
       toast.success("Event deleted", {
         description: removedFromGoogle
           ? "Removed from Google Calendar too."
-          : "Click Sync Google to remove it from your calendar.",
+          : "It'll be removed from Google Calendar shortly.",
       });
     } catch (err) {
       toast.error(`Could not delete: ${err instanceof Error ? err.message : "unknown error"}`);
@@ -466,7 +466,7 @@ function CreateEventDialog({
     try {
       if (editEvent) {
         await updateEvent.mutateAsync({ id: editEvent.event.id, ...common });
-        toast.success("Event updated", { description: "Click Sync Google to push the change." });
+        toast.success("Event updated", { description: "Syncing to Google Calendar…" });
       } else {
         await createEvent.mutateAsync({ ...common, createdBy: authorId });
         toast.success("Event scheduled");
