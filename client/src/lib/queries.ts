@@ -2120,12 +2120,14 @@ async function triggerGoogleSync(staffIds: Array<string | null | undefined>): Pr
     if (!token) return;
 
     // Don't await the reconcile — it can take a few seconds per user and must
-    // not delay the UI. keepalive lets it finish even if the tab navigates away.
+    // not delay the UI. (No `keepalive`: it's the one difference from the
+    // working google-oauth-connect call, and keepalive + CORS preflight is a
+    // known source of net::ERR_FAILED in Chrome. The sync fires while the page
+    // is open, so keepalive isn't needed.)
     void fetch(`${SUPABASE_URL}/functions/v1/google-calendar-sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ userIds }),
-      keepalive: true,
     }).catch(() => {
       /* best-effort — the pg_cron safety-net will reconcile later */
     });

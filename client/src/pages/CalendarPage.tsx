@@ -11,7 +11,12 @@ import type { CalendarEventType, CalendarEventRow } from "@/lib/dbTypes";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { googleConfigured, hasGoogleToken } from "@/lib/google/gis";
-import { exportEvents, removeEventFromGoogle } from "@/lib/google/sync";
+import { removeEventFromGoogle } from "@/lib/google/sync";
+import {
+  connectGoogleCalendar,
+  resyncGoogleCalendar,
+  isGoogleConnectedLocally,
+} from "@/lib/google/connect";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -65,29 +70,48 @@ export default function CalendarPage() {
   // user must click Sync again (a browser-blocked popup can't be opened silently).
   const [syncedOk, setSyncedOk] = useState(false);
 
-  // One-way push of the calendar into the signed-in user's OWN Google Calendar.
-  // Per-user consent (GIS) + login_hint → their account. `silent` = background
-  // auto-sync (no popup, no toasts); loud = the manual button.
-  const runGoogleSync = async (silent: boolean) => {
-    if (!user) { if (!silent) toast.error("Please sign in first"); return; }
-    if (!silent) setSyncing(true);
+  // "Sync Google" IS the real OAuth connect. First click (not yet connected on
+  // this browser) runs the Google consent flow → google-oauth-connect stores a
+  // durable refresh token server-side; from then on every create/edit/delete
+  // auto-syncs with no clicks (see triggerGoogleSync in queries.ts). Later clicks
+  // just ask the server to re-sync the user's calendar now.
+  //
+  // The consent popup MUST open inside this click gesture, so the not-connected
+  // branch calls connectGoogleCalendar() with no awaited work before it.
+  const handleGoogleSync = async () => {
+    if (!user) { toast.error("Please sign in first"); return; }
+    setSyncing(true);
     try {
-      const r = await exportEvents(
-        user.id, calendarEvents, user.email ?? me?.email ?? undefined, { silent },
-      );
-      setSyncedOk(true);
-      if (!silent) {
-        toast.success("Synced to Google Calendar", {
-          description: `${r.created} added · ${r.updated} updated · ${r.removed} removed`,
-        });
+      if (!isGoogleConnectedLocally(user.id)) {
+        // First time on this browser → real OAuth connect (opens the popup).
+        const r = await connectGoogleCalendar(user.email ?? me?.email ?? undefined);
+        if (r.connected) {
+          setSyncedOk(true);
+          toast.success("Google Calendar connected", {
+            description: "Your events now sync automatically.",
+          });
+          // Push the existing events across right away.
+          void resyncGoogleCalendar().catch(() => {});
+        }
+      } else {
+        // Already connected → re-sync now via the server (no popup).
+        const status = await resyncGoogleCalendar();
+        if (status === "synced") {
+          setSyncedOk(true);
+          toast.success("Synced to Google Calendar");
+        } else if (status === "not_connected" || status === "reauth_required") {
+          setSyncedOk(false);
+          toast.info("Reconnect needed — click Sync Google again to reconnect.");
+        } else {
+          toast.error("Sync failed. Please try again.");
+        }
       }
     } catch (err) {
-      if (!silent) toast.error(`Google sync failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(`Google sync failed: ${err instanceof Error ? err.message : "unknown error"}`);
     } finally {
-      if (!silent) setSyncing(false);
+      setSyncing(false);
     }
   };
-  const handleGoogleSync = () => runGoogleSync(false);
 
   // eventId → assigned staff rows (from the multi-staff junction table).
   const staffById = new Map(allStaff.map((s) => [s.id, s]));
