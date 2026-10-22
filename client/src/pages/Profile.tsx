@@ -178,7 +178,7 @@ export default function Profile() {
               <Calendar size={15} style={{ color: "oklch(0.55 0.12 150)" }} />
             </div>
             <div className="flex-1">
-              <p className="text-sm text-[color:var(--t-1)]">Connect Google Calendar</p>
+              <p className="text-sm text-[color:var(--t-1)]">Sync Google</p>
               <p className="text-xs" style={{ color: "var(--t-5)" }}>
                 {connectingGoogle ? "Connecting…" : "Allow once — then your events sync automatically"}
               </p>
