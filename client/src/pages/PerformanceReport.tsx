@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  TrendingUp, Target, Coins, Award, Briefcase, Calendar, Download, Trophy
+  TrendingUp, Target, Coins, Award, Briefcase, Calendar, Download, Trophy, AlertCircle
 } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import { toast } from "sonner";
@@ -98,7 +98,7 @@ export default function PerformanceReport() {
         </div>
 
         {view === "Team" ? (
-          <TeamView company={company} team={team} onPickStaff={() => setView("Personal")} />
+          <TeamView company={company} team={team} hasTargets={targets.length > 0} onPickStaff={() => setView("Personal")} />
         ) : (
           <PersonalView staff={me} />
         )}
@@ -141,33 +141,45 @@ export default function PerformanceReport() {
 function TeamView({
   company,
   team,
+  hasTargets,
   onPickStaff: _onPickStaff,
 }: {
   company: ReturnType<typeof computeCompanyPerformance>;
   team: StaffPerformance[];
+  hasTargets: boolean;
   onPickStaff: () => void;
 }) {
   return (
     <>
+      {/* No-targets notice — revenue/pipeline below are live; achievement %
+          only appears once sales targets are configured. */}
+      {!hasTargets && (
+        <div className="rounded-xl px-3.5 py-2.5 flex items-start gap-2.5" style={{ background: "oklch(0.65 0.10 55 / 8%)", border: "1px solid oklch(0.65 0.10 55 / 20%)" }}>
+          <AlertCircle size={15} style={{ color: "oklch(0.50 0.10 55)", marginTop: 1 }} className="shrink-0" />
+          <p className="text-xs leading-relaxed" style={{ color: "var(--t-3)" }}>
+            No sales targets set yet. Revenue, pipeline and cash flow below are live — achievement % will appear once targets are configured.
+          </p>
+        </div>
+      )}
       {/* Company KPI strip */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           icon={TrendingUp}
           label="YTD Revenue"
           primary={formatRMCompact(company.awardedYTD)}
-          secondary={`${(company.ytdAchievementPct * 100).toFixed(0)}% of ${formatRMCompact(company.ytdRevenueTarget)}`}
+          secondary={hasTargets ? `${(company.ytdAchievementPct * 100).toFixed(0)}% of ${formatRMCompact(company.ytdRevenueTarget)}` : "No target set"}
           tint="var(--acc-ink)"
           tintBg="oklch(0.62 0.09 68 / 10%)"
-          progress={company.ytdAchievementPct}
+          progress={hasTargets ? company.ytdAchievementPct : undefined}
         />
         <KpiCard
           icon={Calendar}
           label="This Month"
           primary={formatRMCompact(company.awardedThisMonth)}
-          secondary={`${(company.monthAchievementPct * 100).toFixed(0)}% of ${formatRMCompact(company.monthlyRevenueTarget)}`}
+          secondary={hasTargets ? `${(company.monthAchievementPct * 100).toFixed(0)}% of ${formatRMCompact(company.monthlyRevenueTarget)}` : "No target set"}
           tint="oklch(0.45 0.10 55)"
           tintBg="oklch(0.65 0.10 55 / 10%)"
-          progress={company.monthAchievementPct}
+          progress={hasTargets ? company.monthAchievementPct : undefined}
         />
         <KpiCard
           icon={Coins}
@@ -226,7 +238,7 @@ function TeamView({
         </div>
 
         {/* Sales leaderboard */}
-        <Section title="SALES LEADERBOARD" subtitle="YTD awarded vs target">
+        <Section title="SALES LEADERBOARD" subtitle={hasTargets ? "YTD awarded vs target" : "YTD awarded"}>
           <div className="space-y-3">
             {team.map((p, i) => (
               <StaffRow key={p.staffId} perf={p} rank={i + 1} />

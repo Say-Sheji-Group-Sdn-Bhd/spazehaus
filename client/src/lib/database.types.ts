@@ -1429,6 +1429,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      seed_project_lifecycle: {
+        Args: { p_budget: number; p_project_id: string }
+        Returns: undefined
+      }
       staff_email_exists: { Args: { p_email: string }; Returns: boolean }
       submit_client_review: {
         Args: {

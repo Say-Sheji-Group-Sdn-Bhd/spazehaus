@@ -20,7 +20,8 @@ import {
   type ContactLogEntry,
 } from "@/lib/customerData";
 import type { InquiryStage } from "@/lib/dbTypes";
-import { useInquiry, useAllStaff } from "@/lib/queries";
+import { useInquiry, useAllStaff, canEditProject } from "@/lib/queries";
+import { useAuth } from "@/contexts/AuthContext";
 import { formatRM } from "@/lib/quotationData";
 
 const HERO_BG = "/hero/cool.jpg";
@@ -43,6 +44,8 @@ export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const [convertOpen, setConvertOpen] = useState(false);
+  const { staff: me } = useAuth();
+  const canConvert = canEditProject(me?.role); // ops-tier only (mirrors the RPC's is_ops_tier gate)
   const { data: inq, isLoading } = useInquiry(id);
   const { data: allStaff = [] } = useAllStaff();
 
@@ -388,8 +391,10 @@ export default function CustomerDetail() {
             <DetailRow icon={MapPin} label="Source" value={inq.source} />
           </SectionCard>
 
-          {/* Convert to Project — primary CTA when inquiry is in pipeline */}
-          {(inq.stage === "new-inquiry" || inq.stage === "showroom-meet") && (
+          {/* Convert to Project — primary CTA when inquiry is in pipeline.
+              Ops-tier only (the convert RPC enforces is_ops_tier); hide for
+              everyone else rather than let them hit a raw 42501. */}
+          {canConvert && (inq.stage === "new-inquiry" || inq.stage === "showroom-meet") && (
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={() => setConvertOpen(true)}
@@ -406,6 +411,11 @@ export default function CustomerDetail() {
                 CONVERT TO PROJECT
               </span>
             </motion.button>
+          )}
+          {!canConvert && (inq.stage === "new-inquiry" || inq.stage === "showroom-meet") && (
+            <p className="text-xs text-center px-2" style={{ color: "var(--t-5)" }}>
+              Only admins / project managers can convert an inquiry into a project.
+            </p>
           )}
 
           {/* Secondary action buttons */}

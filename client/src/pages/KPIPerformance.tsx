@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import AppHeader from "@/components/AppHeader";
 import { useAllStaff, useKpiRecords } from "@/lib/queries";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from "recharts";
+import { ClipboardList } from "lucide-react";
 
 const ratingColors: Record<string, { bg: string; color: string; border: string }> = {
   A: { bg: "oklch(0.62 0.09 68 / 12%)", color: "var(--acc)", border: "oklch(0.62 0.09 68 / 25%)" },
@@ -62,11 +63,34 @@ export default function KPIPerformance() {
     });
   }, [kpiRecords]);
 
+  // Honest empty state: the page is driven by monthly KPI reviews. With none
+  // recorded, don't fabricate grades/zero-charts from the stored kpi_grade field.
+  const hasData = kpiRecords.length > 0;
+
+  // Label the ratings list by the most recent review month we actually have.
+  const latestLabel = useMemo(() => {
+    const top = kpiRecords[0];
+    return top ? `${MONTHS_SHORT[top.month - 1] ?? ""} ${top.year}`.toUpperCase() : "";
+  }, [kpiRecords]);
+
   return (
     <div className="mobile-container">
       <AppHeader title="KPI & Performance" subtitle="MONTHLY REVIEW" showBack compact />
 
       <div className="px-4 py-4 pb-24 space-y-5 lg:px-8 lg:py-7">
+        {!hasData && (
+          <div className="rounded-2xl p-8 flex flex-col items-center text-center gap-3" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "oklch(0.62 0.09 68 / 12%)" }}>
+              <ClipboardList size={22} style={{ color: "var(--acc)" }} />
+            </div>
+            <p className="font-display text-base font-semibold" style={{ color: "var(--t-1)" }}>No KPI reviews yet</p>
+            <p className="text-sm leading-relaxed max-w-xs" style={{ color: "var(--t-5)" }}>
+              Monthly performance reviews will appear here once they're recorded. Ratings, score trends and the team breakdown stay empty until the first review is entered.
+            </p>
+          </div>
+        )}
+
+        {hasData && (<>
         {/* Summary cards */}
         <div className="grid grid-cols-3 gap-2">
           {[
@@ -109,7 +133,7 @@ export default function KPIPerformance() {
 
         {/* Staff KPI list */}
         <div>
-          <p className="text-xs font-label mb-3" style={{ color: "var(--t-5)", letterSpacing: "0.08em" }}>STAFF RATINGS — FEB 2026</p>
+          <p className="text-xs font-label mb-3" style={{ color: "var(--t-5)", letterSpacing: "0.08em" }}>STAFF RATINGS{latestLabel ? ` — ${latestLabel}` : ""}</p>
           <div className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start">
             {staffMembers.map((staff, i) => {
               const ratingKey = rating(staff.id);
@@ -149,6 +173,7 @@ export default function KPIPerformance() {
             })}
           </div>
         </div>
+        </>)}
       </div>
     </div>
   );

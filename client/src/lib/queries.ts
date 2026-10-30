@@ -587,6 +587,19 @@ export function useCreateProject() {
         throw new Error("Could not allocate a unique project id after several attempts. Please retry.");
       }
 
+      // Seed the lifecycle scaffolding (5 payment gates + 6 signatures), the same
+      // rows the convert-from-inquiry flow creates — so the Lifecycle tab renders
+      // the payment schedule / signatures instead of "RM0 of RM0" and stage can
+      // advance off status changes. Idempotent server-side; non-fatal if it fails
+      // (the project still exists and can be re-seeded later).
+      {
+        const { error: seedErr } = await supabase.rpc("seed_project_lifecycle", {
+          p_project_id: created.id,
+          p_budget: args.budget ?? 0,
+        });
+        if (seedErr) console.error("seed_project_lifecycle failed:", seedErr);
+      }
+
       // Optional cover image — upload now that we have the id, then patch image_path.
       // Non-fatal: if the upload fails the project still exists and the app falls
       // back to the built-in default cover.
