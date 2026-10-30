@@ -88,7 +88,7 @@ export default function ManageTeamSheet({
             </div>
 
             {/* Header */}
-            <div className="px-4 pb-3 flex items-start justify-between shrink-0" style={{ borderBottom: "1px solid var(--b-2)" }}>
+            <div className="px-4 pt-3 lg:pt-5 pb-3 flex items-start justify-between shrink-0" style={{ borderBottom: "1px solid var(--b-2)" }}>
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, var(--acc-strong), var(--acc-2))" }}>
                   <Users size={16} className="text-white" />
@@ -135,13 +135,19 @@ export default function ManageTeamSheet({
                         key={s.id}
                         type="button"
                         onClick={() => toggleMember(s.avatar_code)}
-                        className="px-2.5 py-1.5 rounded-full text-xs font-label"
+                        className="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-xs font-label transition-colors"
                         style={{
-                          background: on ? "oklch(0.62 0.09 68 / 15%)" : "var(--s-3)",
-                          color: on ? "var(--acc-ink)" : "var(--t-5)",
-                          border: on ? "1px solid oklch(0.62 0.09 68 / 40%)" : "1px solid var(--b-1)",
+                          background: on ? "oklch(0.62 0.09 68 / 14%)" : "var(--s-3)",
+                          color: on ? "var(--acc-ink)" : "var(--t-4)",
+                          border: on ? "1px solid oklch(0.62 0.09 68 / 45%)" : "1px solid var(--b-1)",
                         }}
                       >
+                        <span
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
+                          style={{ background: on ? "var(--acc-bright)" : "var(--s-2)", color: on ? "oklch(1 0 0)" : "var(--t-5)" }}
+                        >
+                          {s.avatar_code}
+                        </span>
                         {s.name}
                       </button>
                     );
