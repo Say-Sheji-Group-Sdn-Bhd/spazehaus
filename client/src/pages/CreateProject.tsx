@@ -48,7 +48,7 @@ export default function CreateProject() {
     setImagePreview(URL.createObjectURL(file));
   };
   const [form, setForm] = useState({
-    clientName: "", clientContact: "", clientEmail: "",
+    clientName: "", clientContact: "", clientEmail: "", source: "",
     projectName: "", projectType: "Residential", propertyType: "Condominium",
     serviceType: "Design", // "Design" | "Renovation" — drives the SD/SR project number
     location: "", size: "", budget: "", startDate: "", targetDate: "",
@@ -83,6 +83,7 @@ export default function CreateProject() {
       clientName: inq.client_name ?? f.clientName,
       clientContact: inq.contact ?? f.clientContact,
       clientEmail: inq.email ?? f.clientEmail,
+      source: inq.source ?? f.source,
       projectType: type,
       propertyType: propType,
       location: inq.location ?? f.location,
@@ -114,6 +115,7 @@ export default function CreateProject() {
         type: form.projectType,
         propertyType: form.propertyType,
         serviceType: form.serviceType as "Design" | "Renovation",
+        source: form.source || null,
         location: form.location.trim(),
         size: form.size ? Number(form.size) : 0,
         budget: form.budget ? Number(form.budget) : 0,
@@ -227,6 +229,16 @@ export default function CreateProject() {
                 <div>
                   <label style={labelStyle}>EMAIL ADDRESS</label>
                   <input style={inputStyle} placeholder="client@email.com" value={form.clientEmail} onChange={(e) => update("clientEmail", e.target.value)} />
+                </div>
+                <div>
+                  <label style={labelStyle}>LEAD SOURCE</label>
+                  <select data-testid="cp-source" style={inputStyle} value={form.source} onChange={(e) => update("source", e.target.value)}>
+                    <option value="">— How did they find us? —</option>
+                    <option value="Social Media">Social Media</option>
+                    <option value="Website">Website</option>
+                    <option value="Walk-in">Walk-in</option>
+                    <option value="Referral">Referral</option>
+                  </select>
                 </div>
               </>
             )}
@@ -378,7 +390,7 @@ export default function CreateProject() {
             {step === 4 && (
               <div className="space-y-3">
                 {[
-                  { title: "Client Details", fields: [{ label: "Client Name", value: form.clientName || "—" }, { label: "Contact", value: form.clientContact || "—" }, { label: "Email", value: form.clientEmail || "—" }] },
+                  { title: "Client Details", fields: [{ label: "Client Name", value: form.clientName || "—" }, { label: "Contact", value: form.clientContact || "—" }, { label: "Email", value: form.clientEmail || "—" }, { label: "Source", value: form.source || "—" }] },
                   { title: "Project Details", fields: [{ label: "Project Name", value: form.projectName || "—" }, { label: "Type", value: `${form.projectType} · ${form.propertyType}` }, { label: "Service", value: form.serviceType }, { label: "Location", value: form.location || "—" }, { label: "Size", value: form.size ? `${form.size} sqft` : "—" }, { label: "Budget", value: form.budget ? `RM ${Number(form.budget).toLocaleString()}` : "—" }] },
                 ].map((section, si) => (
                   <div key={si} className="rounded-2xl p-4" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>

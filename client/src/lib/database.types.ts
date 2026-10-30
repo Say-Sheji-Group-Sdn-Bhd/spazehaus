@@ -750,6 +750,7 @@ export type Database = {
           property_type: string
           service_type: string | null
           size_sqft: number
+          source: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"]
           target_date: string | null
@@ -785,6 +786,7 @@ export type Database = {
           property_type: string
           service_type?: string | null
           size_sqft: number
+          source?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           target_date?: string | null
@@ -820,6 +822,7 @@ export type Database = {
           property_type?: string
           service_type?: string | null
           size_sqft?: number
+          source?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           target_date?: string | null

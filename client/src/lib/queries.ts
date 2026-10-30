@@ -489,6 +489,7 @@ export type CreateProjectArgs = {
   type: string;                    // → project_type
   propertyType: string;
   serviceType: "Design" | "Renovation"; // → service_type; picks the SD/SR project code
+  source?: string | null;          // lead channel: how the client found us
   location: string;
   size?: number;                   // → size_sqft (NOT NULL → default 0)
   budget?: number;                 // NOT NULL → default 0
@@ -535,6 +536,7 @@ export function useCreateProject() {
         project_type: args.type,
         property_type: args.propertyType,
         service_type: args.serviceType,
+        source: args.source ?? null,
         location: args.location,
         size_sqft: args.size ?? 0,
         budget: args.budget ?? 0,
