@@ -826,6 +826,28 @@ export function useDeleteReview() {
   });
 }
 
+/** Public client-portal review submission (no auth). Validates the portal token
+ *  and inserts the review server-side via the `submit_client_review` anon RPC. */
+export function useSubmitClientReview() {
+  return useMutation({
+    mutationFn: async (args: {
+      token: string;
+      rating: number;
+      comment?: string;
+      reviewerName?: string;
+    }): Promise<void> => {
+      const rating = Math.max(1, Math.min(5, Math.round(args.rating)));
+      const { error } = await supabase.rpc("submit_client_review", {
+        p_token: args.token,
+        p_rating: rating,
+        p_comment: args.comment?.trim() || undefined,
+        p_reviewer_name: args.reviewerName?.trim() || undefined,
+      });
+      if (error) throw error;
+    },
+  });
+}
+
 // ─── LIFECYCLE (PAYMENTS + SIGNATURES PER PROJECT) ──────────────────────────
 
 export function useProjectLifecycle(projectId: string | undefined) {

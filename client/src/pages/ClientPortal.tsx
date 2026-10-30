@@ -18,7 +18,7 @@ import { motion } from "framer-motion";
 import { useRoute } from "wouter";
 import {
   AlertCircle, CheckCircle2, Clock, FileSignature, Receipt, Camera,
-  MapPin, Calendar, Loader2, Lock, Mail, Phone, User, Building2,
+  MapPin, Calendar, Loader2, Lock, Mail, Phone, User, Building2, Star, Heart,
 } from "lucide-react";
 import {
   useClientPortalData,
@@ -29,6 +29,7 @@ import {
   type ClientPortalSignature,
   type ClientPortalStage,
 } from "@/lib/clientPortal";
+import { useSubmitClientReview } from "@/lib/queries";
 
 const HERO_BG =
   "/hero/portfolio.jpg";
@@ -87,6 +88,7 @@ export default function ClientPortal() {
         <PaymentsSection payments={data.payments} budget={data.project.budget} />
         <SignaturesSection signatures={data.signatures} />
         <PhotosSection photos={data.recent_photos} token={token!} />
+        <ReviewSection token={token!} clientName={data.project.client_name} />
         <SupportCard project={data.project} />
         <Footer />
       </div>
@@ -619,6 +621,110 @@ function PortalPhotoTile({
         {formatDate(photo.photo_date)}
       </span>
     </div>
+  );
+}
+
+function ReviewSection({ token, clientName }: { token: string; clientName: string }) {
+  const submit = useSubmitClientReview();
+  const [rating, setRating] = useState(0);
+  const [hover, setHover] = useState(0);
+  const [comment, setComment] = useState("");
+  const [name, setName] = useState("");
+  const [done, setDone] = useState(false);
+
+  async function handleSubmit() {
+    if (rating < 1) return;
+    try {
+      await submit.mutateAsync({ token, rating, comment, reviewerName: name || clientName });
+      setDone(true);
+    } catch {
+      /* mutation error surfaced below */
+    }
+  }
+
+  if (done) {
+    return (
+      <Section title="YOUR REVIEW" icon={Star}>
+        <div
+          className="rounded-2xl p-5 flex flex-col items-center text-center gap-2"
+          style={{ background: "linear-gradient(135deg, oklch(0.62 0.09 68 / 8%), oklch(1 0 0))", border: "1px solid oklch(0.62 0.09 68 / 25%)" }}
+        >
+          <Heart size={22} style={{ color: "oklch(0.55 0.14 25)" }} />
+          <p className="font-display text-base font-semibold" style={{ color: "oklch(0.18 0.008 65)" }}>Thank you!</p>
+          <p className="text-xs leading-relaxed max-w-xs" style={{ color: "oklch(0.42 0.008 65)" }}>
+            Your feedback means a lot to the SPAZEHAUS team.
+          </p>
+        </div>
+      </Section>
+    );
+  }
+
+  return (
+    <Section title="RATE YOUR EXPERIENCE" icon={Star}>
+      <div
+        className="rounded-2xl p-4 space-y-3 lg:p-5"
+        style={{ background: "oklch(1 0 0)", border: "1px solid oklch(0.90 0.010 75)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
+      >
+        <p className="text-xs leading-relaxed" style={{ color: "oklch(0.42 0.008 65)" }}>
+          How has your experience been so far? Tap a star to rate us.
+        </p>
+        <div className="flex gap-1.5 justify-center py-1">
+          {[1, 2, 3, 4, 5].map((n) => {
+            const on = n <= (hover || rating);
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setRating(n)}
+                onMouseEnter={() => setHover(n)}
+                onMouseLeave={() => setHover(0)}
+                aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                className="p-1 transition-transform active:scale-90"
+              >
+                <Star
+                  size={30}
+                  style={{ color: on ? "oklch(0.72 0.14 68)" : "oklch(0.85 0.010 75)" }}
+                  fill={on ? "oklch(0.72 0.14 68)" : "none"}
+                />
+              </button>
+            );
+          })}
+        </div>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Tell us what you loved (optional)"
+          rows={3}
+          className="w-full rounded-xl px-3 py-2.5 text-sm resize-none"
+          style={{ background: "oklch(0.98 0.004 80)", border: "1px solid oklch(0.90 0.010 75)", color: "oklch(0.20 0.008 65)", outline: "none" }}
+        />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={`Your name (${clientName})`}
+          className="w-full rounded-xl px-3 py-2.5 text-sm"
+          style={{ background: "oklch(0.98 0.004 80)", border: "1px solid oklch(0.90 0.010 75)", color: "oklch(0.20 0.008 65)", outline: "none" }}
+        />
+        {submit.isError && (
+          <p className="text-xs" style={{ color: "oklch(0.55 0.14 25)" }}>
+            Couldn't submit — please try again.
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={rating < 1 || submit.isPending}
+          className="w-full rounded-xl py-3 text-sm font-label font-semibold flex items-center justify-center gap-2"
+          style={{
+            background: rating < 1 ? "oklch(0.85 0.010 75)" : "linear-gradient(135deg, oklch(0.62 0.09 68), oklch(0.55 0.10 55))",
+            color: "oklch(1 0 0)", letterSpacing: "0.04em", opacity: submit.isPending ? 0.7 : 1,
+            cursor: rating < 1 ? "not-allowed" : "pointer",
+          }}
+        >
+          {submit.isPending ? "Sending…" : "Submit Review"}
+        </button>
+      </div>
+    </Section>
   );
 }
 
