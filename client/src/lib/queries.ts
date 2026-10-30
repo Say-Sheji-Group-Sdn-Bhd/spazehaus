@@ -440,6 +440,8 @@ export type UpdateProjectArgs = {
   description?: string | null;
   startDate?: string;                    // DD/MM/YYYY → start_date
   targetDate?: string;                   // DD/MM/YYYY → target_date
+  imageFile?: File | null;               // replace cover → project-images bucket → image_path
+  removeImage?: boolean;                 // clear cover → image_path null (built-in default shown)
 };
 
 /** Update editable project metadata. Gated server-side by the Phase 0D
@@ -463,6 +465,19 @@ export function useUpdateProject() {
       if (args.description !== undefined) payload.description = args.description;
       if (args.startDate !== undefined) payload.start_date = args.startDate ? ddmmyyyyToIso(args.startDate) : null;
       if (args.targetDate !== undefined) payload.target_date = args.targetDate ? ddmmyyyyToIso(args.targetDate) : null;
+
+      // Cover image: remove (→ null, default shown) or replace (upload → set image_path).
+      if (args.removeImage) {
+        payload.image_path = null;
+      } else if (args.imageFile) {
+        const ext = args.imageFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
+        const path = `${args.id}/cover-${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from("project-images")
+          .upload(path, args.imageFile, { upsert: true, contentType: args.imageFile.type });
+        if (upErr) throw upErr;
+        payload.image_path = path;
+      }
 
       const { data, error } = await supabase
         .from("projects")

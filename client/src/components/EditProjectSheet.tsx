@@ -8,9 +8,9 @@
  * current_stage_id, client_access_token) and assignee reassignment
  * (designer/pm) are intentionally out of scope here.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, FolderCog, Check } from "lucide-react";
+import { X, FolderCog, Check, ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUpdateProject, type UpdateProjectArgs, type Project } from "@/lib/queries";
 import { useIsDesktop } from "@/hooks/useMobile";
@@ -54,9 +54,16 @@ export default function EditProjectSheet({
   const [clientContact, setClientContact] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [description, setDescription] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [removeCover, setRemoveCover] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open && project) {
+      setCoverFile(null);
+      setCoverPreview(null);
+      setRemoveCover(false);
       setName(project.name);
       setStatus(project.status as ProjectRow["status"]);
       setPriority(project.priority as ProjectRow["priority"]);
@@ -72,7 +79,26 @@ export default function EditProjectSheet({
     }
   }, [open, project]);
 
+  function pickCover(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+    setRemoveCover(false);
+  }
+  function clearCover() {
+    setCoverFile(null);
+    setCoverPreview(null);
+    setRemoveCover(true);
+  }
+
   if (!project) return null;
+
+  // Current cover shown in the sheet: a freshly-picked file, else the existing
+  // cover, else (removed / none) the built-in default placeholder.
+  const currentCoverUrl = removeCover ? undefined : (coverPreview ?? project.heroImage);
+  const showRemove = Boolean(coverFile) || (Boolean(project.heroImage) && !removeCover);
 
   async function handleSubmit() {
     if (!project) return;
@@ -93,6 +119,8 @@ export default function EditProjectSheet({
       clientContact: clientContact.trim() || null,
       clientEmail: clientEmail.trim() || null,
       description: description.trim() || null,
+      imageFile: coverFile,
+      removeImage: removeCover,
     };
     try {
       await updateProject.mutateAsync(args);
@@ -152,6 +180,47 @@ export default function EditProjectSheet({
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+              <FieldGroup label="COVER IMAGE">
+                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--b-1)" }}>
+                  <div
+                    style={{
+                      height: 120,
+                      background: currentCoverUrl
+                        ? `linear-gradient(oklch(0.11 0.004 285 / 0.1), oklch(0.11 0.004 285 / 0.25)), url(${currentCoverUrl}) center/cover no-repeat`
+                        : "var(--s-3)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    {!currentCoverUrl && (
+                      <span className="text-[11px]" style={{ color: "var(--t-5)" }}>Default cover (by project type)</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2 p-2" style={{ borderTop: "1px solid var(--b-2)" }}>
+                    <button
+                      type="button"
+                      data-testid="edit-cover-replace"
+                      onClick={() => fileRef.current?.click()}
+                      className="flex-1 py-2 rounded-lg text-xs font-label flex items-center justify-center gap-1.5"
+                      style={{ background: "var(--s-2)", color: "var(--acc-ink)", border: "1px solid var(--b-1)" }}
+                    >
+                      <ImagePlus size={13} />{currentCoverUrl ? "Replace" : "Add cover"}
+                    </button>
+                    {showRemove && (
+                      <button
+                        type="button"
+                        data-testid="edit-cover-remove"
+                        onClick={clearCover}
+                        className="py-2 px-3 rounded-lg text-xs font-label flex items-center justify-center gap-1.5"
+                        style={{ background: "oklch(0.55 0.16 25 / 10%)", color: "oklch(0.55 0.16 25)", border: "1px solid oklch(0.55 0.16 25 / 25%)" }}
+                      >
+                        <Trash2 size={13} />Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickCover} />
+              </FieldGroup>
+
               <FieldGroup label="PROJECT NAME *">
                 <input data-testid="edit-name" type="text" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
               </FieldGroup>

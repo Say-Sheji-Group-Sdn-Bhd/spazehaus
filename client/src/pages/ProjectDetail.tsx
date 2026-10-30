@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useLocation } from "wouter";
-import { Upload, UserPlus, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X } from "lucide-react";
+import { Upload, UserPlus, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import MarkCollectedSheet, { type MarkCollectedTarget } from "@/components/MarkCollectedSheet";
 import SignDocumentSheet, { type SignDocumentTarget } from "@/components/SignDocumentSheet";
@@ -34,6 +34,7 @@ import {
   canEditPayments,
   canEditSignatures,
   canEditProject,
+  useUpdateProject,
   resolveProjectRoster,
   useRegenerateClientToken,
   getSignatureDocUrl,
@@ -115,6 +116,9 @@ export default function ProjectDetail() {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTaskRow | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [coverMenuOpen, setCoverMenuOpen] = useState(false);
+  const updateCover = useUpdateProject();
 
   if (isLoading) {
     return (
@@ -172,6 +176,30 @@ export default function ProjectDetail() {
     roleLabel: r.role,
   }));
   const canEdit = canEditProject(me?.role);
+
+  async function onCoverPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    setCoverMenuOpen(false);
+    if (!file || !project) return;
+    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
+    try {
+      await updateCover.mutateAsync({ id: project.id, imageFile: file });
+      toast.success("Cover updated");
+    } catch (err) {
+      toast.error(`Cover update failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    }
+  }
+  async function handleRemoveCover() {
+    setCoverMenuOpen(false);
+    if (!project) return;
+    try {
+      await updateCover.mutateAsync({ id: project.id, removeImage: true });
+      toast.success("Cover removed — default shown");
+    } catch (err) {
+      toast.error(`Remove failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    }
+  }
 
   // Task helpers (real DB tasks replace the old sampleTasks mock).
   const staffById = new Map(allStaff.map((s) => [s.id, s]));
@@ -266,6 +294,33 @@ export default function ProjectDetail() {
             background: `linear-gradient(to bottom, oklch(0.11 0.004 285 / 0.3), oklch(0.11 0.004 285 / 0.75)), url(${project.heroImage ?? (project.type === "Residential" ? CARD_BG2 : CARD_BG1)}) center/cover no-repeat`,
           }}
         >
+          {canEdit && (
+            <div className="absolute top-3 right-3 lg:top-5 lg:right-5 z-10">
+              <button
+                type="button"
+                data-testid="hero-cover-btn"
+                onClick={() => setCoverMenuOpen((v) => !v)}
+                disabled={updateCover.isPending}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-label"
+                style={{ background: "oklch(0.11 0.004 285 / 0.55)", color: "white", border: "1px solid oklch(1 0 0 / 0.25)", backdropFilter: "blur(4px)", opacity: updateCover.isPending ? 0.6 : 1 }}
+              >
+                <ImagePlus size={13} />{updateCover.isPending ? "Saving…" : "Cover"}
+              </button>
+              {coverMenuOpen && !updateCover.isPending && (
+                <div className="absolute right-0 mt-1.5 rounded-xl overflow-hidden min-w-[150px]" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 8px 28px oklch(0 0 0 / 0.22)" }}>
+                  <button type="button" onClick={() => coverInputRef.current?.click()} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs" style={{ color: "var(--t-2)" }}>
+                    <ImagePlus size={13} style={{ color: "var(--acc-ink)" }} />{project.heroImage ? "Replace cover" : "Add cover"}
+                  </button>
+                  {project.heroImage && (
+                    <button type="button" onClick={handleRemoveCover} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs" style={{ color: "oklch(0.55 0.16 25)", borderTop: "1px solid var(--b-2)" }}>
+                      <Trash2 size={13} />Remove cover
+                    </button>
+                  )}
+                </div>
+              )}
+              <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={onCoverPicked} />
+            </div>
+          )}
           <div className="absolute bottom-4 left-4 right-4 lg:bottom-6 lg:left-8 lg:right-8">
             <div className="flex items-end justify-between">
               <div>
