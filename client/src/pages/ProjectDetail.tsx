@@ -56,6 +56,7 @@ import {
 import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow } from "@/lib/dbTypes";
 import { useAuth } from "@/contexts/AuthContext";
 import EditProjectSheet from "@/components/EditProjectSheet";
+import ManageTeamSheet from "@/components/ManageTeamSheet";
 import { toast } from "sonner";
 
 const CARD_BG1 = "/hero/card1.jpg";
@@ -103,6 +104,7 @@ export default function ProjectDetail() {
   const { data: allQuotations = [] } = useQuotations();
   const { staff: me } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
+  const [manageTeamOpen, setManageTeamOpen] = useState(false);
 
   // Phase 1 — DB-backed tasks, site photos, and client reviews.
   const { data: tasks = [] } = useProjectTasks(id);
@@ -705,7 +707,26 @@ export default function ProjectDetail() {
 
             {/* Team tab */}
             {activeTab === "Team" && (
-              <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start">
+              <div className="space-y-3">
+                {canEdit && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      data-testid="manage-team-btn"
+                      onClick={() => setManageTeamOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-label font-semibold"
+                      style={{ background: "var(--acc-bright)", color: "oklch(1 0 0)" }}
+                    >
+                      <UserPlus size={14} />Manage Team
+                    </button>
+                  </div>
+                )}
+                {roster.length === 0 ? (
+                  <div className="rounded-2xl p-6 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
+                    <p className="text-sm" style={{ color: "var(--t-5)" }}>{canEdit ? "No one on this project yet — tap Manage Team to add a Lead Designer, PM and members." : "No team assigned yet."}</p>
+                  </div>
+                ) : (
+                  <div className="lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start space-y-3 lg:space-y-0">
                 {roster.map((member, i) => (
                   <motion.div
                     key={member.id}
@@ -741,6 +762,8 @@ export default function ProjectDetail() {
                     </span>
                   </motion.div>
                 ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -826,6 +849,7 @@ export default function ProjectDetail() {
       </div>
 
       <EditProjectSheet project={project} open={editOpen} onClose={() => setEditOpen(false)} />
+      <ManageTeamSheet project={project} staff={allStaff} open={manageTeamOpen} onClose={() => setManageTeamOpen(false)} />
       <TaskDialog
         projectId={project.id}
         task={editingTask}

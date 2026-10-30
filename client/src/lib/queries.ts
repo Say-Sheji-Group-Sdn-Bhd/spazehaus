@@ -440,6 +440,9 @@ export type UpdateProjectArgs = {
   description?: string | null;
   startDate?: string;                    // DD/MM/YYYY → start_date
   targetDate?: string;                   // DD/MM/YYYY → target_date
+  designerId?: string | null;            // → designer_id (staff id)
+  pmId?: string | null;                  // → pm_id (staff id)
+  team?: string[];                       // → team (staff avatar codes)
   imageFile?: File | null;               // replace cover → project-images bucket → image_path
   removeImage?: boolean;                 // clear cover → image_path null (built-in default shown)
 };
@@ -465,6 +468,9 @@ export function useUpdateProject() {
       if (args.description !== undefined) payload.description = args.description;
       if (args.startDate !== undefined) payload.start_date = args.startDate ? ddmmyyyyToIso(args.startDate) : null;
       if (args.targetDate !== undefined) payload.target_date = args.targetDate ? ddmmyyyyToIso(args.targetDate) : null;
+      if (args.designerId !== undefined) payload.designer_id = args.designerId;
+      if (args.pmId !== undefined) payload.pm_id = args.pmId;
+      if (args.team !== undefined) payload.team = args.team;
 
       // Cover image: remove (→ null, default shown) or replace (upload → set image_path).
       if (args.removeImage) {
