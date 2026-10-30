@@ -25,7 +25,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "How do I assign tasks or change a project's team?",
-    a: "Open the project. Use the Tasks tab to add, edit, or complete tasks. Admin/ops staff can use the Team tab → “Manage Team” to reassign the PM, lead designer, and members.",
+    a: "Open the project. Admin/ops staff first staff the project on the Team tab → “Manage Team” (set the Lead Designer, PM, and members). Then use the Tasks tab to add tasks and assign them to anyone on that team.",
   },
   {
     q: "How do I share the client portal with a customer?",

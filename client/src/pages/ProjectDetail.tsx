@@ -1075,7 +1075,7 @@ function TaskDialog({
                 </div>
               </div>
               {teamMembers.length === 0 && (
-                <p className="text-[11px]" style={{ color: "var(--t-5)" }}>Tip: add team members via the Team tab to assign tasks to them.</p>
+                <p className="text-[11px]" style={{ color: "var(--t-5)" }}>Tip: add people on the Team tab → Manage Team, then they'll show up here to assign.</p>
               )}
             </div>
 
