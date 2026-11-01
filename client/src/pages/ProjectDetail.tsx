@@ -410,8 +410,10 @@ export default function ProjectDetail() {
           ))}
         </div>
 
-        {/* ── Desktop two-column split: main content left, side rail right ── */}
-        <div className="px-4 py-4 lg:px-8 lg:py-7 lg:grid lg:grid-cols-[1fr_360px] lg:gap-6 lg:items-start">
+        {/* ── Two-column split (main + side rail) only at xl: the fixed sidebar
+            already eats ~200px, so a 360px rail only fits at ≥1280. Tablet
+            (768–1279) stays single-column full-width. ── */}
+        <div className="px-4 py-4 lg:px-8 lg:py-7 xl:grid xl:grid-cols-[1fr_360px] xl:gap-6 xl:items-start">
 
           {/* ── PRIMARY COLUMN (left) ── */}
           <div className="min-w-0">
@@ -496,8 +498,8 @@ export default function ProjectDetail() {
                     link so staff can WhatsApp / email it to the client. */}
                 <SharePortalButton token={project.clientAccessToken} clientName={project.client} projectId={project.id} canManage={canEdit} />
 
-                {/* Project Details card — shown inline on mobile, moves to side rail on lg */}
-                <div className="rounded-2xl p-4 space-y-3 lg:hidden" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
+                {/* Project Details card — shown inline up to xl, moves to side rail at xl */}
+                <div className="rounded-2xl p-4 space-y-3 xl:hidden" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
                   <h4 className="font-display text-base font-semibold" style={{ color: "var(--t-1)" }}>Project Details</h4>
                   {[
                     { label: "Client", value: project.client },
@@ -547,7 +549,7 @@ export default function ProjectDetail() {
                     <p className="text-xs" style={{ color: "var(--t-5)" }}>{canEdit ? "Add the first task to start tracking work." : "Tasks will appear here once added."}</p>
                   </div>
                 ) : (
-                  <div className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-2 lg:items-start">
+                  <div className="space-y-2 xl:space-y-0 xl:grid xl:grid-cols-2 xl:gap-2 xl:items-start">
                     {tasks.map((task, i) => {
                       const ts = taskStatusConfig[task.status] ?? taskStatusConfig.pending;
                       const assignee = task.assignee_id ? staffById.get(task.assignee_id) : undefined;
@@ -622,7 +624,7 @@ export default function ProjectDetail() {
                           <p className="text-xs" style={{ color: "var(--t-5)" }}>Create a quotation for this project</p>
                         </div>
                       ) : (
-                        <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start">
+                        <div className="space-y-3">
                           {projectQuotes.map((q, i) => {
                             const sc2 = qStatusConfig[q.status];
                             const { total } = computeTotals(q.items, q.tax_rate);
@@ -641,8 +643,8 @@ export default function ProjectDetail() {
                                   <FileText size={17} style={{ color: "var(--acc)" }} />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>{q.id}</p>
-                                  <p className="text-xs mt-0.5" style={{ color: "var(--t-5)" }}>{q.doc_type} · {q.issue_date}</p>
+                                  <p className="text-sm font-semibold truncate" style={{ color: "var(--t-1)" }}>{q.id}</p>
+                                  <p className="text-xs mt-0.5 truncate" style={{ color: "var(--t-5)" }}>{q.doc_type} · {q.issue_date}</p>
                                 </div>
                                 <div className="text-right shrink-0">
                                   <p className="text-sm font-display font-semibold" style={{ color: "var(--acc)" }}>{formatRM(total)}</p>
@@ -726,7 +728,7 @@ export default function ProjectDetail() {
                     <p className="text-sm" style={{ color: "var(--t-5)" }}>{canEdit ? "No one on this project yet — tap Manage Team to add a Lead Designer, PM and members." : "No team assigned yet."}</p>
                   </div>
                 ) : (
-                  <div className="lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start space-y-3 lg:space-y-0">
+                  <div className="xl:grid xl:grid-cols-2 xl:gap-3 xl:items-start space-y-3 xl:space-y-0">
                 {roster.map((member, i) => (
                   <motion.div
                     key={member.id}
@@ -768,8 +770,8 @@ export default function ProjectDetail() {
             )}
           </div>
 
-          {/* ── SIDE RAIL (right column, desktop only) ── */}
-          <div className="hidden lg:flex lg:flex-col lg:gap-4">
+          {/* ── SIDE RAIL (right column, xl desktop only) ── */}
+          <div className="hidden xl:flex xl:flex-col xl:gap-4">
             {/* Project Details */}
             <div className="rounded-2xl p-4 space-y-3" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
               <h4 className="font-display text-base font-semibold" style={{ color: "var(--t-1)" }}>Project Details</h4>

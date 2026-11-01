@@ -141,7 +141,7 @@ export default function CustomerDetail() {
         </div>
 
         {/* Two-column layout on lg+: primary (left) + side rail (right) */}
-        <div className="px-4 py-4 space-y-4 lg:px-8 lg:py-6 lg:space-y-0 lg:grid lg:grid-cols-[1fr_360px] lg:gap-6 lg:items-start">
+        <div className="px-4 py-4 space-y-4 lg:px-8 lg:py-6 xl:space-y-0 xl:grid xl:grid-cols-[1fr_360px] xl:gap-6 xl:items-start">
 
           {/* PRIMARY COLUMN */}
           <div className="space-y-4 lg:space-y-6">

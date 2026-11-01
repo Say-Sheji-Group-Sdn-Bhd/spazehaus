@@ -221,7 +221,7 @@ export default function CalendarPage() {
 
       <div className="px-4 py-4 pb-24 space-y-4 lg:px-8 lg:py-7 lg:space-y-6">
         {/* Two-column layout on lg+: calendar left, agenda right */}
-        <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[1fr_340px] lg:gap-6 lg:items-start">
+        <div className="space-y-4 xl:space-y-0 xl:grid xl:grid-cols-[1fr_340px] xl:gap-6 xl:items-start">
 
           {/* LEFT: Month nav + calendar grid */}
           <div className="space-y-4 lg:space-y-5">
