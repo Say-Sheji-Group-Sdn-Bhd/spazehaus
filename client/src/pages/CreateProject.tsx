@@ -57,6 +57,25 @@ export default function CreateProject() {
 
   const update = (key: string, value: string | string[]) => setForm((f) => ({ ...f, [key]: value }));
 
+  // Required fields per step — block Continue (and name the missing field) until
+  // they're filled. Step 3 (cover & notes) is all optional.
+  const stepError = (s: number): string | null => {
+    if (s === 1) {
+      if (!form.clientName.trim()) return "Client name";
+      if (!form.clientContact.trim()) return "Contact number";
+    } else if (s === 2) {
+      if (!form.projectName.trim()) return "Project name";
+      if (!form.propertyType) return "Property type";
+      if (!form.location.trim()) return "Location";
+    }
+    return null;
+  };
+  const goNext = () => {
+    const missing = stepError(step);
+    if (missing) { toast.error(`${missing} is required`); return; }
+    setStep((s) => s + 1);
+  };
+
   // Switching project type must also reset property type to a valid option for
   // that type — otherwise a leftover value (e.g. "Condominium" on a Commercial
   // project) stays selected and gets submitted.
@@ -429,7 +448,7 @@ export default function CreateProject() {
         )}
         <motion.button
           whileTap={{ scale: 0.95 }}
-          onClick={step < 4 ? () => setStep((s) => s + 1) : handleSubmit}
+          onClick={step < 4 ? goNext : handleSubmit}
           disabled={createProject.isPending}
           data-testid="cp-next"
           className="flex-1 py-3.5 rounded-xl text-sm font-label font-semibold"

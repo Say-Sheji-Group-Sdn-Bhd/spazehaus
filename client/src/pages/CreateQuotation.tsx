@@ -120,6 +120,22 @@ export default function CreateQuotation() {
     return `${seriesPrefix}${padded(next)}`;
   }
 
+  // Required fields per step — block Continue until they're met. Step 3 is review.
+  const stepError = (s: number): string | null => {
+    if (s === 1) {
+      if (!docInfo.projectId) return "Pick a linked project first";
+      if (!docInfo.issueDate.trim()) return "Issue date is required";
+    } else if (s === 2) {
+      if (items.some((i) => !i.description.trim())) return "Every line item needs a description";
+    }
+    return null;
+  };
+  const goNext = () => {
+    const err = stepError(step);
+    if (err) { toast.error(err); return; }
+    setStep((s) => s + 1);
+  };
+
   const handleSubmit = async () => {
     if (!selectedProject) {
       toast.error("Pick a linked project first");
@@ -506,7 +522,7 @@ export default function CreateQuotation() {
         )}
         <motion.button
           whileTap={createQuotation.isPending ? undefined : { scale: 0.95 }}
-          onClick={step < 3 ? () => setStep((s) => s + 1) : handleSubmit}
+          onClick={step < 3 ? goNext : handleSubmit}
           disabled={step === 3 && createQuotation.isPending}
           data-testid="cq-next"
           className="flex-1 py-3.5 rounded-xl text-sm font-label font-semibold"
