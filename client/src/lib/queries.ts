@@ -3175,6 +3175,21 @@ export function reminderSummary(
   return { todayPending, todayCompleted, thisWeekUpcoming, overdue, streak, total: reminders.length };
 }
 
+/** Shared reminder list — the same build the Reminders page uses. Powers both the
+ *  /reminders page and the header notification dropdown so they never drift. */
+export function useReminders() {
+  const { data: projects = [] } = useProjects();
+  const { data: staff = [] } = useAllStaff();
+  const { data: sitePhotos = [] } = useSitePhotos();
+  const activeProjectIds = projects
+    .filter((p) => p.status === "active" || p.status === "assigned")
+    .map((p) => p.id);
+  const photoMaps = buildSitePhotoMaps(activeProjectIds, sitePhotos, staff);
+  const all = buildReminders(projects, photoMaps);
+  const summary = reminderSummary(all, photoMaps);
+  return { all, summary };
+}
+
 // ── Project timeline ──
 
 export type TimelineRow = {

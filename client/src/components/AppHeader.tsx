@@ -3,8 +3,9 @@
  * Design: White/light corporate header with warm gold accents
  * Used across all screens — supports back navigation, title, subtitle, action buttons
  */
-import { ChevronLeft, Bell } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { motion } from "framer-motion";
+import NotificationBell from "./NotificationBell";
 
 interface AppHeaderProps {
   title: string;
@@ -88,16 +89,7 @@ export default function AppHeader({
           </div>
           <div className="flex items-center gap-2">
             {rightAction}
-            {showNotification && (
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                className="w-9 h-9 flex items-center justify-center rounded-full relative"
-                style={{ background: "oklch(1 0 0 / 15%)", border: "1px solid oklch(1 0 0 / 20%)" }}
-              >
-                <Bell size={16} className="text-white" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "var(--acc-strong)" }} />
-              </motion.button>
-            )}
+            {showNotification && <NotificationBell variant="dark" />}
           </div>
         </div>
       </div>
@@ -157,16 +149,7 @@ export default function AppHeader({
 
         <div className="flex items-center gap-2">
           {rightAction}
-          {showNotification && (
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              className="w-9 h-9 flex items-center justify-center rounded-full relative"
-              style={{ background: "var(--s-2)", border: "1px solid var(--b-1)" }}
-            >
-              <Bell size={16} style={{ color: "var(--t-3)" }} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "var(--acc-strong)" }} />
-            </motion.button>
-          )}
+          {showNotification && <NotificationBell variant="light" />}
         </div>
       </div>
     </div>

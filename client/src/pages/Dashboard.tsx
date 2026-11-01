@@ -9,8 +9,9 @@ import { useLocation } from "wouter";
 import {
   FolderOpen, Users, ClipboardCheck, TrendingUp,
   Plus, CalendarCheck, FileText, Camera,
-  ChevronRight, Bell, Search, AlertCircle, Coins, PenSquare
+  ChevronRight, Bell, AlertCircle, Coins, PenSquare
 } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useProjects,
@@ -104,15 +105,7 @@ export default function Dashboard() {
               <h1 className="font-display text-2xl font-semibold text-white leading-tight">Management</h1>
             </div>
             <div className="flex items-center gap-2">
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                data-testid="notif-bell"
-                className="w-9 h-9 flex items-center justify-center rounded-full relative"
-                style={{ background: "oklch(1 0 0 / 12%)", border: "1px solid oklch(1 0 0 / 18%)" }}
-              >
-                <Bell size={16} className="text-white" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "var(--acc-bright)" }} />
-              </motion.button>
+              <NotificationBell variant="dark" />
               <div
                 data-testid="hero-avatar"
                 className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold"
@@ -124,20 +117,10 @@ export default function Dashboard() {
           </div>
 
           {/* Greeting */}
-          <div className="mb-5">
+          <div>
             <p className="text-sm text-white/70">Good morning,</p>
             <p data-testid="hero-greeting" className="font-display text-xl font-semibold text-white">{staff?.name ?? ""}</p>
             <p data-testid="hero-jobtitle" className="text-xs mt-0.5" style={{ color: "var(--acc-bright)" }}>{staff?.job_title ?? ""}</p>
-          </div>
-
-          {/* Search bar */}
-          <div
-            data-testid="hero-search"
-            className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl"
-            style={{ background: "oklch(1 0 0 / 10%)", border: "1px solid oklch(1 0 0 / 15%)" }}
-          >
-            <Search size={14} className="text-white/50" />
-            <span className="text-sm text-white/40">Search projects, staff, tasks…</span>
           </div>
         </div>
       </div>

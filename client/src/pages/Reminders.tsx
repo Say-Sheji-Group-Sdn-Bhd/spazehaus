@@ -110,7 +110,7 @@ export default function Reminders() {
 
   return (
     <div className="mobile-container" style={{ background: "var(--s-page)" }}>
-      <AppHeader title="Reminders" subtitle="DAILY · WEEKLY SOP" bgImage={HERO_BG} showBack showNotification />
+      <AppHeader title="Reminders" subtitle="DAILY · WEEKLY SOP" bgImage={HERO_BG} showBack />
 
       <div className="px-4 py-4 space-y-5 pb-24 lg:px-8 lg:py-7 lg:space-y-6">
         {/* KPI strip */}
