@@ -120,6 +120,7 @@ export default function ProjectDetail() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverMenuOpen, setCoverMenuOpen] = useState(false);
+  const [lightbox, setLightbox] = useState<{ url: string; label: string } | null>(null);
   const updateCover = useUpdateProject();
 
   if (isLoading) {
@@ -699,7 +700,7 @@ export default function ProjectDetail() {
                   ) : (
                     <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
                       {photos.map((p) => (
-                        <SitePhotoThumb key={p.id} photo={p} canDelete={canEdit} onDelete={() => handleDeletePhoto(p)} />
+                        <SitePhotoThumb key={p.id} photo={p} canDelete={canEdit} onDelete={() => handleDeletePhoto(p)} onOpen={(url, label) => setLightbox({ url, label })} />
                       ))}
                     </div>
                   )}
@@ -852,6 +853,7 @@ export default function ProjectDetail() {
 
       <EditProjectSheet project={project} open={editOpen} onClose={() => setEditOpen(false)} />
       <ManageTeamSheet project={project} staff={allStaff} open={manageTeamOpen} onClose={() => setManageTeamOpen(false)} />
+      <PhotoLightbox photo={lightbox} onClose={() => setLightbox(null)} />
       <TaskDialog
         projectId={project.id}
         task={editingTask}
@@ -898,7 +900,7 @@ function StarRow({ value, size = 14 }: { value: number; size?: number }) {
 // SITE PHOTO THUMBNAIL — resolves a signed URL for the private storage object
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SitePhotoThumb({ photo, canDelete, onDelete }: { photo: SitePhotoRow; canDelete: boolean; onDelete: () => void }) {
+function SitePhotoThumb({ photo, canDelete, onDelete, onOpen }: { photo: SitePhotoRow; canDelete: boolean; onDelete: () => void; onOpen: (url: string, label: string) => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -917,7 +919,13 @@ function SitePhotoThumb({ photo, canDelete, onDelete }: { photo: SitePhotoRow; c
   return (
     <div className="aspect-square rounded-xl overflow-hidden relative" style={{ background: "var(--s-2)" }}>
       {url && !failed ? (
-        <img src={url} alt={dateLabel} className="w-full h-full object-cover" onError={() => setFailed(true)} />
+        <img
+          src={url}
+          alt={dateLabel}
+          onClick={() => onOpen(url, dateLabel)}
+          className="w-full h-full object-cover cursor-pointer transition-transform hover:scale-[1.03]"
+          onError={() => setFailed(true)}
+        />
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           <Upload size={16} style={{ color: "var(--t-7)" }} />
@@ -937,6 +945,59 @@ function SitePhotoThumb({ photo, canDelete, onDelete }: { photo: SitePhotoRow; c
         </button>
       )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PHOTO LIGHTBOX — tap a site photo to view it full-size
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PhotoLightbox({ photo, onClose }: { photo: { url: string; label: string } | null; onClose: () => void }) {
+  useEffect(() => {
+    if (!photo) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [photo, onClose]);
+
+  return (
+    <AnimatePresence>
+      {photo && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={onClose}
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: "oklch(0.08 0.004 285 / 0.88)", backdropFilter: "blur(6px)" }}
+        >
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: "oklch(1 0 0 / 14%)", border: "1px solid oklch(1 0 0 / 22%)" }}
+          >
+            <X size={18} className="text-white" />
+          </button>
+          <motion.img
+            key={photo.url}
+            initial={{ scale: 0.96, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.96, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            src={photo.url}
+            alt={photo.label}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-[86vh] rounded-2xl object-contain"
+            style={{ boxShadow: "0 20px 60px oklch(0 0 0 / 0.5)" }}
+          />
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full" style={{ background: "oklch(1 0 0 / 14%)", border: "1px solid oklch(1 0 0 / 20%)" }}>
+            <span className="text-xs text-white font-medium">{photo.label}</span>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 

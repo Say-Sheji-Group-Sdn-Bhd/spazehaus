@@ -385,12 +385,12 @@ export default function SignDocumentSheet({
                 </div>
                 <div className="text-left flex-1">
                   <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>
-                    Mark as signed
+                    {markSigned ? "This document is signed" : "Not signed yet"}
                   </p>
                   <p className="text-[11px]" style={{ color: "var(--t-5)" }}>
                     {markSigned
-                      ? "Status → completed · signed_by + signed_date will be recorded"
-                      : "Status → in-progress · just uploading the file for now"}
+                      ? "We'll record who signed it and the date below."
+                      : "Just saving the file for now — you can mark it signed later."}
                   </p>
                 </div>
               </button>
