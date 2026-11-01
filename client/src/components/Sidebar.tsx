@@ -48,7 +48,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`hidden lg:flex flex-col shrink-0 sticky top-0 h-screen z-40 transition-[width] duration-200 ${
+      className={`hidden md:flex flex-col shrink-0 sticky top-0 h-screen z-40 transition-[width] duration-200 ${
         collapsed ? "w-20" : "w-64"
       }`}
       style={{

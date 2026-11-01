@@ -114,17 +114,18 @@ function AppLayout() {
 
   return (
     <div
-      className="min-h-screen flex lg:items-stretch items-center justify-center"
+      className="min-h-screen flex md:items-stretch items-center justify-center"
       style={{ background: "oklch(0.93 0.008 75)" }}
     >
-      {/* Desktop/tablet left rail — hidden below lg, where BottomNav takes over */}
+      {/* Desktop/tablet left rail — hidden below md (phone), where BottomNav takes over.
+          Shows from md (768px / tablet portrait) so iPad uses the full screen. */}
       <Sidebar />
 
-      {/* Main content column. Mobile keeps the 430px app feel; lg+ widens into a
-          centered work area beside the sidebar. Dense pages can opt into a wider
-          frame per-page in later phases. */}
+      {/* Main content column. Phone (<md) keeps the 430px app feel + bottom nav;
+          md+ (tablet & desktop) widens into a work area beside the sidebar. The
+          two-column side-rail/dense grids kick in at xl (see ProjectDetail etc.). */}
       <div className="flex-1 min-w-0 flex justify-center">
-      <div className="w-full max-w-[430px] lg:max-w-[1100px] xl:max-w-[1440px] 2xl:max-w-[1760px] min-h-screen relative">
+      <div className="w-full max-w-[430px] md:max-w-[1100px] xl:max-w-[1440px] 2xl:max-w-[1760px] min-h-screen relative">
         <Suspense fallback={<RouteFallback />}>
           <Switch>
             {/* Main tabs */}
