@@ -90,6 +90,8 @@ const SpacologyResults = lazyWithReload(() => import("./pages/SpacologyResults")
 const ClientPortal     = lazyWithReload(() => import("./pages/ClientPortal"));
 // Public — /privacy, used as the Google OAuth privacy-policy link (no auth).
 const Privacy          = lazyWithReload(() => import("./pages/Privacy"));
+// Public — /terms, used as the Google OAuth terms-of-service link (no auth).
+const Terms            = lazyWithReload(() => import("./pages/Terms"));
 
 // Pages that show bottom nav
 const BOTTOM_NAV_PATHS = ["/", "/projects", "/company", "/calendar", "/profile"];
@@ -223,6 +225,15 @@ function AuthGate() {
     return (
       <Suspense fallback={<RouteFallback />}>
         <Privacy />
+      </Suspense>
+    );
+  }
+
+  // /terms is FULLY public too (Google OAuth terms-of-service link).
+  if (location === "/terms") {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <Terms />
       </Suspense>
     );
   }
