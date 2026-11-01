@@ -71,7 +71,6 @@ export default function SignDocumentSheet({
   const [signedDateIso, setSignedDateIso] = useState(isoToday());
   const [signedBy, setSignedBy] = useState("");
   const [notes, setNotes] = useState("");
-  const [markSigned, setMarkSigned] = useState(true);
   const [viewLoading, setViewLoading] = useState(false);
 
   // Reset form whenever the sheet opens against a new target
@@ -81,7 +80,6 @@ export default function SignDocumentSheet({
       setSignedDateIso(target.signedDate ? toIso(target.signedDate) : isoToday());
       setSignedBy(target.signedBy ?? target.defaultSignedBy ?? "");
       setNotes(target.notes ?? "");
-      setMarkSigned(target.status !== "completed");
     }
   }, [open, target]);
 
@@ -120,15 +118,13 @@ export default function SignDocumentSheet({
       toast.error("Pick a file to upload");
       return;
     }
-    if (markSigned) {
-      if (!signedDateDDMM) {
-        toast.error("Pick the signed date");
-        return;
-      }
-      if (!signedBy.trim()) {
-        toast.error("Who signed it? (client name / contact)");
-        return;
-      }
+    if (!signedDateDDMM) {
+      toast.error("Pick the signed date");
+      return;
+    }
+    if (!signedBy.trim()) {
+      toast.error("Who signed it? (client name / contact)");
+      return;
     }
 
     try {
@@ -142,22 +138,17 @@ export default function SignDocumentSheet({
         });
       }
 
-      // 2. Update status / signed_by / signed_date / notes
+      // 2. Mark signed — record signer + date and flip status to completed.
       const result = await updateSig.mutateAsync({
         id: target.id,
         projectId: target.projectId,
-        status: markSigned ? "completed" : "in-progress",
-        signedDate: markSigned ? signedDateDDMM : null,
-        signedBy: markSigned ? signedBy.trim() : null,
+        status: "completed",
+        signedDate: signedDateDDMM,
+        signedBy: signedBy.trim(),
         notes: notes.trim() || null,
       });
 
-      toast.success(
-        markSigned
-          ? `${target.label} marked signed`
-          : `${target.label} document uploaded`,
-        { description: target.projectName },
-      );
+      toast.success(`${target.label} marked signed`, { description: target.projectName });
 
       // Stage advancement (only happens when status flipped to completed)
       if (result.stageAdvanced) {
@@ -364,63 +355,28 @@ export default function SignDocumentSheet({
                 )}
               </FieldGroup>
 
-              {/* Mark-signed toggle */}
-              <button
-                onClick={() => setMarkSigned((v) => !v)}
-                data-testid="sign-mark-toggle"
-                className="w-full rounded-xl p-3 flex items-center gap-3"
-                style={{
-                  background: markSigned ? "oklch(0.55 0.09 145 / 8%)" : "var(--s-2)",
-                  border: `1px solid ${markSigned ? "oklch(0.55 0.09 145 / 30%)" : "var(--b-1)"}`,
-                }}
-              >
-                <div
-                  className="w-5 h-5 rounded flex items-center justify-center shrink-0"
-                  style={{
-                    background: markSigned ? "oklch(0.55 0.09 145)" : "oklch(1 0 0)",
-                    border: `1.5px solid ${markSigned ? "oklch(0.55 0.09 145)" : "var(--t-7)"}`,
-                  }}
-                >
-                  {markSigned && <Check size={12} className="text-white" strokeWidth={3} />}
-                </div>
-                <div className="text-left flex-1">
-                  <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>
-                    {markSigned ? "This document is signed" : "Not signed yet"}
-                  </p>
-                  <p className="text-[11px]" style={{ color: "var(--t-5)" }}>
-                    {markSigned
-                      ? "We'll record who signed it and the date below."
-                      : "Just saving the file for now — you can mark it signed later."}
-                  </p>
-                </div>
-              </button>
+              {/* Signed date + signed by — uploading a document records it as signed. */}
+              <FieldGroup label="SIGNED DATE *">
+                <input
+                  type="date"
+                  data-testid="sign-date"
+                  value={signedDateIso}
+                  onChange={(e) => setSignedDateIso(e.target.value)}
+                  max={isoToday()}
+                  style={inputStyle}
+                />
+              </FieldGroup>
 
-              {/* Signed date + signed by — only when marking signed */}
-              {markSigned && (
-                <>
-                  <FieldGroup label="SIGNED DATE *">
-                    <input
-                      type="date"
-                      data-testid="sign-date"
-                      value={signedDateIso}
-                      onChange={(e) => setSignedDateIso(e.target.value)}
-                      max={isoToday()}
-                      style={inputStyle}
-                    />
-                  </FieldGroup>
-
-                  <FieldGroup label="SIGNED BY *" hint="Client name or signatory">
-                    <input
-                      type="text"
-                      data-testid="sign-by"
-                      value={signedBy}
-                      onChange={(e) => setSignedBy(e.target.value)}
-                      placeholder={target.defaultSignedBy ?? "e.g. Mr. & Mrs. Lim"}
-                      style={inputStyle}
-                    />
-                  </FieldGroup>
-                </>
-              )}
+              <FieldGroup label="SIGNED BY *" hint="Client name or signatory">
+                <input
+                  type="text"
+                  data-testid="sign-by"
+                  value={signedBy}
+                  onChange={(e) => setSignedBy(e.target.value)}
+                  placeholder={target.defaultSignedBy ?? "e.g. Mr. & Mrs. Lim"}
+                  style={inputStyle}
+                />
+              </FieldGroup>
 
               {/* Notes (optional) */}
               <FieldGroup label="NOTES" hint="Optional — internal context (revision count, etc.)">
@@ -486,8 +442,8 @@ export default function SignDocumentSheet({
                   </>
                 ) : (
                   <>
-                    {markSigned ? <Check size={15} /> : <Upload size={15} />}
-                    {markSigned ? "Mark Signed" : "Upload Only"}
+                    <Check size={15} />
+                    Mark Signed
                   </>
                 )}
               </motion.button>
