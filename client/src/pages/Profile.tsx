@@ -14,7 +14,7 @@ import { toast } from "sonner";
 const menuItems: { icon: typeof Bell; label: string; subtitle: string; color: string; to?: string }[] = [
   { icon: Bell, label: "Notifications", subtitle: "In-app alerts", color: "var(--acc)", to: "/notifications" },
   { icon: Moon, label: "Appearance", subtitle: "Light mode", color: "oklch(0.70 0.09 240)" },
-  { icon: Shield, label: "Privacy & Security", subtitle: "Two-factor, sessions", color: "oklch(0.60 0.07 145)", to: "/security" },
+  { icon: Shield, label: "Privacy & Security", subtitle: "Sessions", color: "oklch(0.60 0.07 145)", to: "/security" },
   { icon: HelpCircle, label: "Help & Support", subtitle: "FAQ, contact us", color: "oklch(0.68 0.12 25)", to: "/help" },
 ];
 
