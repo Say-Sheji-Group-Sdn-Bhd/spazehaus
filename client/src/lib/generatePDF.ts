@@ -7,7 +7,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { computeTotals, formatRM } from "./quotationData";
-import type { QuotationWithItems } from "./queries";
+import type { QuotationWithItems, CompanyPerformance, StaffPerformance, TimelineRow } from "./queries";
 
 // Brand colors as RGB arrays for jsPDF — LIGHT theme
 const GOLD = [176, 141, 74] as [number, number, number];         // #B08D4A — deepened for contrast on white
@@ -346,4 +346,175 @@ export async function generateQuotationPDF(quotation: QuotationWithItems): Promi
   // ── SAVE ─────────────────────────────────────────────────────────────────────
   const filename = `${quotation.id}_${quotation.client.replace(/[^a-zA-Z0-9]/g, "_")}_${quotation.type.replace(" ", "_")}.pdf`;
   doc.save(filename);
+}
+
+// ─── PERFORMANCE REPORT ───────────────────────────────────────────────────────
+
+export type PerformanceReportData = {
+  monthLabel: string;           // e.g. "NOVEMBER 2026"
+  hasTargets: boolean;
+  company: CompanyPerformance;
+  team: StaffPerformance[];
+  timeline: TimelineRow[];
+};
+
+export async function generatePerformancePDF(data: PerformanceReportData): Promise<void> {
+  const { company, team, timeline, hasTargets, monthLabel } = data;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentW = pageW - margin * 2;
+  const pct = (p: number) => `${Math.round(p * 100)}%`;
+
+  // ── BACKGROUND + HEADER BAND ──────────────────────────────────────────────────
+  doc.setFillColor(...PAGE_BG);
+  doc.rect(0, 0, pageW, pageH, "F");
+  doc.setFillColor(...CARD_BG);
+  doc.rect(0, 0, pageW, 46, "F");
+  doc.setFillColor(...GOLD);
+  doc.rect(0, 0, pageW, 1.5, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(...GOLD);
+  doc.text("SPAZEHAUS", margin, 18);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(...MUTED);
+  doc.setCharSpace(2);
+  doc.text("INTERIOR DESIGN", margin, 23);
+  doc.setCharSpace(0);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(...INK);
+  const title = "PERFORMANCE REPORT";
+  doc.text(title, pageW - margin - doc.getTextWidth(title), 18);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...GOLD);
+  doc.text(monthLabel, pageW - margin - doc.getTextWidth(monthLabel), 24);
+
+  doc.setFontSize(7);
+  doc.setTextColor(...MUTED);
+  doc.text(COMPANY_INFO.address + ", " + COMPANY_INFO.address2, margin, 32);
+  doc.text(`${COMPANY_INFO.phone}  |  ${COMPANY_INFO.email}  |  ${COMPANY_INFO.website}`, margin, 37);
+
+  // ── KPI SUMMARY (4 boxes) ─────────────────────────────────────────────────────
+  let y = 56;
+  const boxGap = 4;
+  const boxW = (contentW - boxGap * 3) / 4;
+  const kpis = [
+    { label: "YTD REVENUE", value: formatRM(company.awardedYTD), sub: hasTargets ? `${pct(company.ytdAchievementPct)} of ${formatRM(company.ytdRevenueTarget)}` : "No target set" },
+    { label: "THIS MONTH", value: formatRM(company.awardedThisMonth), sub: hasTargets ? `${pct(company.monthAchievementPct)} of ${formatRM(company.monthlyRevenueTarget)}` : "No target set" },
+    { label: "PROJECTED GP", value: formatRM(company.projectedGP), sub: `@ ${company.gpTargetPct}% target` },
+    { label: "PIPELINE", value: formatRM(company.pipelineRM), sub: "Active inquiries" },
+  ];
+  kpis.forEach((k, i) => {
+    const x = margin + i * (boxW + boxGap);
+    doc.setFillColor(...CARD_BG);
+    doc.setDrawColor(...LIGHT_BORDER);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, y, boxW, 24, 2, 2, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6);
+    doc.setTextColor(...MUTED);
+    doc.setCharSpace(0.4);
+    doc.text(k.label, x + 4, y + 6);
+    doc.setCharSpace(0);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...INK);
+    doc.text(k.value, x + 4, y + 14);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6);
+    doc.setTextColor(...MUTED);
+    doc.text(doc.splitTextToSize(k.sub, boxW - 8)[0] ?? k.sub, x + 4, y + 20);
+  });
+  y += 30;
+
+  // ── CASH FLOW ─────────────────────────────────────────────────────────────────
+  doc.setFillColor(...CARD_BG);
+  doc.setDrawColor(...LIGHT_BORDER);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(margin, y, contentW, 18, 2, 2, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...GOLD);
+  doc.text("CASH FLOW", margin + 4, y + 6);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(...MUTED);
+  doc.text("Invoiced", margin + 4, y + 13);
+  doc.text("Collected", margin + contentW / 2, y + 13);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...INK);
+  doc.text(formatRM(company.invoicedRM), margin + 24, y + 13);
+  doc.text(formatRM(company.collectedRM), margin + contentW / 2 + 22, y + 13);
+  y += 26;
+
+  // ── SALES LEADERBOARD TABLE ───────────────────────────────────────────────────
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...INK);
+  doc.text("Sales Leaderboard", margin, y);
+  y += 3;
+  if (team.length === 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...MUTED);
+    doc.text("No sales targets set yet — revenue and pipeline above are live.", margin, y + 6);
+    y += 12;
+  } else {
+    autoTable(doc, {
+      startY: y + 2,
+      head: [["Staff", "Role", "YTD Awarded", hasTargets ? "Target" : "", hasTargets ? "Achieved" : ""]],
+      body: team.map((p) => [
+        p.name,
+        p.role,
+        formatRM(p.awardedYTD),
+        hasTargets ? formatRM(p.ytdTarget) : "",
+        hasTargets ? pct(p.ytdAchievementPct) : "",
+      ]),
+      margin: { left: margin, right: margin },
+      tableWidth: contentW,
+      styles: { fillColor: CARD_BG, textColor: INK, fontSize: 7.5, cellPadding: 3, lineColor: LIGHT_BORDER, lineWidth: 0.2, font: "helvetica" },
+      headStyles: { fillColor: GOLD, textColor: WHITE, fontStyle: "bold", fontSize: 7, halign: "left" },
+      columnStyles: { 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right", fontStyle: "bold" } },
+    });
+    y = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  // ── PROJECT TIMELINE TABLE ────────────────────────────────────────────────────
+  if (y > pageH - 60) { doc.addPage(); doc.setFillColor(...PAGE_BG); doc.rect(0, 0, pageW, pageH, "F"); y = 20; }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...INK);
+  doc.text("Project Timeline", margin, y);
+  autoTable(doc, {
+    startY: y + 4,
+    head: [["Project", "Client", "Status", "Progress"]],
+    body: timeline.length
+      ? timeline.map((t: TimelineRow) => [t.name, t.client, t.status, `${t.progressPct}%`])
+      : [["No active projects", "", "", ""]],
+    margin: { left: margin, right: margin },
+    tableWidth: contentW,
+    styles: { fillColor: CARD_BG, textColor: INK, fontSize: 7.5, cellPadding: 3, lineColor: LIGHT_BORDER, lineWidth: 0.2, font: "helvetica" },
+    headStyles: { fillColor: GOLD, textColor: WHITE, fontStyle: "bold", fontSize: 7, halign: "left" },
+    columnStyles: { 2: { halign: "center" }, 3: { halign: "right", fontStyle: "bold" } },
+  });
+
+  // ── FOOTER ────────────────────────────────────────────────────────────────────
+  const footerY = pageH - 12;
+  doc.setFillColor(...GOLD);
+  doc.rect(0, footerY - 2, pageW, 0.5, "F");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.5);
+  doc.setTextColor(...MUTED);
+  doc.text(`${COMPANY_INFO.name}  |  ${COMPANY_INFO.email}  |  ${COMPANY_INFO.website}`, pageW / 2, footerY + 2, { align: "center" });
+  doc.text(`Generated by Spazehaus Management App  |  ${new Date().toLocaleDateString("en-MY")}`, pageW / 2, footerY + 6, { align: "center" });
+
+  doc.save(`Spazehaus_Performance_Report_${monthLabel.replace(/\s+/g, "_")}.pdf`);
 }

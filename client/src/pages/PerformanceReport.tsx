@@ -66,6 +66,28 @@ export default function PerformanceReport() {
   }, [authStaff, targets, inquiries, team]);
 
   const timeline = useMemo(() => buildProjectTimeline(projects), [projects]);
+  const [exporting, setExporting] = useState(false);
+
+  const handleGeneratePDF = async () => {
+    setExporting(true);
+    toast.info("Generating report…");
+    try {
+      const { generatePerformancePDF } = await import("@/lib/generatePDF");
+      await generatePerformancePDF({
+        monthLabel: monthLabel(getToday()),
+        hasTargets: targets.length > 0,
+        company,
+        team,
+        timeline,
+      });
+      toast.success("Performance report downloaded");
+    } catch (e) {
+      toast.error("Report export failed. Please try again.");
+      console.error(e);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="mobile-container" style={{ background: "var(--s-page)" }}>
@@ -110,19 +132,21 @@ export default function PerformanceReport() {
 
         {/* Generate report button */}
         <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={() => toast.success("Performance report PDF queued — would call generatePDF.ts in production")}
+          whileTap={exporting ? undefined : { scale: 0.98 }}
+          onClick={handleGeneratePDF}
+          disabled={exporting}
           data-testid="perf-generate"
           className="w-full rounded-2xl py-3.5 flex items-center justify-center gap-2"
           style={{
             background: "linear-gradient(135deg, var(--acc-strong), var(--acc-2))",
             color: "white",
             boxShadow: "0 4px 16px oklch(0.62 0.09 68 / 0.25)",
+            opacity: exporting ? 0.7 : 1,
           }}
         >
           <Download size={16} />
           <span className="text-sm font-label" style={{ letterSpacing: "0.06em", fontWeight: 700 }}>
-            GENERATE REPORT (PDF)
+            {exporting ? "GENERATING…" : "GENERATE REPORT (PDF)"}
           </span>
         </motion.button>
 
