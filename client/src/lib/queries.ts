@@ -963,6 +963,7 @@ export function useOpenSignatures() {
 export type UpdatePaymentArgs = {
   id: number;
   projectId: string;                  // required for cache invalidation
+  amount?: number;                    // actual amount collected (gate amount can differ from the estimate)
   status?: PaymentRecordRow["status"];
   collectedDate?: string;             // DD/MM/YYYY — null clears
   dueDate?: string;                   // DD/MM/YYYY — null clears
@@ -1006,6 +1007,7 @@ export function useUpdatePayment() {
   return useMutation({
     mutationFn: async (args: UpdatePaymentArgs): Promise<CheckpointMutationResult<PaymentRecordRow>> => {
       const payload: TablesUpdate<"payment_records"> = {};
+      if (args.amount !== undefined) payload.amount = args.amount;
       if (args.status !== undefined) payload.status = args.status;
       if (args.collectedDate !== undefined) {
         payload.collected_date = args.collectedDate ? ddmmyyyyToIso(args.collectedDate) : null;

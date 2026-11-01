@@ -46,6 +46,16 @@ export default function ManageTeamSheet({
   if (!project) return null;
 
   const active = staff.filter((s) => s.status !== "inactive");
+
+  // Lead Designer and PM are always on the team (resolveProjectRoster adds them),
+  // so show them auto-selected + locked and count them in. Match by staff id —
+  // two staff can share initials, so avatar_code isn't a safe identity here.
+  const designerCode = active.find((s) => s.id === designerId)?.avatar_code;
+  const pmCode = active.find((s) => s.id === pmId)?.avatar_code;
+  const isAutoStaff = (s: StaffRow) => s.id === designerId || s.id === pmId;
+  const isOnStaff = (s: StaffRow) => isAutoStaff(s) || teamCodes.includes(s.avatar_code);
+  const memberCount = active.filter(isOnStaff).length;
+
   const toggleMember = (code: string) =>
     setTeamCodes((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
 
@@ -56,7 +66,9 @@ export default function ManageTeamSheet({
         id: project.id,
         designerId: designerId || null,
         pmId: pmId || null,
-        team: teamCodes,
+        // Don't store the Lead/PM's code in `team` — the roster adds them
+        // automatically, so this keeps the data clean and avoids double-counting.
+        team: teamCodes.filter((c) => c !== designerCode && c !== pmCode),
       });
       toast.success("Team updated");
       onClose();
@@ -126,20 +138,25 @@ export default function ManageTeamSheet({
               </div>
 
               <div>
-                <label style={labelStyle}>TEAM MEMBERS ({teamCodes.length})</label>
+                <label style={labelStyle}>TEAM MEMBERS ({memberCount})</label>
                 <div className="flex flex-wrap gap-1.5">
                   {active.map((s) => {
-                    const on = teamCodes.includes(s.avatar_code);
+                    const on = isOnStaff(s);
+                    const auto = isAutoStaff(s);
+                    const roleTag = s.id === designerId ? "LEAD" : s.id === pmId ? "PM" : null;
                     return (
                       <button
                         key={s.id}
                         type="button"
-                        onClick={() => toggleMember(s.avatar_code)}
+                        onClick={() => !auto && toggleMember(s.avatar_code)}
+                        disabled={auto}
+                        title={auto ? "Automatically on the team as Lead Designer / PM" : undefined}
                         className="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-xs font-label transition-colors"
                         style={{
                           background: on ? "oklch(0.62 0.09 68 / 14%)" : "var(--s-3)",
                           color: on ? "var(--acc-ink)" : "var(--t-4)",
                           border: on ? "1px solid oklch(0.62 0.09 68 / 45%)" : "1px solid var(--b-1)",
+                          cursor: auto ? "default" : "pointer",
                         }}
                       >
                         <span
@@ -149,11 +166,16 @@ export default function ManageTeamSheet({
                           {s.avatar_code}
                         </span>
                         {s.name}
+                        {roleTag && (
+                          <span className="text-[8px] font-bold px-1 py-0.5 rounded" style={{ background: "oklch(0.62 0.09 68 / 22%)", color: "var(--acc-ink)", letterSpacing: "0.04em" }}>
+                            {roleTag}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
-                <p className="text-[10px] mt-1.5" style={{ color: "var(--t-5)" }}>Lead Designer and PM are on the roster automatically.</p>
+                <p className="text-[10px] mt-1.5" style={{ color: "var(--t-5)" }}>The Lead Designer and PM are added to the team automatically.</p>
               </div>
             </div>
 

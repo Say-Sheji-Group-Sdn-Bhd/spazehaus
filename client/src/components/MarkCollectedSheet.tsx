@@ -55,6 +55,7 @@ export default function MarkCollectedSheet({
 }) {
   const updatePayment = useUpdatePayment();
   const isDesktop = useIsDesktop();
+  const [amount, setAmount] = useState("");
   const [collectedDateIso, setCollectedDateIso] = useState(isoToday());
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
@@ -62,6 +63,7 @@ export default function MarkCollectedSheet({
   // Reset the form whenever the sheet opens against a new target
   useEffect(() => {
     if (open && target) {
+      setAmount(target.amount ? String(target.amount) : "");
       setCollectedDateIso(isoToday());
       setReference(target.reference ?? "");
       setNotes(target.notes ?? "");
@@ -74,8 +76,14 @@ export default function MarkCollectedSheet({
   const collectedDDMM = isoToDDMM(collectedDateIso);
   const isValidDate = collectedDDMM.length > 0;
 
+  const amountNum = Number(amount);
+
   async function handleSubmit() {
     if (!target) return;
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      toast.error("Enter the amount collected");
+      return;
+    }
     if (!isValidDate) {
       toast.error("Pick a collected date");
       return;
@@ -88,13 +96,14 @@ export default function MarkCollectedSheet({
       const result = await updatePayment.mutateAsync({
         id: target.id,
         projectId: target.projectId,
+        amount: amountNum,
         status: "completed",
         collectedDate: collectedDDMM,
         reference: reference.trim(),
         notes: notes.trim() || null,
       });
       toast.success(`Payment ${gateLabel} marked collected`, {
-        description: `${formatRM(target.amount)} · ${reference.trim()}`,
+        description: `${formatRM(amountNum)} · ${reference.trim()}`,
       });
       // Server-side advancement trigger may have moved the project forward
       if (result.stageAdvanced) {
@@ -196,7 +205,7 @@ export default function MarkCollectedSheet({
                     AMOUNT
                   </p>
                   <p className="font-display text-xl font-semibold" style={{ color: "oklch(0.38 0.09 145)" }}>
-                    {formatRM(target.amount)}
+                    {formatRM(Number.isFinite(amountNum) ? amountNum : 0)}
                   </p>
                   {target.projectName && (
                     <p className="text-[11px] mt-0.5" style={{ color: "var(--t-5)" }}>
@@ -211,6 +220,22 @@ export default function MarkCollectedSheet({
                   {gateLabel}
                 </div>
               </div>
+
+              {/* Amount collected — editable: the gate amount is an estimate (and is
+                  RM0 on a blank project), so record the real figure received here. */}
+              <FieldGroup label="AMOUNT COLLECTED (RM) *" hint="The actual amount received for this gate.">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  data-testid="collect-amount"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="e.g. 5000"
+                  style={inputStyle}
+                />
+              </FieldGroup>
 
               {/* Collected date */}
               <FieldGroup label="COLLECTED DATE *">
