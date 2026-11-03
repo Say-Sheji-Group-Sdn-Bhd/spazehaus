@@ -1352,7 +1352,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          id?: number
+          id?: never
           locale?: string | null
           message?: string | null
           page?: string | null
@@ -1363,7 +1363,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          id?: number
+          id?: never
           locale?: string | null
           message?: string | null
           page?: string | null
@@ -1596,6 +1596,18 @@ export type Database = {
       get_client_portal_data: { Args: { p_token: string }; Returns: Json }
       is_admin_tier: { Args: never; Returns: boolean }
       is_ops_tier: { Args: never; Returns: boolean }
+      log_wa_click: {
+        Args: {
+          p_locale?: string
+          p_message?: string
+          p_page?: string
+          p_source: string
+          p_utm_campaign?: string
+          p_utm_medium?: string
+          p_utm_source?: string
+        }
+        Returns: undefined
+      }
       maybe_advance_project_stage: {
         Args: { p_project_id: string }
         Returns: string
