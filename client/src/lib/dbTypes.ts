@@ -99,41 +99,12 @@ export type SpacologyAnswer = {
 // written by the public `submit_website_enquiry` RPC. Immutable except for the
 // workflow columns (status / staff_note / inquiry_id). See migration
 // 20261103000000_website_enquiries.sql.
-//
-// NOTE: hand-written on purpose — the `website_enquiries` table isn't in
-// `database.types.ts` until the migration is applied AND `bun run gen:types` is
-// re-run. After that, replace this block with:
-//   export type WebsiteEnquiryRow = Tables<"website_enquiries">;
-// (the shape below mirrors the migration exactly, so nothing else needs to change).
 
+// The DB stores `status` as plain text; narrow it to the workflow values (which
+// the migration's CHECK constraint enforces) so the app gets exhaustive typing.
 export type EnquiryStatus = "new" | "contacted" | "qualified" | "unqualified" | "consulted" | "spam";
 
-export type WebsiteEnquiryRow = {
-  id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-  project_location: string | null;
-  project_type: string | null;
-  property: string | null;
-  budget: string | null;
-  timeline: string | null;
-  heard_via: string | null;
-  message: string | null;
-  locale: string | null;
-  source: string;
-  referrer: string | null;
-  landing_path: string | null;
-  utm_source: string | null;
-  utm_medium: string | null;
-  utm_campaign: string | null;
-  user_agent: string | null;
-  status: EnquiryStatus;
-  staff_note: string | null;
-  inquiry_id: string | null;
-  submitted_at: string;
-  created_at: string;
-};
+export type WebsiteEnquiryRow = Omit<Tables<"website_enquiries">, "status"> & { status: EnquiryStatus };
 
 // ─── RE-EXPORT `Database` ITSELF (for advanced callers) ─────────────────────
 
