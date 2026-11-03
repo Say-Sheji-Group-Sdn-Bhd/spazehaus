@@ -1129,6 +1129,95 @@ export type Database = {
           },
         ]
       }
+      website_enquiries: {
+        Row: {
+          budget: string | null
+          created_at: string
+          email: string | null
+          heard_via: string | null
+          id: string
+          inquiry_id: string | null
+          landing_path: string | null
+          locale: string | null
+          message: string | null
+          name: string
+          phone: string
+          project_location: string | null
+          project_type: string | null
+          property: string | null
+          referrer: string | null
+          source: string
+          staff_note: string | null
+          status: string
+          submitted_at: string
+          timeline: string | null
+          user_agent: string | null
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          budget?: string | null
+          created_at?: string
+          email?: string | null
+          heard_via?: string | null
+          id: string
+          inquiry_id?: string | null
+          landing_path?: string | null
+          locale?: string | null
+          message?: string | null
+          name: string
+          phone: string
+          project_location?: string | null
+          project_type?: string | null
+          property?: string | null
+          referrer?: string | null
+          source?: string
+          staff_note?: string | null
+          status?: string
+          submitted_at?: string
+          timeline?: string | null
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          budget?: string | null
+          created_at?: string
+          email?: string | null
+          heard_via?: string | null
+          id?: string
+          inquiry_id?: string | null
+          landing_path?: string | null
+          locale?: string | null
+          message?: string | null
+          name?: string
+          phone?: string
+          project_location?: string | null
+          project_type?: string | null
+          property?: string | null
+          referrer?: string | null
+          source?: string
+          staff_note?: string | null
+          status?: string
+          submitted_at?: string
+          timeline?: string | null
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "website_enquiries_inquiry_id_fkey"
+            columns: ["inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "inquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spacology_results: {
         Row: {
           answer_count: number

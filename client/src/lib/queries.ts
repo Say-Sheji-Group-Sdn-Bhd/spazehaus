@@ -44,6 +44,8 @@ import type {
   CustomerCategory,
   CustomerTier,
   InquiryStage,
+  WebsiteEnquiryRow,
+  EnquiryStatus,
 } from "@/lib/dbTypes";
 import type { TablesUpdate, TablesInsert } from "@/lib/database.types";
 import type { PaymentGate, SignatureKey } from "@/lib/lifecycleData";
@@ -292,6 +294,7 @@ export const qk = {
   projectSitePhotos: (id: string) => ["site_photos", id] as const,
   auditLog: (filters?: AuditLogFilters) => ["audit_log", filters ?? {}] as const,
   spacologyResults: ["spacology_results"] as const,
+  websiteEnquiries: ["website_enquiries"] as const,
 };
 
 // ─── AUDIT LOG ──────────────────────────────────────────────────────────────
@@ -2807,6 +2810,125 @@ export function parseSpacologyScores(value: unknown): SpacologyScores {
     if (typeof v === "number") out[k as SpaceType] = v;
   }
   return out;
+}
+
+// ─── WEBSITE ENQUIRIES ──────────────────────────────────────────────────────
+// Contact-form submissions from the marketing site (spazehaus.com/contact).
+// Staff read them here; rows are written by the public `submit_website_enquiry`
+// RPC and are immutable except status / staff_note / inquiry_id. See migration
+// 20261103000000_website_enquiries.sql.
+
+/** Workflow order for the status filter + distribution. */
+export const ENQUIRY_STATUSES: EnquiryStatus[] = [
+  "new", "contacted", "qualified", "consulted", "unqualified", "spam",
+];
+
+/** Newest-first, capped. The page paginates client-side like the other lists. */
+export function useWebsiteEnquiries() {
+  return useQuery({
+    queryKey: qk.websiteEnquiries,
+    queryFn: async (): Promise<WebsiteEnquiryRow[]> => {
+      const { data, error } = await supabase
+        .from("website_enquiries")
+        .select("*")
+        .order("submitted_at", { ascending: false })
+        .limit(2000);
+      if (error) throw error;
+      return (data ?? []) as WebsiteEnquiryRow[];
+    },
+  });
+}
+
+/** Ops-tier update of the workflow columns (status / staff note). The DB guard
+ *  rejects edits to the submitted form data, and RLS returns zero rows when the
+ *  caller isn't ops tier — surfaced here as a real message. */
+export function useUpdateEnquiry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; status?: EnquiryStatus; staff_note?: string | null }): Promise<void> => {
+      const patch: { status?: EnquiryStatus; staff_note?: string | null } = {};
+      if (args.status !== undefined) patch.status = args.status;
+      if (args.staff_note !== undefined) patch.staff_note = args.staff_note?.trim() || null;
+      const { data, error } = await supabase
+        .from("website_enquiries")
+        .update(patch)
+        .eq("id", args.id)
+        .select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("You don't have permission to update enquiries.");
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.websiteEnquiries }),
+  });
+}
+
+/** Admin-tier only (spam / test rows). */
+export function useDeleteEnquiry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      const { data, error } = await supabase.from("website_enquiries").delete().eq("id", id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Only an admin can delete enquiries.");
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.websiteEnquiries }),
+  });
+}
+
+/** Mirrors `website_enquiries_update_ops` (`is_ops_tier()`) — presentation only. */
+export function canEditEnquiry(role: StaffRow["role"] | null | undefined): boolean {
+  if (!role) return false;
+  return role === "principal" || role === "admin" || role === "admin_exec"
+      || role === "pm" || role === "site_supervisor";
+}
+
+/** Mirrors `website_enquiries_delete_admin` (`is_admin_tier()`) — presentation only. */
+export function canDeleteEnquiry(role: StaffRow["role"] | null | undefined): boolean {
+  if (!role) return false;
+  return role === "principal" || role === "admin" || role === "admin_exec";
+}
+
+export type EnquirySummary = {
+  total: number;
+  last7: number;
+  last30: number;
+  open: number; // still 'new' — not yet triaged
+  byStatus: Record<EnquiryStatus, number>;
+  topSource: string | null;
+};
+
+export function computeEnquirySummary(rows: WebsiteEnquiryRow[]): EnquirySummary {
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const byStatus: Record<EnquiryStatus, number> = {
+    new: 0, contacted: 0, qualified: 0, unqualified: 0, consulted: 0, spam: 0,
+  };
+  let last7 = 0;
+  let last30 = 0;
+  const sourceCounts = new Map<string, number>();
+
+  for (const r of rows) {
+    if (r.status in byStatus) byStatus[r.status] += 1;
+    const age = now - new Date(r.submitted_at).getTime();
+    if (age <= 7 * DAY) last7 += 1;
+    if (age <= 30 * DAY) last30 += 1;
+    const src = r.utm_source?.trim() || r.heard_via?.trim() || r.source?.trim();
+    if (src) sourceCounts.set(src, (sourceCounts.get(src) ?? 0) + 1);
+  }
+
+  let topSource: string | null = null;
+  let topCount = 0;
+  sourceCounts.forEach((n, src) => {
+    if (n > topCount) {
+      topSource = src;
+      topCount = n;
+    }
+  });
+
+  return { total: rows.length, last7, last30, open: byStatus.new, byStatus, topSource };
 }
 
 // ─── ANALYTICS / COMPUTED VIEWS ─────────────────────────────────────────────
