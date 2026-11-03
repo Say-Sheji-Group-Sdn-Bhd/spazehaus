@@ -1338,6 +1338,42 @@ export type Database = {
         }
         Relationships: []
       }
+      wa_clicks: {
+        Row: {
+          created_at: string
+          id: number
+          locale: string | null
+          message: string | null
+          page: string | null
+          source: string
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          locale?: string | null
+          message?: string | null
+          page?: string | null
+          source?: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          locale?: string | null
+          message?: string | null
+          page?: string | null
+          source?: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Relationships: []
+      }
       website_enquiries: {
         Row: {
           budget: string | null

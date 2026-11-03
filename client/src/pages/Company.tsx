@@ -5,7 +5,7 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import { Users, CalendarCheck, UserSearch, BarChart3, Megaphone, ChevronRight, TrendingUp, ShieldCheck, Sparkles, Inbox } from "lucide-react";
+import { Users, CalendarCheck, UserSearch, BarChart3, Megaphone, ChevronRight, TrendingUp, ShieldCheck, Sparkles, Inbox, MessageCircle } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import {
   useAllStaff,
@@ -17,6 +17,7 @@ import {
   useSalesTargets,
   useSpacologyResults,
   useWebsiteEnquiries,
+  useWaClicks,
   computeTeamPerformance,
   computeCompanyPerformance,
   canViewAuditLog,
@@ -46,6 +47,7 @@ export default function Company() {
   const { data: targets = [] } = useSalesTargets();
   const { data: spacology = [] } = useSpacologyResults();
   const { data: enquiries = [] } = useWebsiteEnquiries();
+  const { data: waClicks = [] } = useWaClicks();
   const showAudit = canViewAuditLog(me?.role);
 
   const company = useMemo(() => {
@@ -61,6 +63,7 @@ export default function Company() {
     { id: "kpi",           title: "KPI & Performance",   subtitle: "Monthly scores & reviews",      icon: BarChart3,    color: "oklch(0.38 0.09 145)", bg: "oklch(0.55 0.09 145 / 10%)", path: "/company/kpi",           stat: "Monthly review" },
     { id: "announcements", title: "Announcements",       subtitle: "Company news & updates",        icon: Megaphone,    color: "oklch(0.45 0.10 25)",  bg: "oklch(0.60 0.10 25 / 10%)",  path: "/company/announcements", stat: `${announcements.length} post${announcements.length === 1 ? "" : "s"}` },
     { id: "enquiries",     title: "Website Enquiries",   subtitle: "Contact-form leads · website",       icon: Inbox,        color: "oklch(0.42 0.10 230)", bg: "oklch(0.60 0.10 230 / 10%)", path: "/enquiries",             stat: `${enquiries.length} enquir${enquiries.length === 1 ? "y" : "ies"}` },
+    { id: "wa-clicks",     title: "WhatsApp Clicks",     subtitle: "Link taps · website",                icon: MessageCircle, color: "oklch(0.38 0.09 145)", bg: "oklch(0.55 0.09 145 / 10%)", path: "/wa-clicks",             stat: `${waClicks.length} click${waClicks.length === 1 ? "" : "s"}` },
     { id: "spacology",     title: "Spacology Results",   subtitle: "Website quiz · space personalities", icon: Sparkles,     color: "oklch(0.52 0.13 55)", bg: "oklch(0.66 0.13 55 / 10%)",  path: "/spacology",             stat: `${spacology.length} submission${spacology.length === 1 ? "" : "s"}` },
     ...(showAudit
       ? [{ id: "audit", title: "Audit Log", subtitle: "System activity history (admin)", icon: ShieldCheck, color: "var(--acc-ink)", bg: "oklch(0.62 0.09 68 / 10%)", path: "/company/audit", stat: "Admin only" }]

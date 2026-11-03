@@ -87,6 +87,7 @@ const Security         = lazyWithReload(() => import("./pages/Security"));
 const Help             = lazyWithReload(() => import("./pages/Help"));
 const SpacologyResults = lazyWithReload(() => import("./pages/SpacologyResults"));
 const WebsiteEnquiries = lazyWithReload(() => import("./pages/WebsiteEnquiries"));
+const WhatsAppClicks   = lazyWithReload(() => import("./pages/WhatsAppClicks"));
 // Public — reachable without a Supabase Auth session via /portal/:token.
 const ClientPortal     = lazyWithReload(() => import("./pages/ClientPortal"));
 // Public — /privacy, used as the Google OAuth privacy-policy link (no auth).
@@ -176,6 +177,9 @@ function AppLayout() {
 
             {/* Website enquiries — Contact-form submissions from the marketing site */}
             <Route path="/enquiries" component={WebsiteEnquiries} />
+
+            {/* WhatsApp clicks — link taps from the marketing site */}
+            <Route path="/wa-clicks" component={WhatsAppClicks} />
 
             {/* Performance Report — Sales/GP targets + project timeline */}
             <Route path="/performance" component={PerformanceReport} />

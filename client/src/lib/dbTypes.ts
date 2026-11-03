@@ -106,6 +106,14 @@ export type EnquiryStatus = "new" | "contacted" | "qualified" | "unqualified" | 
 
 export type WebsiteEnquiryRow = Omit<Tables<"website_enquiries">, "status"> & { status: EnquiryStatus };
 
+// ─── WHATSAPP CLICK LOG ─────────────────────────────────────────────────────
+// Anonymous, cookieless log of WhatsApp-link clicks on the marketing site.
+// Written by the public `log_wa_click` RPC. See migration 20261103100000_wa_clicks.sql.
+
+export type WaClickSource = "fab" | "contact" | "consult" | "career" | "nav" | "cta" | "link";
+
+export type WaClickRow = Omit<Tables<"wa_clicks">, "source"> & { source: WaClickSource };
+
 // ─── RE-EXPORT `Database` ITSELF (for advanced callers) ─────────────────────
 
 export type { Database } from "@/lib/database.types";

@@ -46,6 +46,7 @@ import type {
   InquiryStage,
   WebsiteEnquiryRow,
   EnquiryStatus,
+  WaClickRow,
 } from "@/lib/dbTypes";
 import type { TablesUpdate, TablesInsert } from "@/lib/database.types";
 import type { PaymentGate, SignatureKey } from "@/lib/lifecycleData";
@@ -295,6 +296,7 @@ export const qk = {
   auditLog: (filters?: AuditLogFilters) => ["audit_log", filters ?? {}] as const,
   spacologyResults: ["spacology_results"] as const,
   websiteEnquiries: ["website_enquiries"] as const,
+  waClicks: ["wa_clicks"] as const,
 };
 
 // ─── AUDIT LOG ──────────────────────────────────────────────────────────────
@@ -2929,6 +2931,99 @@ export function computeEnquirySummary(rows: WebsiteEnquiryRow[]): EnquirySummary
   });
 
   return { total: rows.length, last7, last30, open: byStatus.new, byStatus, topSource };
+}
+
+// ─── WHATSAPP CLICK LOG ─────────────────────────────────────────────────────
+// Anonymous, cookieless log of WhatsApp-link clicks on the marketing site,
+// written by the public `log_wa_click` RPC. Tracks *clicks* (intent), not
+// messages. See migration 20261103100000_wa_clicks.sql.
+
+/** Newest-first, capped. Clicks are higher-volume than enquiries. */
+export function useWaClicks() {
+  return useQuery({
+    queryKey: qk.waClicks,
+    queryFn: async (): Promise<WaClickRow[]> => {
+      const { data, error } = await supabase
+        .from("wa_clicks")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (error) throw error;
+      return (data ?? []) as WaClickRow[];
+    },
+  });
+}
+
+/** Admin-tier only (clear test / bot clicks). */
+export function useDeleteWaClick() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number): Promise<void> => {
+      const { data, error } = await supabase.from("wa_clicks").delete().eq("id", id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Only an admin can delete click records.");
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.waClicks }),
+  });
+}
+
+/** Mirrors `wa_clicks_delete_admin` (`is_admin_tier()`) — presentation only. */
+export function canDeleteWaClick(role: StaffRow["role"] | null | undefined): boolean {
+  if (!role) return false;
+  return role === "principal" || role === "admin" || role === "admin_exec";
+}
+
+export type WaMessageGroup = { message: string; count: number; topSource: string };
+
+export type WaClickSummary = {
+  total: number;
+  last7: number;
+  last30: number;
+  bySource: Record<string, number>;
+  /** The pre-filled first messages, each with how many clicked it (desc). */
+  byMessage: WaMessageGroup[];
+};
+
+export function computeWaClickSummary(rows: WaClickRow[]): WaClickSummary {
+  const now = Date.now();
+  const DAY = 86_400_000;
+  let last7 = 0;
+  let last30 = 0;
+  const bySource: Record<string, number> = {};
+  // message -> { count, source -> count }
+  const msgMap = new Map<string, { count: number; sources: Map<string, number> }>();
+
+  for (const r of rows) {
+    const age = now - new Date(r.created_at).getTime();
+    if (age <= 7 * DAY) last7 += 1;
+    if (age <= 30 * DAY) last30 += 1;
+
+    bySource[r.source] = (bySource[r.source] ?? 0) + 1;
+
+    const msg = r.message?.trim() || "(no message)";
+    const m = msgMap.get(msg) ?? { count: 0, sources: new Map<string, number>() };
+    m.count += 1;
+    m.sources.set(r.source, (m.sources.get(r.source) ?? 0) + 1);
+    msgMap.set(msg, m);
+  }
+
+  const byMessage: WaMessageGroup[] = [];
+  msgMap.forEach((m, message) => {
+    let topSource = "";
+    let top = 0;
+    m.sources.forEach((n, s) => {
+      if (n > top) {
+        top = n;
+        topSource = s;
+      }
+    });
+    byMessage.push({ message, count: m.count, topSource });
+  });
+  byMessage.sort((a, b) => b.count - a.count);
+
+  return { total: rows.length, last7, last30, bySource, byMessage };
 }
 
 // ─── ANALYTICS / COMPUTED VIEWS ─────────────────────────────────────────────
