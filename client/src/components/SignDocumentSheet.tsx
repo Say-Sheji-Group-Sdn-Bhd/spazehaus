@@ -163,6 +163,13 @@ export default function SignDocumentSheet({
             },
           );
         }, 350);
+      } else if (result.currentStage?.label) {
+        // Signed out of order — recorded, but an earlier step is still outstanding.
+        setTimeout(() => {
+          toast.info(`Recorded — the project is still on "${result.currentStage!.label}"`, {
+            description: "Complete that step to move the project forward (see the Next step banner).",
+          });
+        }, 350);
       }
       onClose();
     } catch (err) {

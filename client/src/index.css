@@ -289,3 +289,15 @@
     background: linear-gradient(90deg, var(--acc-strong), oklch(0.72 0.09 68 / 40%), transparent);
   }
 }
+
+/* Toast (sonner) readability — the default description colour is a near-invisible
+   light grey; force a legible contrast in both themes. Also give the title full
+   weight so the two lines are clearly distinct. */
+[data-sonner-toast] [data-title] {
+  color: var(--t-1);
+  font-weight: 600;
+}
+[data-sonner-toast] [data-description] {
+  color: var(--t-3) !important;
+  opacity: 1 !important;
+}

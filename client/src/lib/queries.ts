@@ -1112,6 +1112,9 @@ export type CheckpointMutationResult<TRow> = {
     fromLabel: string | null;
     toLabel: string | null;
   };
+  /** The project's current stage AFTER the write (always present) — used to nudge
+   *  the user when a checkpoint was completed out of order and nothing advanced. */
+  currentStage?: { id: string | null; label: string | null };
 };
 
 /** Look up a project's current_stage_id + the stage's label in one round-trip. */
@@ -1171,6 +1174,7 @@ export function useUpdatePayment() {
                 toLabel: afterStage.label,
               }
             : undefined,
+        currentStage: afterStage,
       };
     },
     onSuccess: (_result, args) => {
@@ -1353,6 +1357,7 @@ export function useUpdateSignature() {
                 toLabel: afterStage.label,
               }
             : undefined,
+        currentStage: afterStage,
       };
     },
     onSuccess: (_result, args) => {

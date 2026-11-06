@@ -10,7 +10,14 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useLocation } from "wouter";
-import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, History } from "lucide-react";
+import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, History, MoreHorizontal, Undo2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import AppHeader from "@/components/AppHeader";
 import MarkCollectedSheet, { type MarkCollectedTarget } from "@/components/MarkCollectedSheet";
 import SignDocumentSheet, { type SignDocumentTarget } from "@/components/SignDocumentSheet";
@@ -38,6 +45,7 @@ import {
   useUpdateSignature,
   useRevertPayment,
   useRevertSignature,
+  type RevertResult,
   useCheckpointHistory,
   canEditPayments,
   canEditSignatures,
@@ -1466,25 +1474,21 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       toast.success(`${label} reverted to pending`);
     }
   };
-  const doRevertPayment = (p: PaymentRecord) => {
-    if (!window.confirm(`Revert "${p.label}" back to pending? This clears the collected date/reference and may move the project to an earlier stage.`)) return;
-    revertPayment.mutate(
-      { id: p.id, projectId },
-      {
-        onSuccess: (r) => revertResultToast(p.label, r),
-        onError: (e) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
-      },
-    );
-  };
-  const doRevertSignature = (s: DocumentSignRecord) => {
-    if (!window.confirm(`Revert "${s.label}" back to unsigned? This clears the signed date/document and may move the project to an earlier stage.`)) return;
-    revertSignature.mutate(
-      { id: s.id, projectId },
-      {
-        onSuccess: (r) => revertResultToast(s.label, r),
-        onError: (e) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
-      },
-    );
+  // Revert now goes through an in-app confirm dialog (not window.confirm).
+  const [revertTarget, setRevertTarget] = useState<{ kind: "payment" | "signature"; id: number; label: string } | null>(null);
+  const doRevertPayment = (p: PaymentRecord) => setRevertTarget({ kind: "payment", id: p.id, label: p.label });
+  const doRevertSignature = (s: DocumentSignRecord) => setRevertTarget({ kind: "signature", id: s.id, label: s.label });
+  const reverting = revertPayment.isPending || revertSignature.isPending;
+  const confirmRevert = () => {
+    if (!revertTarget) return;
+    const { kind, id, label } = revertTarget;
+    const opts = {
+      onSuccess: (r: RevertResult) => revertResultToast(label, r),
+      onError: (e: unknown) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
+    };
+    if (kind === "payment") revertPayment.mutate({ id, projectId }, opts);
+    else revertSignature.mutate({ id, projectId }, opts);
+    setRevertTarget(null);
   };
   const [collectTarget, setCollectTarget] = useState<MarkCollectedTarget | null>(null);
   const [signTarget, setSignTarget] = useState<SignDocumentTarget | null>(null);
@@ -1542,6 +1546,32 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   // Build a map of signatureKey -> record
   const sigByKey = Object.fromEntries(lc.signatures.map((s) => [s.key, s]));
 
+  // ── Next step (guide, don't block) ──────────────────────────────────────────
+  // The project only advances when the CURRENT stage's checkpoint(s) are done.
+  // Compute that one action set, so we can show a "Next step" banner and mark
+  // which checkpoint is live vs. an out-of-order one.
+  const currentStage = LIFECYCLE_STAGES.find((s) => stageStatus(s, lc.currentStageId) === "in-progress");
+  const nextPayments = currentStage?.paymentGate
+    ? (paymentsByGate[currentStage.paymentGate] ?? []).filter((p) => p.status !== "completed" && p.status !== "skipped")
+    : [];
+  const nextSigRec = currentStage?.signatureKey ? sigByKey[currentStage.signatureKey] : undefined;
+  const nextSignature = nextSigRec && nextSigRec.status !== "completed" && nextSigRec.status !== "skipped" ? nextSigRec : undefined;
+  const hasNextAction = nextPayments.length > 0 || !!nextSignature;
+  const lastStageId = LIFECYCLE_STAGES[LIFECYCLE_STAGES.length - 1]?.id;
+  const projectComplete = lc.currentStageId === lastStageId && !hasNextAction;
+  const nextParts: string[] = [
+    ...nextPayments.map((p) => `collect ${p.label} (${formatRM(p.amount)})`),
+    ...(nextSignature ? [`sign ${nextSignature.label}`] : []),
+  ];
+  const openCollect = (p: PaymentRecord) =>
+    setCollectTarget({ id: p.id, projectId, label: p.label, amount: p.amount, gate: p.gate, reference: p.reference, notes: p.notes });
+  const openSign = (s: DocumentSignRecord) =>
+    setSignTarget({
+      id: s.id, projectId, projectName, signatureKey: s.key, label: s.label, group: s.group,
+      status: s.status, documentRef: s.documentRef, signedDate: s.signedDate, signedBy: s.signedBy,
+      notes: s.notes, defaultSignedBy: clientName,
+    });
+
   return (
     <div className="space-y-5">
       {/* Customer context (meeting note #3) — checkpoints belong to this client. */}
@@ -1554,6 +1584,51 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
           </p>
         </div>
       )}
+
+      {/* —— Next step banner — the ONE action that advances the project —— */}
+      {projectComplete ? (
+        <div className="rounded-xl px-3.5 py-2.5 flex items-center gap-2.5" style={{ background: "oklch(0.55 0.09 145 / 10%)", border: "1px solid oklch(0.55 0.09 145 / 30%)" }}>
+          <Check size={15} style={{ color: "oklch(0.45 0.10 145)" }} />
+          <p className="text-xs font-medium" style={{ color: "oklch(0.40 0.10 145)" }}>
+            Project complete — all payments collected and all documents signed.
+          </p>
+        </div>
+      ) : hasNextAction ? (
+        <div className="rounded-xl px-3.5 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5" style={{ background: "oklch(0.62 0.09 68 / 8%)", border: "1px solid oklch(0.62 0.09 68 / 28%)" }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-label" style={{ color: "var(--acc)", letterSpacing: "0.1em" }}>NEXT STEP TO PROCEED</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--t-2)" }}>
+              To advance past <span className="font-semibold">{currentStage?.label}</span>, {nextParts.join(" and ")}.
+              {(nextPayments.length > 0 && nextSignature) && <span style={{ color: "var(--t-5)" }}> (needs both)</span>}
+            </p>
+          </div>
+          {canManage && (
+            <div className="flex items-center gap-2 shrink-0">
+              {nextPayments.map((p) => (
+                <button
+                  key={`nx-${p.id}`}
+                  type="button"
+                  onClick={() => openCollect(p)}
+                  className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-[11px] font-label font-bold"
+                  style={{ background: "oklch(0.55 0.09 145)", color: "oklch(1 0 0)", letterSpacing: "0.04em" }}
+                >
+                  <Check size={11} strokeWidth={3} /> COLLECT
+                </button>
+              ))}
+              {nextSignature && (
+                <button
+                  type="button"
+                  onClick={() => openSign(nextSignature)}
+                  className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-[11px] font-label font-bold"
+                  style={{ background: "var(--acc-strong)", color: "oklch(1 0 0)", letterSpacing: "0.04em" }}
+                >
+                  <Upload size={11} /> SIGN
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* —— Summary header: Payment + Document Sign progress —— */}
       <div className="grid grid-cols-2 gap-3">
@@ -1641,6 +1716,11 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                             {stage.paymentGate && <GateBadge gate={stage.paymentGate} kind="payment" />}
                             {stage.type === "contract-sign" && <GateBadge kind="contract" />}
                             {stage.type === "drawing-sign" && <GateBadge kind="drawing" />}
+                            {status === "in-progress" && (payments || signature) && (
+                              <span className="text-[9px] font-label px-1.5 py-0.5 rounded-full" style={{ background: "var(--acc-bright)", color: "oklch(1 0 0)", letterSpacing: "0.04em", fontWeight: 700 }}>
+                                DO THIS NEXT
+                              </span>
+                            )}
                           </div>
                           {stage.description && (
                             <p className="text-[10px] mt-0.5 leading-snug" style={{ color: "var(--t-5)" }}>
@@ -1682,6 +1762,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                               payment={p}
                               projectId={projectId}
                               canCollect={canCollect}
+                              isNext={status === "in-progress"}
                               staffById={staffById}
                               onSetDate={(d) => setPaymentDate(p.id, d)}
                               onSetAmount={(amt) => setPaymentAmount(p.id, amt)}
@@ -1721,6 +1802,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                         <SignatureRow
                           signature={signature}
                           canSign={canSign}
+                          isNext={status === "in-progress"}
                           staffById={staffById}
                           onSetDate={(d) => setSignatureDate(signature.id, d)}
                           onRevert={() => doRevertSignature(signature)}
@@ -1770,6 +1852,30 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
         open={signTarget !== null}
         onClose={() => setSignTarget(null)}
       />
+
+      {/* In-app revert confirm (replaces window.confirm) */}
+      <AlertDialog open={revertTarget !== null} onOpenChange={(o) => { if (!o) setRevertTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revert “{revertTarget?.label}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This sets the checkpoint back to {revertTarget?.kind === "payment" ? "pending" : "unsigned"} and clears its{" "}
+              {revertTarget?.kind === "payment" ? "collected date and reference" : "signed date and document"}. It may move the
+              project back to an earlier stage. The amount is kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRevert}
+              disabled={reverting}
+              style={{ background: "oklch(0.55 0.15 25)", color: "oklch(1 0 0)" }}
+            >
+              Revert
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1935,9 +2041,36 @@ function CheckpointHistory({ table, rowId, staffById }: {
   );
 }
 
+/** Overflow "⋯" menu for a completed checkpoint row — tucks Edit/Revert away so
+ *  they aren't both always on screen (6-Nov follow-up). */
+function CheckpointActionsMenu({ onEdit, onRevert, disabled }: { onEdit?: () => void; onRevert?: () => void; disabled?: boolean }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" title="More actions" className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ color: "var(--t-5)" }}>
+          <MoreHorizontal size={14} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[8rem]">
+        {onEdit && (
+          <DropdownMenuItem onSelect={() => onEdit()} className="gap-2 text-xs">
+            <Pencil size={12} /> Edit
+          </DropdownMenuItem>
+        )}
+        {onRevert && (
+          <DropdownMenuItem onSelect={() => onRevert()} disabled={disabled} className="gap-2 text-xs" style={{ color: "oklch(0.52 0.16 25)" }}>
+            <Undo2 size={12} /> Revert
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function PaymentRow({
   payment,
   canCollect,
+  isNext = true,
   onCollect,
   onEdit,
   onSetDate,
@@ -1949,6 +2082,7 @@ function PaymentRow({
   payment: PaymentRecord;
   projectId: string;
   canCollect: boolean;
+  isNext?: boolean;
   onCollect: () => void;
   onEdit?: () => void;
   onSetDate?: (ddmm: string | null) => void;
@@ -2003,20 +2137,19 @@ function PaymentRow({
         {isOpen && onSetDate && (
           <StageDateControl value={payment.dueDate} canEdit={canCollect} onSet={onSetDate} />
         )}
-        {editingAmount && canCollect && onSetAmount ? (
+        {editingAmount && isOpen && canCollect && onSetAmount ? (
           <input
             type="number"
             autoFocus
             defaultValue={payment.amount}
-            onBlur={() => setEditingAmount(false)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              if (e.key === "Escape") setEditingAmount(false);
-            }}
-            onChange={(e) => {
+            onBlur={(e) => {
               const v = Number(e.currentTarget.value);
               if (Number.isFinite(v) && v >= 0 && v !== payment.amount) onSetAmount(v);
               setEditingAmount(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") setEditingAmount(false);
             }}
             className="w-24 text-[11px] rounded-md px-1.5 py-0.5 text-right"
             style={{ background: "var(--s-2)", border: "1px solid var(--b-strong)", color: "var(--t-1)" }}
@@ -2024,46 +2157,30 @@ function PaymentRow({
         ) : (
           <button
             type="button"
-            onClick={() => canCollect && onSetAmount && setEditingAmount(true)}
-            disabled={!canCollect || !onSetAmount}
+            onClick={() => isOpen && canCollect && onSetAmount && setEditingAmount(true)}
+            disabled={!isOpen || !canCollect || !onSetAmount}
             className="text-[11px] font-display font-semibold inline-flex items-center gap-1"
-            style={{ color: sc.color, cursor: canCollect && onSetAmount ? "pointer" : "default" }}
-            title={canCollect && onSetAmount ? "Edit amount" : undefined}
+            style={{ color: sc.color, cursor: isOpen && canCollect && onSetAmount ? "pointer" : "default" }}
+            title={isOpen && canCollect && onSetAmount ? "Edit amount" : undefined}
           >
             {formatRM(payment.amount)}
-            {canCollect && onSetAmount && <Pencil size={9} style={{ color: "var(--t-5)" }} />}
+            {isOpen && canCollect && onSetAmount && <Pencil size={9} style={{ color: "var(--t-5)" }} />}
           </button>
         )}
-        {isCompleted && canCollect && onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="text-[9px] font-label px-2 py-0.5 rounded-md"
-            style={{ background: "var(--s-2)", color: "var(--t-3)", border: "1px solid var(--b-strong)", letterSpacing: "0.04em", fontWeight: 700 }}
-          >
-            EDIT
-          </button>
-        )}
-        {isCompleted && canCollect && onRevert && (
-          <button
-            type="button"
-            onClick={onRevert}
-            disabled={reverting}
-            className="text-[9px] font-label px-2 py-0.5 rounded-md"
-            style={{ background: "oklch(0.68 0.12 25 / 10%)", color: "oklch(0.50 0.12 25)", border: "1px solid oklch(0.68 0.12 25 / 25%)", opacity: reverting ? 0.6 : 1, letterSpacing: "0.04em", fontWeight: 700 }}
-          >
-            REVERT
-          </button>
+        {isCompleted && canCollect && (onEdit || onRevert) && (
+          <CheckpointActionsMenu onEdit={onEdit} onRevert={onRevert} disabled={reverting} />
         )}
         {isOpen && canCollect && (
           <motion.button
             whileTap={{ scale: 0.94 }}
             onClick={onCollect}
+            title={isNext ? undefined : "Not the current step — recording this won't advance the project yet"}
             className="px-2 py-0.5 rounded-md flex items-center gap-1"
             style={{
               background: "oklch(0.55 0.09 145 / 12%)",
               color: "oklch(0.38 0.09 145)",
               border: "1px solid oklch(0.55 0.09 145 / 25%)",
+              opacity: isNext ? 1 : 0.45,
             }}
           >
             <Check size={9} strokeWidth={3} />
@@ -2091,6 +2208,7 @@ function PaymentRow({
 function SignatureRow({
   signature,
   canSign,
+  isNext = true,
   onSign,
   onSetDate,
   onRevert,
@@ -2099,6 +2217,7 @@ function SignatureRow({
 }: {
   signature: DocumentSignRecord;
   canSign: boolean;
+  isNext?: boolean;
   onSign: () => void;
   onSetDate?: (ddmm: string | null) => void;
   onRevert?: () => void;
@@ -2173,15 +2292,7 @@ function SignatureRow({
           <StageDateControl value={signature.estimatedDate} canEdit={canSign} onSet={onSetDate} />
         )}
         {isCompleted && canSign && onRevert && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRevert(); }}
-            disabled={reverting}
-            className="text-[9px] font-label px-2 py-0.5 rounded-md"
-            style={{ background: "oklch(0.68 0.12 25 / 10%)", color: "oklch(0.50 0.12 25)", border: "1px solid oklch(0.68 0.12 25 / 25%)", opacity: reverting ? 0.6 : 1, letterSpacing: "0.04em", fontWeight: 700 }}
-          >
-            REVERT
-          </button>
+          <CheckpointActionsMenu onRevert={onRevert} disabled={reverting} />
         )}
         {(hasStoredDoc || hasLegacyDoc) && (
           <button
@@ -2205,6 +2316,7 @@ function SignatureRow({
               e.stopPropagation();
               onSign();
             }}
+            title={isNext ? undefined : "Not the current step — recording this won't advance the project yet"}
             className="px-2 py-0.5 rounded-md flex items-center gap-1"
             style={{
               background: signature.group === "contract"
@@ -2216,6 +2328,7 @@ function SignatureRow({
               border: signature.group === "contract"
                 ? "1px solid oklch(0.50 0.10 25 / 35%)"
                 : "1px solid oklch(0.38 0.09 240 / 35%)",
+              opacity: isNext ? 1 : 0.45,
             }}
           >
             <Upload size={9} />

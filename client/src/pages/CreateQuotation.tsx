@@ -268,15 +268,15 @@ export default function CreateQuotation() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label style={labelStyle}>ISSUE DATE *</label>
-                    <input style={inputStyle} placeholder="DD/MM/YYYY" value={docInfo.issueDate} onChange={(e) => setDocInfo((d) => ({ ...d, issueDate: e.target.value }))} />
+                    <input type="date" style={inputStyle} value={(docInfo.issueDate || "").split("/").reverse().join("-")} onChange={(e) => setDocInfo((d) => ({ ...d, issueDate: e.target.value ? e.target.value.split("-").reverse().join("/") : "" }))} />
                   </div>
                   <div>
                     <label style={labelStyle}>{docInfo.type === "Invoice" ? "DUE DATE" : "VALID UNTIL"}</label>
                     <input
+                      type="date"
                       style={inputStyle}
-                      placeholder="DD/MM/YYYY"
-                      value={docInfo.type === "Invoice" ? docInfo.dueDate : docInfo.validUntil}
-                      onChange={(e) => setDocInfo((d) => docInfo.type === "Invoice" ? { ...d, dueDate: e.target.value } : { ...d, validUntil: e.target.value })}
+                      value={((docInfo.type === "Invoice" ? docInfo.dueDate : docInfo.validUntil) || "").split("/").reverse().join("-")}
+                      onChange={(e) => { const dmy = e.target.value ? e.target.value.split("-").reverse().join("/") : ""; setDocInfo((d) => docInfo.type === "Invoice" ? { ...d, dueDate: dmy } : { ...d, validUntil: dmy }); }}
                     />
                   </div>
                 </div>

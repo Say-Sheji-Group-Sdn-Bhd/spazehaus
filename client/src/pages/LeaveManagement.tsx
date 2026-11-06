@@ -269,11 +269,11 @@ export default function LeaveManagement() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label style={labelStyle}>START DATE *</label>
-                  <input data-testid="leave-start" style={inputStyle} placeholder="DD/MM/YYYY" value={applyForm.startDate} onChange={(e) => setApplyForm((f) => ({ ...f, startDate: e.target.value }))} />
+                  <input data-testid="leave-start" type="date" style={inputStyle} value={(applyForm.startDate || "").split("/").reverse().join("-")} onChange={(e) => setApplyForm((f) => ({ ...f, startDate: e.target.value ? e.target.value.split("-").reverse().join("/") : "" }))} />
                 </div>
                 <div>
                   <label style={labelStyle}>END DATE *</label>
-                  <input data-testid="leave-end" style={inputStyle} placeholder="DD/MM/YYYY" value={applyForm.endDate} onChange={(e) => setApplyForm((f) => ({ ...f, endDate: e.target.value }))} />
+                  <input data-testid="leave-end" type="date" style={inputStyle} value={(applyForm.endDate || "").split("/").reverse().join("-")} onChange={(e) => setApplyForm((f) => ({ ...f, endDate: e.target.value ? e.target.value.split("-").reverse().join("/") : "" }))} />
                 </div>
               </div>
               <div>
