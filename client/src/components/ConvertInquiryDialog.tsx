@@ -10,12 +10,13 @@
  *   • The inquiry flips to "awarded" with awardedProjectId
  *   • User is navigated to the new project
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { X, Sparkles, Calendar, Coins, AlertCircle, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useAllStaff, useConvertInquiry, type Inquiry } from "@/lib/queries";
+import { useAuth } from "@/contexts/AuthContext";
 import { formatRM } from "@/lib/quotationData";
 import { useIsDesktop } from "@/hooks/useMobile";
 
@@ -62,6 +63,7 @@ export default function ConvertInquiryDialog({
 }) {
   const [, navigate] = useLocation();
   const { data: allStaff = [] } = useAllStaff();
+  const { staff: me } = useAuth();
   const convertMutation = useConvertInquiry();
   const isDesktop = useIsDesktop();
 
@@ -69,7 +71,18 @@ export default function ConvertInquiryDialog({
   const designStaff = useMemo(() => allStaff.filter((s) => s.dept === "Design"), [allStaff]);
   const opsStaff = useMemo(() => allStaff.filter((s) => s.dept === "Operations"), [allStaff]);
 
-  const defaultDesigner = designStaff[1] || designStaff[0]; // skip Grace if there's a senior designer
+  // Meeting note #6: the staff member converting the inquiry becomes its Lead
+  // Designer by default (same as from-scratch create). Still editable here, and
+  // the converter is added to the picker even if they aren't in the Design dept.
+  const designerOptions = useMemo(() => {
+    const opts = designStaff.map((s) => ({ value: s.id, label: s.name }));
+    if (me && !designStaff.some((s) => s.id === me.id)) {
+      opts.unshift({ value: me.id, label: `${me.name} (you)` });
+    }
+    return opts;
+  }, [designStaff, me]);
+
+  const defaultDesigner = me ?? designStaff[1] ?? designStaff[0]; // converter leads by default
   const defaultPM = opsStaff[0];
   const defaultBudget = inquiry.estimatedBudget ?? 100_000;
   const defaultDeposit = Math.max(2_000, Math.round(defaultBudget * 0.02));
@@ -88,6 +101,15 @@ export default function ConvertInquiryDialog({
   }));
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Robustness for meeting-note #6: the dialog is always mounted, so the form
+  // initializer may run before `me` (useAuth) is ready. Once `me` loads, default
+  // the designer to the converter — unless the user has already picked someone.
+  const designerTouched = useRef(false);
+  useEffect(() => {
+    if (designerTouched.current || !me?.id) return;
+    setForm((f) => (f.designerStaffId === me.id ? f : { ...f, designerStaffId: me.id }));
+  }, [me?.id]);
 
   // Derived validation
   const budgetNum = parseFloat(form.budget) || 0;
@@ -221,8 +243,8 @@ export default function ConvertInquiryDialog({
                   <Select
                     testid="convert-designer"
                     value={form.designerStaffId}
-                    onChange={(v) => setForm({ ...form, designerStaffId: v })}
-                    options={designStaff.map((s) => ({ value: s.id, label: s.name }))}
+                    onChange={(v) => { designerTouched.current = true; setForm({ ...form, designerStaffId: v }); }}
+                    options={designerOptions}
                   />
                 </FieldGroup>
                 <FieldGroup label="PROJECT MANAGER">

@@ -834,6 +834,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_stage_id: string | null
+          defect_period_completed_at: string | null
+          defect_period_completed_by: string | null
           description: string | null
           designer_id: string | null
           id: string
@@ -870,6 +872,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_stage_id?: string | null
+          defect_period_completed_at?: string | null
+          defect_period_completed_by?: string | null
           description?: string | null
           designer_id?: string | null
           id: string
@@ -906,6 +910,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_stage_id?: string | null
+          defect_period_completed_at?: string | null
+          defect_period_completed_by?: string | null
           description?: string | null
           designer_id?: string | null
           id?: string

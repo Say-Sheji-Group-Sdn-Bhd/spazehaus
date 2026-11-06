@@ -128,6 +128,12 @@ export default function CreateProject() {
       return;
     }
     try {
+      // Native <input type="date"> returns ISO (YYYY-MM-DD); the create mutation
+      // expects DD/MM/YYYY, so convert here.
+      const toDMY = (iso: string) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+        return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+      };
       const project = await createProject.mutateAsync({
         name: form.projectName.trim(),
         client: form.clientName.trim(),
@@ -140,8 +146,8 @@ export default function CreateProject() {
         location: form.location.trim(),
         size: form.size ? Number(form.size) : 0,
         budget: form.budget ? Number(form.budget) : 0,
-        startDate: form.startDate.trim() || null,
-        targetDate: form.targetDate.trim() || null,
+        startDate: toDMY(form.startDate) || null,
+        targetDate: toDMY(form.targetDate) || null,
         areas: [],
         description: form.notes.trim() || null,
         linkInquiryId: linkInquiryId || null,
@@ -352,11 +358,11 @@ export default function CreateProject() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label style={labelStyle}>START DATE</label>
-                    <input style={inputStyle} placeholder="DD/MM/YYYY" value={form.startDate} onChange={(e) => update("startDate", e.target.value)} />
+                    <input type="date" style={inputStyle} value={form.startDate} onChange={(e) => update("startDate", e.target.value)} />
                   </div>
                   <div>
                     <label style={labelStyle}>TARGET DATE</label>
-                    <input style={inputStyle} placeholder="DD/MM/YYYY" value={form.targetDate} onChange={(e) => update("targetDate", e.target.value)} />
+                    <input type="date" style={inputStyle} value={form.targetDate} onChange={(e) => update("targetDate", e.target.value)} />
                   </div>
                 </div>
               </>

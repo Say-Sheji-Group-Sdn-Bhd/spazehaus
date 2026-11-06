@@ -10,7 +10,14 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useLocation } from "wouter";
-import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, History } from "lucide-react";
+import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, MoreHorizontal, Undo2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import AppHeader from "@/components/AppHeader";
 import MarkCollectedSheet, { type MarkCollectedTarget } from "@/components/MarkCollectedSheet";
 import SignDocumentSheet, { type SignDocumentTarget } from "@/components/SignDocumentSheet";
@@ -28,6 +35,7 @@ import {
 } from "@/lib/lifecycleData";
 import {
   useProject,
+  useSetDefectPeriodDone,
   useAllStaff,
   useQuotations,
   useProjectLifecycle,
@@ -38,7 +46,7 @@ import {
   useUpdateSignature,
   useRevertPayment,
   useRevertSignature,
-  useCheckpointHistory,
+  type RevertResult,
   canEditPayments,
   canEditSignatures,
   canEditProjectData,
@@ -63,7 +71,7 @@ import {
   type PaymentRecord,
   type DocumentSignRecord,
 } from "@/lib/queries";
-import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow, AuditLogRow } from "@/lib/dbTypes";
+import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow } from "@/lib/dbTypes";
 import { useAuth } from "@/contexts/AuthContext";
 import EditProjectSheet from "@/components/EditProjectSheet";
 import ManageTeamSheet from "@/components/ManageTeamSheet";
@@ -98,9 +106,10 @@ function ddmmToIsoDate(ddmm: string | undefined): string {
  *  Shows the date (or "Set est. date") and opens a native date picker on click.
  *  `value` is DD/MM/YYYY; `onSet` receives DD/MM/YYYY or null (cleared). */
 function StageDateControl({
-  value, canEdit, onSet, saving,
+  value, canEdit, onSet, saving, pickLabel = "Set est. date", setPrefix = "Est.",
 }: {
   value?: string; canEdit: boolean; onSet: (ddmm: string | null) => void; saving?: boolean;
+  pickLabel?: string; setPrefix?: string;
 }) {
   const [editing, setEditing] = useState(false);
   if (!canEdit && !value) return null;
@@ -133,10 +142,10 @@ function StageDateControl({
         border: `1px dashed ${value ? "oklch(0.62 0.09 68 / 30%)" : "var(--b-strong)"}`,
         cursor: canEdit ? "pointer" : "default",
       }}
-      title={canEdit ? "Set estimated date" : undefined}
+      title={canEdit ? pickLabel : undefined}
     >
       <CalendarClock size={9} />
-      {value ? `Est. ${value}` : "Set est. date"}
+      {value ? `${setPrefix} ${value}` : pickLabel}
     </button>
   );
 }
@@ -1408,9 +1417,11 @@ function ReportsTab({ projectId, projectName, canEdit }: { projectId: string; pr
 
 function LifecycleTab({ projectId, clientName, clientContact, projectName, budget = 0, canManage = false }: { projectId: string; clientName?: string; clientContact?: string; projectName?: string; budget?: number; canManage?: boolean }) {
   const { data: lc, isLoading } = useProjectLifecycle(projectId);
+  const { data: project } = useProject(projectId);
   const { data: rosterStaff = [] } = useAllStaff();
   const { data: stageDates = {} } = useProjectStageDates(projectId);
   const setStageDate = useSetStageDate();
+  const setDefectDone = useSetDefectPeriodDone(projectId);
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
   const revertPayment = useRevertPayment();
@@ -1421,7 +1432,31 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const canSign = canEditSignatures(me?.role) || canManage;
   // Resolve audit-trail staff ids → names for the checkpoint rows (Phase 1).
   const staffById: Record<string, string> = {};
-  for (const s of rosterStaff) staffById[s.id] = s.name;
+  const staffByAvatar: Record<string, string> = {};
+  for (const s of rosterStaff) {
+    staffById[s.id] = s.name;
+    staffByAvatar[s.avatar_code] = s.name;
+  }
+
+  // Defect Period (final stage) — stored completion marker; closing it flips the
+  // project to "completed". Staff can always revert it (reopen the warranty window).
+  const defectDone = !!project?.defectPeriodCompletedAt;
+  const markDefectDone = () =>
+    setDefectDone.mutate(
+      { done: true, by: me?.avatar_code ?? null },
+      {
+        onSuccess: () => toast.success("Defect Period completed — project marked done"),
+        onError: (e) => toast.error(`Couldn't complete: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
+  const reopenDefect = () =>
+    setDefectDone.mutate(
+      { done: false, by: null },
+      {
+        onSuccess: () => toast.success("Defect Period reopened"),
+        onError: (e) => toast.error(`Couldn't reopen: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
 
   // Phase 2 — set a milestone/checkpoint's estimated date. Routes by source:
   // milestones → project_stage_dates; payments → due_date; signatures →
@@ -1466,25 +1501,27 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       toast.success(`${label} reverted to pending`);
     }
   };
-  const doRevertPayment = (p: PaymentRecord) => {
-    if (!window.confirm(`Revert "${p.label}" back to pending? This clears the collected date/reference and may move the project to an earlier stage.`)) return;
-    revertPayment.mutate(
-      { id: p.id, projectId },
-      {
-        onSuccess: (r) => revertResultToast(p.label, r),
-        onError: (e) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
+  // Revert now goes through an in-app confirm dialog (not window.confirm).
+  const [revertTarget, setRevertTarget] = useState<{ kind: "payment" | "signature"; id: number; label: string } | null>(null);
+  const doRevertPayment = (p: PaymentRecord) => setRevertTarget({ kind: "payment", id: p.id, label: p.label });
+  const doRevertSignature = (s: DocumentSignRecord) => setRevertTarget({ kind: "signature", id: s.id, label: s.label });
+  const reverting = revertPayment.isPending || revertSignature.isPending;
+  const confirmRevert = () => {
+    if (!revertTarget) return;
+    const { kind, id, label } = revertTarget;
+    const opts = {
+      onSuccess: (r: RevertResult) => {
+        revertResultToast(label, r);
+        // If the project had been marked complete, reverting a checkpoint regresses
+        // its lifecycle — clear the Defect Period completion + reset status so it no
+        // longer reads "Completed" while sitting at an earlier stage.
+        if (defectDone) setDefectDone.mutate({ done: false, by: null });
       },
-    );
-  };
-  const doRevertSignature = (s: DocumentSignRecord) => {
-    if (!window.confirm(`Revert "${s.label}" back to unsigned? This clears the signed date/document and may move the project to an earlier stage.`)) return;
-    revertSignature.mutate(
-      { id: s.id, projectId },
-      {
-        onSuccess: (r) => revertResultToast(s.label, r),
-        onError: (e) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
-      },
-    );
+      onError: (e: unknown) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
+    };
+    if (kind === "payment") revertPayment.mutate({ id, projectId }, opts);
+    else revertSignature.mutate({ id, projectId }, opts);
+    setRevertTarget(null);
   };
   const [collectTarget, setCollectTarget] = useState<MarkCollectedTarget | null>(null);
   const [signTarget, setSignTarget] = useState<SignDocumentTarget | null>(null);
@@ -1542,6 +1579,38 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   // Build a map of signatureKey -> record
   const sigByKey = Object.fromEntries(lc.signatures.map((s) => [s.key, s]));
 
+  // ── Next step (guide, don't block) ──────────────────────────────────────────
+  // The project only advances when the CURRENT stage's checkpoint(s) are done.
+  // Compute that one action set, so we can show a "Next step" banner and mark
+  // which checkpoint is live vs. an out-of-order one.
+  const currentStage = LIFECYCLE_STAGES.find((s) => stageStatus(s, lc.currentStageId) === "in-progress");
+  const nextPayments = currentStage?.paymentGate
+    ? (paymentsByGate[currentStage.paymentGate] ?? []).filter((p) => p.status !== "completed" && p.status !== "skipped")
+    : [];
+  const nextSigRec = currentStage?.signatureKey ? sigByKey[currentStage.signatureKey] : undefined;
+  const nextSignature = nextSigRec && nextSigRec.status !== "completed" && nextSigRec.status !== "skipped" ? nextSigRec : undefined;
+  const hasNextAction = nextPayments.length > 0 || !!nextSignature;
+  const lastStageId = LIFECYCLE_STAGES[LIFECYCLE_STAGES.length - 1]?.id;
+  // Work is fully delivered once the project reaches the final stage with no
+  // payment/signature left. It's only TRULY complete once the Defect Period
+  // (warranty window) is closed — until then the warranty is still active.
+  const workDelivered = lc.currentStageId === lastStageId && !hasNextAction;
+  const projectComplete = workDelivered && defectDone;
+  const warrantyActive = workDelivered && !defectDone;
+  const warrantyEndDate = stageDates["defect-period"];
+  const nextParts: string[] = [
+    ...nextPayments.map((p) => `collect ${p.label} (${formatRM(p.amount)})`),
+    ...(nextSignature ? [`sign ${nextSignature.label}`] : []),
+  ];
+  const openCollect = (p: PaymentRecord) =>
+    setCollectTarget({ id: p.id, projectId, label: p.label, amount: p.amount, gate: p.gate, reference: p.reference, notes: p.notes });
+  const openSign = (s: DocumentSignRecord) =>
+    setSignTarget({
+      id: s.id, projectId, projectName, signatureKey: s.key, label: s.label, group: s.group,
+      status: s.status, documentRef: s.documentRef, signedDate: s.signedDate, signedBy: s.signedBy,
+      notes: s.notes, defaultSignedBy: clientName,
+    });
+
   return (
     <div className="space-y-5">
       {/* Customer context (meeting note #3) — checkpoints belong to this client. */}
@@ -1554,6 +1623,62 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
           </p>
         </div>
       )}
+
+      {/* —— Next step banner — the ONE action that advances the project —— */}
+      {projectComplete ? (
+        <div className="rounded-xl px-3.5 py-2.5 flex items-center gap-2.5" style={{ background: "oklch(0.55 0.09 145 / 10%)", border: "1px solid oklch(0.55 0.09 145 / 30%)" }}>
+          <Check size={15} style={{ color: "oklch(0.45 0.10 145)" }} />
+          <p className="text-xs font-medium" style={{ color: "oklch(0.40 0.10 145)" }}>
+            Project completed — defect period closed
+            {project?.defectPeriodCompletedAt
+              ? ` on ${new Date(project.defectPeriodCompletedAt).toLocaleDateString("en-GB")}`
+              : ""}.
+          </p>
+        </div>
+      ) : hasNextAction ? (
+        <div className="rounded-xl px-3.5 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5" style={{ background: "oklch(0.62 0.09 68 / 8%)", border: "1px solid oklch(0.62 0.09 68 / 28%)" }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-label" style={{ color: "var(--acc)", letterSpacing: "0.1em" }}>NEXT STEP TO PROCEED</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--t-2)" }}>
+              To advance past <span className="font-semibold">{currentStage?.label}</span>, {nextParts.join(" and ")}.
+              {(nextPayments.length > 0 && nextSignature) && <span style={{ color: "var(--t-5)" }}> (needs both)</span>}
+            </p>
+          </div>
+          {canManage && (
+            <div className="flex items-center gap-2 shrink-0">
+              {nextPayments.map((p) => (
+                <button
+                  key={`nx-${p.id}`}
+                  type="button"
+                  onClick={() => openCollect(p)}
+                  className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-[11px] font-label font-bold"
+                  style={{ background: "oklch(0.55 0.09 145)", color: "oklch(1 0 0)", letterSpacing: "0.04em" }}
+                >
+                  <Check size={11} strokeWidth={3} /> COLLECT
+                </button>
+              ))}
+              {nextSignature && (
+                <button
+                  type="button"
+                  onClick={() => openSign(nextSignature)}
+                  className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-[11px] font-label font-bold"
+                  style={{ background: "var(--acc-strong)", color: "oklch(1 0 0)", letterSpacing: "0.04em" }}
+                >
+                  <Upload size={11} /> SIGN
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ) : warrantyActive ? (
+        <div className="rounded-xl px-3.5 py-2.5 flex items-center gap-2.5" style={{ background: "oklch(0.62 0.09 68 / 8%)", border: "1px solid oklch(0.62 0.09 68 / 28%)" }}>
+          <Clock size={15} style={{ color: "var(--acc-ink)" }} />
+          <p className="text-xs font-medium" style={{ color: "var(--acc-ink)" }}>
+            Work delivered — defect &amp; warranty period active
+            {warrantyEndDate ? ` until ${warrantyEndDate}` : ""}. Mark it done below to close the project.
+          </p>
+        </div>
+      ) : null}
 
       {/* —— Summary header: Payment + Document Sign progress —— */}
       <div className="grid grid-cols-2 gap-3">
@@ -1594,7 +1719,16 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
               style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
             >
               {phaseStages.map((stage, i) => {
-                const status = stageStatus(stage, lc.currentStageId);
+                // Defect Period's status is the stored completion marker — but ONLY
+                // once the project has actually reached the final stage (workDelivered).
+                // Before that it stays positional (pending), so the Done button can't
+                // appear on a project that's still mid-lifecycle.
+                const status =
+                  stage.id === "defect-period" && workDelivered
+                    ? defectDone
+                      ? "completed"
+                      : "in-progress"
+                    : stageStatus(stage, lc.currentStageId);
                 const isLast = i === phaseStages.length - 1;
                 const payments = stage.paymentGate ? paymentsByGate[stage.paymentGate] : undefined;
                 const signature = stage.signatureKey ? sigByKey[stage.signatureKey] : undefined;
@@ -1641,23 +1775,75 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                             {stage.paymentGate && <GateBadge gate={stage.paymentGate} kind="payment" />}
                             {stage.type === "contract-sign" && <GateBadge kind="contract" />}
                             {stage.type === "drawing-sign" && <GateBadge kind="drawing" />}
+                            {status === "in-progress" && (payments || signature) && (
+                              <span className="text-[9px] font-label px-1.5 py-0.5 rounded-full" style={{ background: "var(--acc-bright)", color: "oklch(1 0 0)", letterSpacing: "0.04em", fontWeight: 700 }}>
+                                DO THIS NEXT
+                              </span>
+                            )}
                           </div>
                           {stage.description && (
                             <p className="text-[10px] mt-0.5 leading-snug" style={{ color: "var(--t-5)" }}>
                               {stage.description}
                             </p>
                           )}
-                          {/* Estimated date for milestone stages (Phase 2).
-                              Payment/signature stages carry their date on the row below. */}
-                          {!payments && !signature && (
-                            <div className="mt-1">
+                          {/* Defect Period (final stage): pick a warranty end date +
+                              a Done button to close it (project → completed). Staff
+                              can always revert (reopen the warranty window). Only when
+                              the project has actually reached closeout (workDelivered). */}
+                          {stage.id === "defect-period" && workDelivered ? (
+                            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                               <StageDateControl
                                 value={stageDates[stage.id]}
-                                canEdit={canCollect}
+                                canEdit={canManage}
                                 onSet={(d) => setMilestoneDate(stage.id, d)}
                                 saving={setStageDate.isPending}
+                                pickLabel="Pick Date"
+                                setPrefix="Warranty ends"
                               />
+                              {canManage &&
+                                (defectDone ? (
+                                  <button
+                                    type="button"
+                                    onClick={reopenDefect}
+                                    disabled={setDefectDone.isPending}
+                                    className="text-[10px] font-label px-2 py-1 rounded-md inline-flex items-center gap-1 shrink-0"
+                                    style={{ background: "transparent", color: "var(--t-3)", border: "1px solid var(--b-strong)", cursor: "pointer" }}
+                                  >
+                                    <Undo2 size={10} /> Revert
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={markDefectDone}
+                                    disabled={setDefectDone.isPending}
+                                    className="text-[10px] font-label font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shrink-0"
+                                    style={{ background: "oklch(0.55 0.09 145)", color: "oklch(1 0 0)", letterSpacing: "0.03em", cursor: "pointer" }}
+                                  >
+                                    <Check size={11} strokeWidth={3} /> Done
+                                  </button>
+                                ))}
                             </div>
+                          ) : (
+                            /* Estimated date for the other milestone stages (Phase 2).
+                               Payment/signature stages carry their date on the row below. */
+                            !payments && !signature && (
+                              <div className="mt-1">
+                                <StageDateControl
+                                  value={stageDates[stage.id]}
+                                  canEdit={canCollect}
+                                  onSet={(d) => setMilestoneDate(stage.id, d)}
+                                  saving={setStageDate.isPending}
+                                />
+                              </div>
+                            )
+                          )}
+                          {stage.id === "defect-period" && workDelivered && defectDone && project?.defectPeriodCompletedAt && (
+                            <p className="text-[10px] mt-1" style={{ color: "var(--t-5)" }}>
+                              Closed {new Date(project.defectPeriodCompletedAt).toLocaleDateString("en-GB")}
+                              {project.defectPeriodCompletedBy && staffByAvatar[project.defectPeriodCompletedBy]
+                                ? ` · by ${staffByAvatar[project.defectPeriodCompletedBy]}`
+                                : ""}
+                            </p>
                           )}
                         </div>
                         <span
@@ -1682,6 +1868,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                               payment={p}
                               projectId={projectId}
                               canCollect={canCollect}
+                              isNext={status === "in-progress"}
                               staffById={staffById}
                               onSetDate={(d) => setPaymentDate(p.id, d)}
                               onSetAmount={(amt) => setPaymentAmount(p.id, amt)}
@@ -1721,6 +1908,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                         <SignatureRow
                           signature={signature}
                           canSign={canSign}
+                          isNext={status === "in-progress"}
                           staffById={staffById}
                           onSetDate={(d) => setSignatureDate(signature.id, d)}
                           onRevert={() => doRevertSignature(signature)}
@@ -1770,6 +1958,30 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
         open={signTarget !== null}
         onClose={() => setSignTarget(null)}
       />
+
+      {/* In-app revert confirm (replaces window.confirm) */}
+      <AlertDialog open={revertTarget !== null} onOpenChange={(o) => { if (!o) setRevertTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revert “{revertTarget?.label}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This sets the checkpoint back to {revertTarget?.kind === "payment" ? "pending" : "unsigned"} and clears its{" "}
+              {revertTarget?.kind === "payment" ? "collected date and reference" : "signed date and document"}. It may move the
+              project back to an earlier stage. The amount is kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRevert}
+              disabled={reverting}
+              style={{ background: "oklch(0.55 0.15 25)", color: "oklch(1 0 0)" }}
+            >
+              Revert
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1888,56 +2100,36 @@ function GateBadge({
   );
 }
 
-// Inline edit/collection history for one checkpoint (note #2) — reads the
-// audit_log via the ops-or-team-member RPC and renders a compact change list.
-function CheckpointHistory({ table, rowId, staffById }: {
-  table: "payment_records" | "signature_records"; rowId: number; staffById?: Record<string, string>;
-}) {
-  const { data: entries = [], isLoading, isError } = useCheckpointHistory(table, rowId, true);
-  const fields = table === "payment_records"
-    ? ["status", "amount", "collected_date", "reference", "collected_by", "notes"]
-    : ["status", "signed_date", "signed_by", "document_ref", "recorded_by", "notes"];
-  const fmtVal = (k: string, v: unknown): string => {
-    if (v == null || v === "") return "—";
-    if (k === "amount") return formatRM(Number(v));
-    if (k.endsWith("_by")) return staffById?.[String(v)] ?? String(v);
-    if (k.endsWith("_date")) return fmtDueDate(String(v));
-    return String(v);
-  };
-  const summarize = (e: AuditLogRow): string => {
-    if (e.action === "INSERT") return "Created";
-    if (e.action === "DELETE") return "Deleted";
-    const before = (e.before_data ?? {}) as Record<string, unknown>;
-    const after = (e.after_data ?? {}) as Record<string, unknown>;
-    const parts: string[] = [];
-    for (const k of fields) {
-      if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) {
-        parts.push(`${k.replace(/_/g, " ")}: ${fmtVal(k, before[k])} → ${fmtVal(k, after[k])}`);
-      }
-    }
-    return parts.length ? parts.join(" · ") : "Updated";
-  };
-  if (isLoading) return <p className="text-[9px] px-2 py-1" style={{ color: "var(--t-6)" }}>Loading history…</p>;
-  if (isError) return <p className="text-[9px] px-2 py-1" style={{ color: "var(--t-6)" }}>Couldn't load history.</p>;
-  if (entries.length === 0) return <p className="text-[9px] px-2 py-1" style={{ color: "var(--t-6)" }}>No changes recorded yet.</p>;
+/** Overflow "⋯" menu for a completed checkpoint row — tucks Edit/Revert away so
+ *  they aren't both always on screen (6-Nov follow-up). */
+function CheckpointActionsMenu({ onEdit, onRevert, disabled }: { onEdit?: () => void; onRevert?: () => void; disabled?: boolean }) {
   return (
-    <div className="rounded-lg px-2 py-1.5 space-y-1" style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}>
-      {entries.map((e) => (
-        <div key={e.id} className="text-[9px] flex gap-1.5" style={{ color: "var(--t-5)" }}>
-          <span className="shrink-0" style={{ color: "var(--t-6)", minWidth: 74 }}>
-            {new Date(e.changed_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}{" "}
-            {new Date(e.changed_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-          <span className="flex-1 leading-snug">{summarize(e)}</span>
-        </div>
-      ))}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" title="More actions" className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ color: "var(--t-5)" }}>
+          <MoreHorizontal size={14} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[8rem]">
+        {onEdit && (
+          <DropdownMenuItem onSelect={() => onEdit()} className="gap-2 text-xs">
+            <Pencil size={12} /> Edit
+          </DropdownMenuItem>
+        )}
+        {onRevert && (
+          <DropdownMenuItem onSelect={() => onRevert()} disabled={disabled} className="gap-2 text-xs" style={{ color: "oklch(0.52 0.16 25)" }}>
+            <Undo2 size={12} /> Revert
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 function PaymentRow({
   payment,
   canCollect,
+  isNext = true,
   onCollect,
   onEdit,
   onSetDate,
@@ -1949,6 +2141,7 @@ function PaymentRow({
   payment: PaymentRecord;
   projectId: string;
   canCollect: boolean;
+  isNext?: boolean;
   onCollect: () => void;
   onEdit?: () => void;
   onSetDate?: (ddmm: string | null) => void;
@@ -1961,7 +2154,6 @@ function PaymentRow({
   const isOpen = payment.status !== "completed" && payment.status !== "skipped";
   const isCompleted = payment.status === "completed";
   const [editingAmount, setEditingAmount] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const audit = checkpointAuditLine({
     createdBy: payment.createdBy,
     createdAt: payment.createdAt,
@@ -2003,20 +2195,19 @@ function PaymentRow({
         {isOpen && onSetDate && (
           <StageDateControl value={payment.dueDate} canEdit={canCollect} onSet={onSetDate} />
         )}
-        {editingAmount && canCollect && onSetAmount ? (
+        {editingAmount && isOpen && canCollect && onSetAmount ? (
           <input
             type="number"
             autoFocus
             defaultValue={payment.amount}
-            onBlur={() => setEditingAmount(false)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              if (e.key === "Escape") setEditingAmount(false);
-            }}
-            onChange={(e) => {
+            onBlur={(e) => {
               const v = Number(e.currentTarget.value);
               if (Number.isFinite(v) && v >= 0 && v !== payment.amount) onSetAmount(v);
               setEditingAmount(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") setEditingAmount(false);
             }}
             className="w-24 text-[11px] rounded-md px-1.5 py-0.5 text-right"
             style={{ background: "var(--s-2)", border: "1px solid var(--b-strong)", color: "var(--t-1)" }}
@@ -2024,46 +2215,30 @@ function PaymentRow({
         ) : (
           <button
             type="button"
-            onClick={() => canCollect && onSetAmount && setEditingAmount(true)}
-            disabled={!canCollect || !onSetAmount}
+            onClick={() => isOpen && canCollect && onSetAmount && setEditingAmount(true)}
+            disabled={!isOpen || !canCollect || !onSetAmount}
             className="text-[11px] font-display font-semibold inline-flex items-center gap-1"
-            style={{ color: sc.color, cursor: canCollect && onSetAmount ? "pointer" : "default" }}
-            title={canCollect && onSetAmount ? "Edit amount" : undefined}
+            style={{ color: sc.color, cursor: isOpen && canCollect && onSetAmount ? "pointer" : "default" }}
+            title={isOpen && canCollect && onSetAmount ? "Edit amount" : undefined}
           >
             {formatRM(payment.amount)}
-            {canCollect && onSetAmount && <Pencil size={9} style={{ color: "var(--t-5)" }} />}
+            {isOpen && canCollect && onSetAmount && <Pencil size={9} style={{ color: "var(--t-5)" }} />}
           </button>
         )}
-        {isCompleted && canCollect && onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="text-[9px] font-label px-2 py-0.5 rounded-md"
-            style={{ background: "var(--s-2)", color: "var(--t-3)", border: "1px solid var(--b-strong)", letterSpacing: "0.04em", fontWeight: 700 }}
-          >
-            EDIT
-          </button>
-        )}
-        {isCompleted && canCollect && onRevert && (
-          <button
-            type="button"
-            onClick={onRevert}
-            disabled={reverting}
-            className="text-[9px] font-label px-2 py-0.5 rounded-md"
-            style={{ background: "oklch(0.68 0.12 25 / 10%)", color: "oklch(0.50 0.12 25)", border: "1px solid oklch(0.68 0.12 25 / 25%)", opacity: reverting ? 0.6 : 1, letterSpacing: "0.04em", fontWeight: 700 }}
-          >
-            REVERT
-          </button>
+        {isCompleted && canCollect && (onEdit || onRevert) && (
+          <CheckpointActionsMenu onEdit={onEdit} onRevert={onRevert} disabled={reverting} />
         )}
         {isOpen && canCollect && (
           <motion.button
             whileTap={{ scale: 0.94 }}
             onClick={onCollect}
+            title={isNext ? undefined : "Not the current step — recording this won't advance the project yet"}
             className="px-2 py-0.5 rounded-md flex items-center gap-1"
             style={{
               background: "oklch(0.55 0.09 145 / 12%)",
               color: "oklch(0.38 0.09 145)",
               border: "1px solid oklch(0.55 0.09 145 / 25%)",
+              opacity: isNext ? 1 : 0.45,
             }}
           >
             <Check size={9} strokeWidth={3} />
@@ -2072,18 +2247,8 @@ function PaymentRow({
             </span>
           </motion.button>
         )}
-        <button
-          type="button"
-          onClick={() => setShowHistory((v) => !v)}
-          title="Change history"
-          className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-          style={{ background: showHistory ? "var(--b-2)" : "transparent", color: "var(--t-5)" }}
-        >
-          <History size={11} />
-        </button>
       </div>
     </div>
-    {showHistory && <CheckpointHistory table="payment_records" rowId={payment.id} staffById={staffById} />}
     </div>
   );
 }
@@ -2091,6 +2256,7 @@ function PaymentRow({
 function SignatureRow({
   signature,
   canSign,
+  isNext = true,
   onSign,
   onSetDate,
   onRevert,
@@ -2099,6 +2265,7 @@ function SignatureRow({
 }: {
   signature: DocumentSignRecord;
   canSign: boolean;
+  isNext?: boolean;
   onSign: () => void;
   onSetDate?: (ddmm: string | null) => void;
   onRevert?: () => void;
@@ -2118,7 +2285,14 @@ function SignatureRow({
   const hasStoredDoc = isStorageDocRef(signature.documentRef);
   const hasLegacyDoc = !!signature.documentRef && !hasStoredDoc;
   const [viewLoading, setViewLoading] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [docUrl, setDocUrl] = useState<string | null>(null);
+  const isPdf = (signature.documentRef || "").toLowerCase().endsWith(".pdf");
+  useEffect(() => {
+    if (!docUrl) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDocUrl(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [docUrl]);
 
   async function handleViewPdf(e: React.MouseEvent) {
     e.stopPropagation();
@@ -2131,7 +2305,7 @@ function SignatureRow({
     try {
       const url = await getSignatureDocUrl(signature.documentRef);
       if (url) {
-        window.open(url, "_blank", "noopener,noreferrer");
+        setDocUrl(url);
       } else {
         toast.error("Could not open document — link may have expired");
       }
@@ -2142,6 +2316,20 @@ function SignatureRow({
 
   return (
     <div className="mt-2 space-y-1">
+    {docUrl && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "oklch(0 0 0 / 0.75)", backdropFilter: "blur(2px)" }} onClick={() => setDocUrl(null)}>
+        <div className="relative rounded-xl overflow-hidden shadow-2xl" style={{ background: "#fff", maxWidth: "92vw", maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
+          <button type="button" onClick={() => setDocUrl(null)} aria-label="Close" className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "oklch(0 0 0 / 0.6)" }}>
+            <X size={18} className="text-white" />
+          </button>
+          {isPdf ? (
+            <iframe title={signature.label} src={docUrl} style={{ width: "90vw", height: "85vh", border: 0 }} />
+          ) : (
+            <img src={docUrl} alt={signature.label} style={{ display: "block", maxWidth: "92vw", maxHeight: "90vh", objectFit: "contain" }} />
+          )}
+        </div>
+      </div>
+    )}
     <div
       className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
       style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}
@@ -2173,15 +2361,7 @@ function SignatureRow({
           <StageDateControl value={signature.estimatedDate} canEdit={canSign} onSet={onSetDate} />
         )}
         {isCompleted && canSign && onRevert && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRevert(); }}
-            disabled={reverting}
-            className="text-[9px] font-label px-2 py-0.5 rounded-md"
-            style={{ background: "oklch(0.68 0.12 25 / 10%)", color: "oklch(0.50 0.12 25)", border: "1px solid oklch(0.68 0.12 25 / 25%)", opacity: reverting ? 0.6 : 1, letterSpacing: "0.04em", fontWeight: 700 }}
-          >
-            REVERT
-          </button>
+          <CheckpointActionsMenu onRevert={onRevert} disabled={reverting} />
         )}
         {(hasStoredDoc || hasLegacyDoc) && (
           <button
@@ -2205,6 +2385,7 @@ function SignatureRow({
               e.stopPropagation();
               onSign();
             }}
+            title={isNext ? undefined : "Not the current step — recording this won't advance the project yet"}
             className="px-2 py-0.5 rounded-md flex items-center gap-1"
             style={{
               background: signature.group === "contract"
@@ -2216,6 +2397,7 @@ function SignatureRow({
               border: signature.group === "contract"
                 ? "1px solid oklch(0.50 0.10 25 / 35%)"
                 : "1px solid oklch(0.38 0.09 240 / 35%)",
+              opacity: isNext ? 1 : 0.45,
             }}
           >
             <Upload size={9} />
@@ -2224,18 +2406,8 @@ function SignatureRow({
             </span>
           </motion.button>
         )}
-        <button
-          type="button"
-          onClick={() => setShowHistory((v) => !v)}
-          title="Change history"
-          className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-          style={{ background: showHistory ? "var(--b-2)" : "transparent", color: "var(--t-5)" }}
-        >
-          <History size={11} />
-        </button>
       </div>
     </div>
-    {showHistory && <CheckpointHistory table="signature_records" rowId={signature.id} staffById={staffById} />}
     </div>
   );
 }

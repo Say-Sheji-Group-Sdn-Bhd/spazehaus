@@ -112,7 +112,7 @@ export default function MarkCollectedSheet({
       toast.success(isEdit ? `Payment ${gateLabel} updated` : `Payment ${gateLabel} marked collected`, {
         description: `${formatRM(amountNum)} · ${reference.trim()}`,
       });
-      // Server-side advancement trigger may have moved the project forward
+      // Server-side advancement trigger may have moved the project forward.
       if (result.stageAdvanced) {
         const { toLabel, fromLabel } = result.stageAdvanced;
         setTimeout(() => {
@@ -124,6 +124,14 @@ export default function MarkCollectedSheet({
                 : "Auto-advanced by SOP",
             },
           );
+        }, 350);
+      } else if (!isEdit && result.currentStage?.label) {
+        // Completed out of order — recorded, but the project is still waiting on
+        // an earlier step, so nothing moved. Explain why (non-blocking).
+        setTimeout(() => {
+          toast.info(`Recorded — the project is still on "${result.currentStage!.label}"`, {
+            description: "Complete that step to move the project forward (see the Next step banner).",
+          });
         }, 350);
       }
       onClose();
