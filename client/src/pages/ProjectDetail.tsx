@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useLocation } from "wouter";
-import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, History, MoreHorizontal, Undo2 } from "lucide-react";
+import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, MoreHorizontal, Undo2 } from "lucide-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
@@ -35,6 +35,7 @@ import {
 } from "@/lib/lifecycleData";
 import {
   useProject,
+  useSetDefectPeriodDone,
   useAllStaff,
   useQuotations,
   useProjectLifecycle,
@@ -46,7 +47,6 @@ import {
   useRevertPayment,
   useRevertSignature,
   type RevertResult,
-  useCheckpointHistory,
   canEditPayments,
   canEditSignatures,
   canEditProjectData,
@@ -71,7 +71,7 @@ import {
   type PaymentRecord,
   type DocumentSignRecord,
 } from "@/lib/queries";
-import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow, AuditLogRow } from "@/lib/dbTypes";
+import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow } from "@/lib/dbTypes";
 import { useAuth } from "@/contexts/AuthContext";
 import EditProjectSheet from "@/components/EditProjectSheet";
 import ManageTeamSheet from "@/components/ManageTeamSheet";
@@ -106,9 +106,10 @@ function ddmmToIsoDate(ddmm: string | undefined): string {
  *  Shows the date (or "Set est. date") and opens a native date picker on click.
  *  `value` is DD/MM/YYYY; `onSet` receives DD/MM/YYYY or null (cleared). */
 function StageDateControl({
-  value, canEdit, onSet, saving,
+  value, canEdit, onSet, saving, pickLabel = "Set est. date", setPrefix = "Est.",
 }: {
   value?: string; canEdit: boolean; onSet: (ddmm: string | null) => void; saving?: boolean;
+  pickLabel?: string; setPrefix?: string;
 }) {
   const [editing, setEditing] = useState(false);
   if (!canEdit && !value) return null;
@@ -141,10 +142,10 @@ function StageDateControl({
         border: `1px dashed ${value ? "oklch(0.62 0.09 68 / 30%)" : "var(--b-strong)"}`,
         cursor: canEdit ? "pointer" : "default",
       }}
-      title={canEdit ? "Set estimated date" : undefined}
+      title={canEdit ? pickLabel : undefined}
     >
       <CalendarClock size={9} />
-      {value ? `Est. ${value}` : "Set est. date"}
+      {value ? `${setPrefix} ${value}` : pickLabel}
     </button>
   );
 }
@@ -1416,9 +1417,11 @@ function ReportsTab({ projectId, projectName, canEdit }: { projectId: string; pr
 
 function LifecycleTab({ projectId, clientName, clientContact, projectName, budget = 0, canManage = false }: { projectId: string; clientName?: string; clientContact?: string; projectName?: string; budget?: number; canManage?: boolean }) {
   const { data: lc, isLoading } = useProjectLifecycle(projectId);
+  const { data: project } = useProject(projectId);
   const { data: rosterStaff = [] } = useAllStaff();
   const { data: stageDates = {} } = useProjectStageDates(projectId);
   const setStageDate = useSetStageDate();
+  const setDefectDone = useSetDefectPeriodDone(projectId);
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
   const revertPayment = useRevertPayment();
@@ -1429,7 +1432,31 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const canSign = canEditSignatures(me?.role) || canManage;
   // Resolve audit-trail staff ids → names for the checkpoint rows (Phase 1).
   const staffById: Record<string, string> = {};
-  for (const s of rosterStaff) staffById[s.id] = s.name;
+  const staffByAvatar: Record<string, string> = {};
+  for (const s of rosterStaff) {
+    staffById[s.id] = s.name;
+    staffByAvatar[s.avatar_code] = s.name;
+  }
+
+  // Defect Period (final stage) — stored completion marker; closing it flips the
+  // project to "completed". Staff can always revert it (reopen the warranty window).
+  const defectDone = !!project?.defectPeriodCompletedAt;
+  const markDefectDone = () =>
+    setDefectDone.mutate(
+      { done: true, by: me?.avatar_code ?? null },
+      {
+        onSuccess: () => toast.success("Defect Period completed — project marked done"),
+        onError: (e) => toast.error(`Couldn't complete: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
+  const reopenDefect = () =>
+    setDefectDone.mutate(
+      { done: false, by: null },
+      {
+        onSuccess: () => toast.success("Defect Period reopened"),
+        onError: (e) => toast.error(`Couldn't reopen: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
 
   // Phase 2 — set a milestone/checkpoint's estimated date. Routes by source:
   // milestones → project_stage_dates; payments → due_date; signatures →
@@ -1483,7 +1510,13 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
     if (!revertTarget) return;
     const { kind, id, label } = revertTarget;
     const opts = {
-      onSuccess: (r: RevertResult) => revertResultToast(label, r),
+      onSuccess: (r: RevertResult) => {
+        revertResultToast(label, r);
+        // If the project had been marked complete, reverting a checkpoint regresses
+        // its lifecycle — clear the Defect Period completion + reset status so it no
+        // longer reads "Completed" while sitting at an earlier stage.
+        if (defectDone) setDefectDone.mutate({ done: false, by: null });
+      },
       onError: (e: unknown) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
     };
     if (kind === "payment") revertPayment.mutate({ id, projectId }, opts);
@@ -1558,7 +1591,13 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const nextSignature = nextSigRec && nextSigRec.status !== "completed" && nextSigRec.status !== "skipped" ? nextSigRec : undefined;
   const hasNextAction = nextPayments.length > 0 || !!nextSignature;
   const lastStageId = LIFECYCLE_STAGES[LIFECYCLE_STAGES.length - 1]?.id;
-  const projectComplete = lc.currentStageId === lastStageId && !hasNextAction;
+  // Work is fully delivered once the project reaches the final stage with no
+  // payment/signature left. It's only TRULY complete once the Defect Period
+  // (warranty window) is closed — until then the warranty is still active.
+  const workDelivered = lc.currentStageId === lastStageId && !hasNextAction;
+  const projectComplete = workDelivered && defectDone;
+  const warrantyActive = workDelivered && !defectDone;
+  const warrantyEndDate = stageDates["defect-period"];
   const nextParts: string[] = [
     ...nextPayments.map((p) => `collect ${p.label} (${formatRM(p.amount)})`),
     ...(nextSignature ? [`sign ${nextSignature.label}`] : []),
@@ -1590,7 +1629,10 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
         <div className="rounded-xl px-3.5 py-2.5 flex items-center gap-2.5" style={{ background: "oklch(0.55 0.09 145 / 10%)", border: "1px solid oklch(0.55 0.09 145 / 30%)" }}>
           <Check size={15} style={{ color: "oklch(0.45 0.10 145)" }} />
           <p className="text-xs font-medium" style={{ color: "oklch(0.40 0.10 145)" }}>
-            Project complete — all payments collected and all documents signed.
+            Project completed — defect period closed
+            {project?.defectPeriodCompletedAt
+              ? ` on ${new Date(project.defectPeriodCompletedAt).toLocaleDateString("en-GB")}`
+              : ""}.
           </p>
         </div>
       ) : hasNextAction ? (
@@ -1627,6 +1669,14 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
               )}
             </div>
           )}
+        </div>
+      ) : warrantyActive ? (
+        <div className="rounded-xl px-3.5 py-2.5 flex items-center gap-2.5" style={{ background: "oklch(0.62 0.09 68 / 8%)", border: "1px solid oklch(0.62 0.09 68 / 28%)" }}>
+          <Clock size={15} style={{ color: "var(--acc-ink)" }} />
+          <p className="text-xs font-medium" style={{ color: "var(--acc-ink)" }}>
+            Work delivered — defect &amp; warranty period active
+            {warrantyEndDate ? ` until ${warrantyEndDate}` : ""}. Mark it done below to close the project.
+          </p>
         </div>
       ) : null}
 
@@ -1669,7 +1719,16 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
               style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
             >
               {phaseStages.map((stage, i) => {
-                const status = stageStatus(stage, lc.currentStageId);
+                // Defect Period's status is the stored completion marker — but ONLY
+                // once the project has actually reached the final stage (workDelivered).
+                // Before that it stays positional (pending), so the Done button can't
+                // appear on a project that's still mid-lifecycle.
+                const status =
+                  stage.id === "defect-period" && workDelivered
+                    ? defectDone
+                      ? "completed"
+                      : "in-progress"
+                    : stageStatus(stage, lc.currentStageId);
                 const isLast = i === phaseStages.length - 1;
                 const payments = stage.paymentGate ? paymentsByGate[stage.paymentGate] : undefined;
                 const signature = stage.signatureKey ? sigByKey[stage.signatureKey] : undefined;
@@ -1727,17 +1786,64 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                               {stage.description}
                             </p>
                           )}
-                          {/* Estimated date for milestone stages (Phase 2).
-                              Payment/signature stages carry their date on the row below. */}
-                          {!payments && !signature && (
-                            <div className="mt-1">
+                          {/* Defect Period (final stage): pick a warranty end date +
+                              a Done button to close it (project → completed). Staff
+                              can always revert (reopen the warranty window). Only when
+                              the project has actually reached closeout (workDelivered). */}
+                          {stage.id === "defect-period" && workDelivered ? (
+                            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                               <StageDateControl
                                 value={stageDates[stage.id]}
-                                canEdit={canCollect}
+                                canEdit={canManage}
                                 onSet={(d) => setMilestoneDate(stage.id, d)}
                                 saving={setStageDate.isPending}
+                                pickLabel="Pick Date"
+                                setPrefix="Warranty ends"
                               />
+                              {canManage &&
+                                (defectDone ? (
+                                  <button
+                                    type="button"
+                                    onClick={reopenDefect}
+                                    disabled={setDefectDone.isPending}
+                                    className="text-[10px] font-label px-2 py-1 rounded-md inline-flex items-center gap-1 shrink-0"
+                                    style={{ background: "transparent", color: "var(--t-3)", border: "1px solid var(--b-strong)", cursor: "pointer" }}
+                                  >
+                                    <Undo2 size={10} /> Revert
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={markDefectDone}
+                                    disabled={setDefectDone.isPending}
+                                    className="text-[10px] font-label font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shrink-0"
+                                    style={{ background: "oklch(0.55 0.09 145)", color: "oklch(1 0 0)", letterSpacing: "0.03em", cursor: "pointer" }}
+                                  >
+                                    <Check size={11} strokeWidth={3} /> Done
+                                  </button>
+                                ))}
                             </div>
+                          ) : (
+                            /* Estimated date for the other milestone stages (Phase 2).
+                               Payment/signature stages carry their date on the row below. */
+                            !payments && !signature && (
+                              <div className="mt-1">
+                                <StageDateControl
+                                  value={stageDates[stage.id]}
+                                  canEdit={canCollect}
+                                  onSet={(d) => setMilestoneDate(stage.id, d)}
+                                  saving={setStageDate.isPending}
+                                />
+                              </div>
+                            )
+                          )}
+                          {stage.id === "defect-period" && workDelivered && defectDone && project?.defectPeriodCompletedAt && (
+                            <p className="text-[10px] mt-1" style={{ color: "var(--t-5)" }}>
+                              Closed {new Date(project.defectPeriodCompletedAt).toLocaleDateString("en-GB")}
+                              {project.defectPeriodCompletedBy && staffByAvatar[project.defectPeriodCompletedBy]
+                                ? ` · by ${staffByAvatar[project.defectPeriodCompletedBy]}`
+                                : ""}
+                            </p>
                           )}
                         </div>
                         <span
@@ -1994,53 +2100,6 @@ function GateBadge({
   );
 }
 
-// Inline edit/collection history for one checkpoint (note #2) — reads the
-// audit_log via the ops-or-team-member RPC and renders a compact change list.
-function CheckpointHistory({ table, rowId, staffById }: {
-  table: "payment_records" | "signature_records"; rowId: number; staffById?: Record<string, string>;
-}) {
-  const { data: entries = [], isLoading, isError } = useCheckpointHistory(table, rowId, true);
-  const fields = table === "payment_records"
-    ? ["status", "amount", "collected_date", "reference", "collected_by", "notes"]
-    : ["status", "signed_date", "signed_by", "document_ref", "recorded_by", "notes"];
-  const fmtVal = (k: string, v: unknown): string => {
-    if (v == null || v === "") return "—";
-    if (k === "amount") return formatRM(Number(v));
-    if (k.endsWith("_by")) return staffById?.[String(v)] ?? String(v);
-    if (k.endsWith("_date")) return fmtDueDate(String(v));
-    return String(v);
-  };
-  const summarize = (e: AuditLogRow): string => {
-    if (e.action === "INSERT") return "Created";
-    if (e.action === "DELETE") return "Deleted";
-    const before = (e.before_data ?? {}) as Record<string, unknown>;
-    const after = (e.after_data ?? {}) as Record<string, unknown>;
-    const parts: string[] = [];
-    for (const k of fields) {
-      if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) {
-        parts.push(`${k.replace(/_/g, " ")}: ${fmtVal(k, before[k])} → ${fmtVal(k, after[k])}`);
-      }
-    }
-    return parts.length ? parts.join(" · ") : "Updated";
-  };
-  if (isLoading) return <p className="text-[9px] px-2 py-1" style={{ color: "var(--t-6)" }}>Loading history…</p>;
-  if (isError) return <p className="text-[9px] px-2 py-1" style={{ color: "var(--t-6)" }}>Couldn't load history.</p>;
-  if (entries.length === 0) return <p className="text-[9px] px-2 py-1" style={{ color: "var(--t-6)" }}>No changes recorded yet.</p>;
-  return (
-    <div className="rounded-lg px-2 py-1.5 space-y-1" style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}>
-      {entries.map((e) => (
-        <div key={e.id} className="text-[9px] flex gap-1.5" style={{ color: "var(--t-5)" }}>
-          <span className="shrink-0" style={{ color: "var(--t-6)", minWidth: 74 }}>
-            {new Date(e.changed_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}{" "}
-            {new Date(e.changed_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-          <span className="flex-1 leading-snug">{summarize(e)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** Overflow "⋯" menu for a completed checkpoint row — tucks Edit/Revert away so
  *  they aren't both always on screen (6-Nov follow-up). */
 function CheckpointActionsMenu({ onEdit, onRevert, disabled }: { onEdit?: () => void; onRevert?: () => void; disabled?: boolean }) {
@@ -2095,7 +2154,6 @@ function PaymentRow({
   const isOpen = payment.status !== "completed" && payment.status !== "skipped";
   const isCompleted = payment.status === "completed";
   const [editingAmount, setEditingAmount] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const audit = checkpointAuditLine({
     createdBy: payment.createdBy,
     createdAt: payment.createdAt,
@@ -2189,18 +2247,8 @@ function PaymentRow({
             </span>
           </motion.button>
         )}
-        <button
-          type="button"
-          onClick={() => setShowHistory((v) => !v)}
-          title="Change history"
-          className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-          style={{ background: showHistory ? "var(--b-2)" : "transparent", color: "var(--t-5)" }}
-        >
-          <History size={11} />
-        </button>
       </div>
     </div>
-    {showHistory && <CheckpointHistory table="payment_records" rowId={payment.id} staffById={staffById} />}
     </div>
   );
 }
@@ -2237,7 +2285,14 @@ function SignatureRow({
   const hasStoredDoc = isStorageDocRef(signature.documentRef);
   const hasLegacyDoc = !!signature.documentRef && !hasStoredDoc;
   const [viewLoading, setViewLoading] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [docUrl, setDocUrl] = useState<string | null>(null);
+  const isPdf = (signature.documentRef || "").toLowerCase().endsWith(".pdf");
+  useEffect(() => {
+    if (!docUrl) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDocUrl(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [docUrl]);
 
   async function handleViewPdf(e: React.MouseEvent) {
     e.stopPropagation();
@@ -2250,7 +2305,7 @@ function SignatureRow({
     try {
       const url = await getSignatureDocUrl(signature.documentRef);
       if (url) {
-        window.open(url, "_blank", "noopener,noreferrer");
+        setDocUrl(url);
       } else {
         toast.error("Could not open document — link may have expired");
       }
@@ -2261,6 +2316,20 @@ function SignatureRow({
 
   return (
     <div className="mt-2 space-y-1">
+    {docUrl && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "oklch(0 0 0 / 0.75)", backdropFilter: "blur(2px)" }} onClick={() => setDocUrl(null)}>
+        <div className="relative rounded-xl overflow-hidden shadow-2xl" style={{ background: "#fff", maxWidth: "92vw", maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
+          <button type="button" onClick={() => setDocUrl(null)} aria-label="Close" className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "oklch(0 0 0 / 0.6)" }}>
+            <X size={18} className="text-white" />
+          </button>
+          {isPdf ? (
+            <iframe title={signature.label} src={docUrl} style={{ width: "90vw", height: "85vh", border: 0 }} />
+          ) : (
+            <img src={docUrl} alt={signature.label} style={{ display: "block", maxWidth: "92vw", maxHeight: "90vh", objectFit: "contain" }} />
+          )}
+        </div>
+      </div>
+    )}
     <div
       className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
       style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}
@@ -2337,18 +2406,8 @@ function SignatureRow({
             </span>
           </motion.button>
         )}
-        <button
-          type="button"
-          onClick={() => setShowHistory((v) => !v)}
-          title="Change history"
-          className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-          style={{ background: showHistory ? "var(--b-2)" : "transparent", color: "var(--t-5)" }}
-        >
-          <History size={11} />
-        </button>
       </div>
     </div>
-    {showHistory && <CheckpointHistory table="signature_records" rowId={signature.id} staffById={staffById} />}
     </div>
   );
 }

@@ -103,6 +103,8 @@ export type Project = {
   description: string;
   currentStageId: string | null;
   lifecycleStartedAt: string | null;
+  defectPeriodCompletedAt: string | null;  // set → warranty window closed, project truly done
+  defectPeriodCompletedBy: string | null;  // staff avatar_code who closed it (audit)
   clientAccessToken: string;   // UUID for the read-only /portal/:token route
 };
 
@@ -214,6 +216,8 @@ function mapProject(row: ProjectWithStaffJoin): Project {
     description: row.description ?? "",
     currentStageId: row.current_stage_id,
     lifecycleStartedAt: row.lifecycle_started_at,
+    defectPeriodCompletedAt: row.defect_period_completed_at,
+    defectPeriodCompletedBy: row.defect_period_completed_by,
     clientAccessToken: row.client_access_token,
   };
 }
@@ -520,6 +524,37 @@ export function useUpdateProject() {
     onSuccess: (_row, args) => {
       qc.invalidateQueries({ queryKey: qk.projects });
       qc.invalidateQueries({ queryKey: qk.project(args.id) });
+    },
+  });
+}
+
+/** Close or reopen the Defect Period (final lifecycle stage).
+ *  `done` → stamps defect_period_completed_at + flips project status to
+ *  'completed' (project reads as done everywhere). Reverting clears the stamp
+ *  and restores status to 'active'. Authz is enforced server-side by the existing
+ *  `projects` UPDATE policies — the OPS tier (projects_write_admin_or_ops) and this
+ *  project's assigned designer/PM/team (projects_update_assigned). */
+export function useSetDefectPeriodDone(projectId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ done, by }: { done: boolean; by: string | null }) => {
+      const payload: TablesUpdate<"projects"> = done
+        ? {
+            defect_period_completed_at: new Date().toISOString(),
+            defect_period_completed_by: by,
+            status: "completed",
+          }
+        : {
+            defect_period_completed_at: null,
+            defect_period_completed_by: null,
+            status: "active",
+          };
+      const { error } = await supabase.from("projects").update(payload).eq("id", projectId ?? "");
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.projects });
+      if (projectId) qc.invalidateQueries({ queryKey: qk.project(projectId) });
     },
   });
 }

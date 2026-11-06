@@ -174,8 +174,11 @@ export default function CustomerDetail() {
                 {PIPELINE.map((step, i) => {
                   const stepOrder = stageConfig[step.key].order;
                   const curOrder = stageConfig[inq.stage].order;
-                  const isDone = stepOrder < curOrder;
-                  const isCurrent = stepOrder === curOrder;
+                  // "Awarded" is a terminal WON state (the inquiry became a
+                  // project) — render it as done (green ✓), not a pending clock.
+                  const isWon = inq.stage === "awarded" && step.key === "awarded";
+                  const isDone = stepOrder < curOrder || isWon;
+                  const isCurrent = stepOrder === curOrder && !isDone;
                   const stepSc = stageConfig[step.key];
                   return (
                     <div key={step.key} className="flex items-center flex-1">
