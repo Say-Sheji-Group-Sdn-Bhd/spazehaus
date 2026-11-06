@@ -8,13 +8,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRoute, useLocation } from "wouter";
 import {
   Download, Send, CheckCircle2, XCircle, FileText, Receipt,
-  ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Loader2
+  ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Loader2, User, PenLine
 } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
-import { useQuotation, useUpdateQuotationStatus } from "@/lib/queries";
+import { useQuotation, useUpdateQuotationStatus, useAllStaff } from "@/lib/queries";
 import { statusConfig, computeTotals, formatRM, categoryColors } from "@/lib/quotationData";
 import type { QuotationStatus } from "@/lib/dbTypes";
 import { toast } from "sonner";
+
+/** Format an ISO timestamp (quotations.created_at) as "6 Nov 2026". */
+function fmtCreatedAt(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
 // `generateQuotationPDF` is dynamically imported below so the ~600 KB jspdf
 // + html2canvas + dompurify stack is fetched only when the user actually
 // taps "Download PDF". Keeps the initial route payload lean.
@@ -37,6 +45,7 @@ export default function QuotationDetail() {
   const id = params?.id || "";
 
   const { data: quotation, isLoading } = useQuotation(id);
+  const { data: allStaff = [] } = useAllStaff();
   const updateStatus = useUpdateQuotationStatus();
 
   const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({});
@@ -60,6 +69,13 @@ export default function QuotationDetail() {
   const sc = statusConfig[quotation.status];
   const { subtotal, taxAmount, total } = computeTotals(quotation.items, quotation.taxRate);
   const isInvoice = quotation.type === "Invoice" || quotation.type === "Proforma Invoice";
+
+  // Who created this quotation, and when (meeting note #3a). created_by / created_at
+  // live on the quotation row; resolve the creator's name from the staff roster.
+  const creatorName = quotation.created_by
+    ? (allStaff.find((s) => s.id === quotation.created_by)?.name ?? quotation.created_by)
+    : null;
+  const createdAtLabel = fmtCreatedAt(quotation.created_at);
 
   // Group items by area
   const areaMap: Record<string, typeof quotation.items> = {};
@@ -145,9 +161,10 @@ export default function QuotationDetail() {
               </span>
             </div>
 
-            {/* Project & Client */}
+            {/* Customer block — name, project, and contact details (meeting note #3a) */}
             <div className="space-y-1.5">
               {[
+                { icon: User, label: quotation.client },
                 { icon: Building2, label: quotation.projectName },
                 { icon: Phone, label: quotation.clientContact },
                 { icon: Mail, label: quotation.clientEmail },
@@ -179,6 +196,17 @@ export default function QuotationDetail() {
                 </div>
               )}
             </div>
+
+            {/* Creator attribution (meeting note #3a) */}
+            {(creatorName || createdAtLabel) && (
+              <div className="mt-3 pt-3 flex items-center gap-1.5" style={{ borderTop: "1px solid var(--b-1)" }}>
+                <PenLine size={11} className="shrink-0" style={{ color: "var(--t-5)" }} />
+                <p className="text-[11px]" style={{ color: "var(--t-5)" }}>
+                  Created by <span style={{ color: "var(--t-3)" }}>{creatorName ?? "—"}</span>
+                  {createdAtLabel && <> · {createdAtLabel}</>}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

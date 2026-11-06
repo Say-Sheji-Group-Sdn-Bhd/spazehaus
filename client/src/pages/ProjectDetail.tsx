@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useLocation } from "wouter";
-import { Upload, UserPlus, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus } from "lucide-react";
+import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, History } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import MarkCollectedSheet, { type MarkCollectedTarget } from "@/components/MarkCollectedSheet";
 import SignDocumentSheet, { type SignDocumentTarget } from "@/components/SignDocumentSheet";
@@ -31,9 +31,17 @@ import {
   useAllStaff,
   useQuotations,
   useProjectLifecycle,
+  useSeedProjectLifecycle,
+  useProjectStageDates,
+  useSetStageDate,
+  useUpdatePayment,
+  useUpdateSignature,
+  useRevertPayment,
+  useRevertSignature,
+  useCheckpointHistory,
   canEditPayments,
   canEditSignatures,
-  canEditProject,
+  canEditProjectData,
   useUpdateProject,
   resolveProjectRoster,
   useRegenerateClientToken,
@@ -46,6 +54,8 @@ import {
   useProjectSitePhotos,
   useUploadSitePhoto,
   useDeleteSitePhoto,
+  useSiteReports,
+  useSetSiteReportSummary,
   getSitePhotoUrl,
   useProjectReviews,
   useDeleteReview,
@@ -53,7 +63,7 @@ import {
   type PaymentRecord,
   type DocumentSignRecord,
 } from "@/lib/queries";
-import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow } from "@/lib/dbTypes";
+import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow, AuditLogRow } from "@/lib/dbTypes";
 import { useAuth } from "@/contexts/AuthContext";
 import EditProjectSheet from "@/components/EditProjectSheet";
 import ManageTeamSheet from "@/components/ManageTeamSheet";
@@ -62,7 +72,7 @@ import { toast } from "sonner";
 const CARD_BG1 = "/hero/card1.jpg";
 const CARD_BG2 = "/hero/card2.jpg";
 
-const tabs = ["Overview", "Lifecycle", "Tasks", "Quotations", "Photos", "Team"];
+const tabs = ["Overview", "Lifecycle", "Tasks", "Quotations", "Photos", "Reports", "Team"];
 
 const TASK_STATUS_OPTIONS: { value: ProjectTaskStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -75,6 +85,87 @@ function fmtDueDate(iso: string | null | undefined): string {
   if (!iso) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
+/** "DD/MM/YYYY" → "YYYY-MM-DD" (native <input type=date> value). "" if unparseable. */
+function ddmmToIsoDate(ddmm: string | undefined): string {
+  if (!ddmm) return "";
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(ddmm);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
+/** Inline estimated-date control for a lifecycle stage/checkpoint (Phase 2).
+ *  Shows the date (or "Set est. date") and opens a native date picker on click.
+ *  `value` is DD/MM/YYYY; `onSet` receives DD/MM/YYYY or null (cleared). */
+function StageDateControl({
+  value, canEdit, onSet, saving,
+}: {
+  value?: string; canEdit: boolean; onSet: (ddmm: string | null) => void; saving?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  if (!canEdit && !value) return null;
+  if (editing && canEdit) {
+    return (
+      <input
+        type="date"
+        autoFocus
+        defaultValue={ddmmToIsoDate(value)}
+        onBlur={() => setEditing(false)}
+        onChange={(e) => {
+          const v = e.target.value; // YYYY-MM-DD or ""
+          onSet(v ? `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)}` : null);
+          setEditing(false);
+        }}
+        className="text-[9px] rounded-md px-1.5 py-0.5"
+        style={{ background: "var(--s-2)", border: "1px solid var(--b-strong)", color: "var(--t-2)" }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => canEdit && setEditing(true)}
+      disabled={saving || !canEdit}
+      className="text-[9px] font-label px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 shrink-0"
+      style={{
+        background: value ? "oklch(0.62 0.09 68 / 10%)" : "transparent",
+        color: value ? "var(--acc-ink)" : "var(--t-5)",
+        border: `1px dashed ${value ? "oklch(0.62 0.09 68 / 30%)" : "var(--b-strong)"}`,
+        cursor: canEdit ? "pointer" : "default",
+      }}
+      title={canEdit ? "Set estimated date" : undefined}
+    >
+      <CalendarClock size={9} />
+      {value ? `Est. ${value}` : "Set est. date"}
+    </button>
+  );
+}
+
+/** Build the checkpoint audit line (Phase 1): "Created by X · DATE · Collected by Y".
+ *  Returns null when no audit info is available (e.g. legacy/seed rows). */
+function checkpointAuditLine({
+  createdBy, createdAt, actorBy, actorVerb, staffById,
+}: {
+  createdBy?: string; createdAt?: string; actorBy?: string;
+  actorVerb: string; staffById?: Record<string, string>;
+}): string | null {
+  const name = (id?: string) => (id ? (staffById?.[id] ?? id) : undefined);
+  const fmtTs = (iso?: string) => {
+    if (!iso) return undefined;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? undefined
+      : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  };
+  const parts: string[] = [];
+  const creator = name(createdBy);
+  const createdLabel = fmtTs(createdAt);
+  if (creator || createdLabel) {
+    parts.push(`Created${creator ? ` by ${creator}` : ""}${createdLabel ? ` · ${createdLabel}` : ""}`);
+  }
+  const actor = name(actorBy);
+  if (actor) parts.push(`${actorVerb} by ${actor}`);
+  return parts.length ? parts.join(" · ") : null;
 }
 
 const taskStatusConfig: Record<string, { label: string; bg: string; color: string }> = {
@@ -121,6 +212,7 @@ export default function ProjectDetail() {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverMenuOpen, setCoverMenuOpen] = useState(false);
   const [lightbox, setLightbox] = useState<{ url: string; label: string } | null>(null);
+  const [photoCaption, setPhotoCaption] = useState("");
   const updateCover = useUpdateProject();
 
   if (isLoading) {
@@ -178,7 +270,8 @@ export default function ProjectDetail() {
     job_title: r.staff.job_title,
     roleLabel: r.role,
   }));
-  const canEdit = canEditProject(me?.role);
+  // Phase 5 — OPS tier OR a member of THIS project's team may edit its data.
+  const canEdit = canEditProjectData(me, project);
 
   async function onCoverPicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -253,16 +346,25 @@ export default function ProjectDetail() {
     }
   };
 
-  const handlePhotoPicked = async (file: File | null) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
+  const handlePhotosPicked = async (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? []).filter((f) => f.type.startsWith("image/"));
+    if (files.length === 0) { toast.error("Please choose one or more image files"); return; }
     const t = new Date();
     const ddmmyyyy = `${String(t.getDate()).padStart(2, "0")}/${String(t.getMonth() + 1).padStart(2, "0")}/${t.getFullYear()}`;
-    try {
-      await uploadPhoto.mutateAsync({ projectId: project.id, file, photoDate: ddmmyyyy, uploadedById: me?.id });
-      toast.success("Photo uploaded");
-    } catch (err) {
-      toast.error(`Upload failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    // The caption applies to every photo in this batch; clear it once consumed.
+    const caption = photoCaption.trim() || undefined;
+    let ok = 0;
+    for (const file of files) {
+      try {
+        await uploadPhoto.mutateAsync({ projectId: project.id, file, photoDate: ddmmyyyy, uploadedById: me?.id, notes: caption });
+        ok += 1;
+      } catch (err) {
+        toast.error(`${file.name}: ${err instanceof Error ? err.message : "upload failed"}`);
+      }
+    }
+    if (ok > 0) {
+      toast.success(ok === 1 ? "Photo uploaded" : `${ok} photos uploaded`);
+      setPhotoCaption("");
     }
   };
 
@@ -520,7 +622,7 @@ export default function ProjectDetail() {
             )}
 
             {activeTab === "Lifecycle" && (
-              <LifecycleTab projectId={project.id} clientName={project.client} projectName={project.name} />
+              <LifecycleTab projectId={project.id} clientName={project.client} clientContact={project.clientContact} projectName={project.name} budget={project.budget} canManage={canEdit} />
             )}
 
             {activeTab === "Tasks" && (
@@ -674,17 +776,29 @@ export default function ProjectDetail() {
             {activeTab === "Photos" && (
               <div className="space-y-4">
                 {canEdit && (
-                  <div
-                    className="rounded-2xl p-6 flex flex-col items-center gap-3 border-2 border-dashed cursor-pointer"
-                    style={{ borderColor: "oklch(0.62 0.09 68 / 30%)", background: "oklch(0.62 0.09 68 / 4%)", opacity: uploadPhoto.isPending ? 0.6 : 1 }}
-                    onClick={() => !uploadPhoto.isPending && photoInputRef.current?.click()}
-                  >
-                    <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "oklch(0.62 0.09 68 / 12%)" }}>
-                      <Upload size={20} style={{ color: "var(--acc)" }} />
+                  <div className="space-y-2">
+                    <div>
+                      <p className="sz-label mb-1.5">DESCRIPTION (OPTIONAL)</p>
+                      <input
+                        value={photoCaption}
+                        onChange={(e) => setPhotoCaption(e.target.value)}
+                        placeholder="e.g. Living room wiring — day 3"
+                        className="w-full rounded-xl px-3 py-2.5 text-sm"
+                        style={{ background: "var(--s-2)", border: "1px solid var(--b-1)", color: "var(--t-2)", outline: "none" }}
+                      />
                     </div>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>{uploadPhoto.isPending ? "Uploading…" : "Upload Photos"}</p>
-                      <p className="text-xs mt-1" style={{ color: "var(--t-5)" }}>Site progress photos · JPG or PNG</p>
+                    <div
+                      className="rounded-2xl p-6 flex flex-col items-center gap-3 border-2 border-dashed cursor-pointer"
+                      style={{ borderColor: "oklch(0.62 0.09 68 / 30%)", background: "oklch(0.62 0.09 68 / 4%)", opacity: uploadPhoto.isPending ? 0.6 : 1 }}
+                      onClick={() => !uploadPhoto.isPending && photoInputRef.current?.click()}
+                    >
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "oklch(0.62 0.09 68 / 12%)" }}>
+                        <Upload size={20} style={{ color: "var(--acc)" }} />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>{uploadPhoto.isPending ? "Uploading…" : "Upload Photos"}</p>
+                        <p className="text-xs mt-1" style={{ color: "var(--t-5)" }}>Pick one or many · JPG or PNG · the description applies to this batch</p>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -706,6 +820,10 @@ export default function ProjectDetail() {
                   )}
                 </div>
               </div>
+            )}
+
+            {activeTab === "Reports" && (
+              <ReportsTab projectId={project.id} projectName={project.name} canEdit={canEdit} />
             )}
 
             {/* Team tab */}
@@ -866,8 +984,9 @@ export default function ProjectDetail() {
         ref={photoInputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
-        onChange={(e) => { handlePhotoPicked(e.target.files?.[0] ?? null); e.target.value = ""; }}
+        onChange={(e) => { handlePhotosPicked(e.target.files); e.target.value = ""; }}
       />
     </div>
   );
@@ -917,6 +1036,7 @@ function SitePhotoThumb({ photo, canDelete, onDelete, onOpen }: { photo: SitePho
   const dateLabel = fmtDueDate(photo.photo_date);
 
   return (
+    <div className="space-y-1">
     <div className="aspect-square rounded-xl overflow-hidden relative" style={{ background: "var(--s-2)" }}>
       {url && !failed ? (
         <img
@@ -943,6 +1063,12 @@ function SitePhotoThumb({ photo, canDelete, onDelete, onOpen }: { photo: SitePho
         >
           <Trash2 size={11} className="text-white" />
         </button>
+      )}
+    </div>
+      {photo.notes && (
+        <p className="text-[10px] leading-snug line-clamp-2" style={{ color: "var(--t-5)" }} title={photo.notes}>
+          {photo.notes}
+        </p>
       )}
     </div>
   );
@@ -1162,14 +1288,229 @@ function TaskDialog({
 // with inline Payment Collection (5 gates) and Document Sign (6 items) badges.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function LifecycleTab({ projectId, clientName, projectName }: { projectId: string; clientName?: string; projectName?: string }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// REPORTS TAB — weekly site report (Phase 4): site photos bucketed by ISO week
+// with an optional per-week staff summary. On-demand (only weeks with photos).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Monday (ISO "YYYY-MM-DD") of the ISO week containing the given date. */
+function mondayOfWeek(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  const back = (d.getDay() + 6) % 7; // 0 = Monday
+  d.setDate(d.getDate() - back);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function weekRangeLabel(mondayIso: string): string {
+  const mon = new Date(mondayIso + "T00:00:00");
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const fmt = (x: Date) => x.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return `${fmt(mon)} – ${fmt(sun)} ${sun.getFullYear()}`;
+}
+
+function WeekSummary({ initial, canEdit, onSave }: { initial: string; canEdit: boolean; onSave: (s: string) => void }) {
+  const [val, setVal] = useState(initial);
+  useEffect(() => { setVal(initial); }, [initial]);
+  if (!canEdit) {
+    return initial
+      ? <p className="text-xs leading-relaxed" style={{ color: "var(--t-4)" }}>{initial}</p>
+      : <p className="text-xs italic" style={{ color: "var(--t-6)" }}>No summary written for this week.</p>;
+  }
+  return (
+    <textarea
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={() => { if (val !== initial) onSave(val); }}
+      placeholder="Write this week's site summary (progress, issues, next steps)…"
+      className="w-full rounded-lg px-2.5 py-2 text-xs leading-relaxed"
+      style={{ background: "var(--s-page)", border: "1px solid var(--b-2)", color: "var(--t-2)", minHeight: 60, resize: "vertical" }}
+    />
+  );
+}
+
+function ReportsTab({ projectId, projectName, canEdit }: { projectId: string; projectName: string; canEdit: boolean }) {
+  const { data: photos = [] } = useProjectSitePhotos(projectId);
+  const { data: reports = {} } = useSiteReports(projectId);
+  const setSummary = useSetSiteReportSummary();
+  const [lightbox, setLightbox] = useState<{ url: string; label: string } | null>(null);
+
+  // Bucket photos by Monday-of-week; weeks newest first (on-demand — only weeks
+  // that actually have photos show up, no empty shells).
+  const buckets = new Map<string, SitePhotoRow[]>();
+  for (const p of photos) {
+    const wk = mondayOfWeek(p.photo_date);
+    if (!buckets.has(wk)) buckets.set(wk, []);
+    buckets.get(wk)!.push(p);
+  }
+  const weeks = Array.from(buckets.keys()).sort().reverse();
+
+  const saveSummary = (weekStart: string, summary: string) => {
+    setSummary.mutate(
+      { projectId, weekStart, summary },
+      { onSuccess: () => toast.success("Weekly summary saved"), onError: (e) => toast.error(`Couldn't save: ${e instanceof Error ? e.message : "unknown error"}`) },
+    );
+  };
+
+  if (photos.length === 0) {
+    return (
+      <div className="rounded-2xl p-8 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
+        <FileText size={26} className="mx-auto mb-3" style={{ color: "var(--t-7)" }} />
+        <p className="text-sm font-semibold mb-1" style={{ color: "var(--t-1)" }}>No weekly reports yet</p>
+        <p className="text-xs" style={{ color: "var(--t-5)" }}>
+          Weekly site reports build automatically from site photos. Upload photos on the Photos tab
+          and they'll group into weeks here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="sz-label">WEEKLY SITE REPORT · {weeks.length} WEEK{weeks.length > 1 ? "S" : ""}</p>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="text-[10px] font-label px-2.5 py-1 rounded-md inline-flex items-center gap-1"
+          style={{ background: "var(--s-2)", color: "var(--t-4)", border: "1px solid var(--b-1)" }}
+          title="Print / save this report as PDF"
+        >
+          <Upload size={10} style={{ transform: "rotate(180deg)" }} /> Print / PDF
+        </button>
+      </div>
+      {weeks.map((wk) => {
+        const wkPhotos = buckets.get(wk)!;
+        return (
+          <div key={wk} className="rounded-2xl overflow-hidden" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
+            <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: "var(--s-3)", borderBottom: "1px solid var(--b-1)" }}>
+              <p className="text-xs font-label font-semibold" style={{ color: "var(--acc)", letterSpacing: "0.04em" }}>
+                {weekRangeLabel(wk)}
+              </p>
+              <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
+                {wkPhotos.length} photo{wkPhotos.length > 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="p-3 space-y-3">
+              <WeekSummary initial={reports[wk]?.summary ?? ""} canEdit={canEdit} onSave={(s) => saveSummary(wk, s)} />
+              <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
+                {wkPhotos.map((p) => (
+                  <SitePhotoThumb key={p.id} photo={p} canDelete={false} onDelete={() => {}} onOpen={(url, label) => setLightbox({ url, label })} />
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      <PhotoLightbox photo={lightbox} onClose={() => setLightbox(null)} />
+    </div>
+  );
+}
+
+function LifecycleTab({ projectId, clientName, clientContact, projectName, budget = 0, canManage = false }: { projectId: string; clientName?: string; clientContact?: string; projectName?: string; budget?: number; canManage?: boolean }) {
   const { data: lc, isLoading } = useProjectLifecycle(projectId);
+  const { data: rosterStaff = [] } = useAllStaff();
+  const { data: stageDates = {} } = useProjectStageDates(projectId);
+  const setStageDate = useSetStageDate();
+  const updatePayment = useUpdatePayment();
+  const updateSignature = useUpdateSignature();
+  const revertPayment = useRevertPayment();
+  const revertSignature = useRevertSignature();
   const { staff: me } = useAuth();
-  const canCollect = canEditPayments(me?.role);
-  const canSign = canEditSignatures(me?.role);
+  // Phase 5 — OPS tier OR a member of this project's team may collect/sign/edit.
+  const canCollect = canEditPayments(me?.role) || canManage;
+  const canSign = canEditSignatures(me?.role) || canManage;
+  // Resolve audit-trail staff ids → names for the checkpoint rows (Phase 1).
+  const staffById: Record<string, string> = {};
+  for (const s of rosterStaff) staffById[s.id] = s.name;
+
+  // Phase 2 — set a milestone/checkpoint's estimated date. Routes by source:
+  // milestones → project_stage_dates; payments → due_date; signatures →
+  // signature_records.estimated_date. Status is never touched.
+  const setMilestoneDate = (stageId: string, ddmm: string | null) => {
+    setStageDate.mutate(
+      { projectId, stageId, date: ddmm },
+      { onError: (e) => toast.error(`Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`) },
+    );
+  };
+  const setPaymentDate = (id: number, ddmm: string | null) => {
+    updatePayment.mutate(
+      { id, projectId, dueDate: ddmm ?? "" },
+      { onError: (e) => toast.error(`Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`) },
+    );
+  };
+  const setSignatureDate = (id: number, ddmm: string | null) => {
+    updateSignature.mutate(
+      { id, projectId, estimatedDate: ddmm },
+      { onError: (e) => toast.error(`Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`) },
+    );
+  };
+
+  // Phase 3 — editable gate amounts (status untouched).
+  const setPaymentAmount = (id: number, amount: number) => {
+    updatePayment.mutate(
+      { id, projectId, amount },
+      {
+        onSuccess: () => toast.success("Amount updated"),
+        onError: (e) => toast.error(`Couldn't update amount: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
+  };
+
+  // Phase 3 — revert a completed checkpoint, moving the lifecycle back.
+  const revertResultToast = (label: string, r: { toLabel: string | null; from: string | null; to: string | null }) => {
+    if (r.from && r.to && r.from !== r.to) {
+      toast.info(r.toLabel ? `Project moved back to "${r.toLabel}"` : "Project stage recomputed", {
+        description: `${label} reverted to pending`,
+      });
+    } else {
+      toast.success(`${label} reverted to pending`);
+    }
+  };
+  const doRevertPayment = (p: PaymentRecord) => {
+    if (!window.confirm(`Revert "${p.label}" back to pending? This clears the collected date/reference and may move the project to an earlier stage.`)) return;
+    revertPayment.mutate(
+      { id: p.id, projectId },
+      {
+        onSuccess: (r) => revertResultToast(p.label, r),
+        onError: (e) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
+  };
+  const doRevertSignature = (s: DocumentSignRecord) => {
+    if (!window.confirm(`Revert "${s.label}" back to unsigned? This clears the signed date/document and may move the project to an earlier stage.`)) return;
+    revertSignature.mutate(
+      { id: s.id, projectId },
+      {
+        onSuccess: (r) => revertResultToast(s.label, r),
+        onError: (e) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
+  };
   const [collectTarget, setCollectTarget] = useState<MarkCollectedTarget | null>(null);
   const [signTarget, setSignTarget] = useState<SignDocumentTarget | null>(null);
-  if (isLoading) {
+
+  // Phase 0A — self-heal. A project must never be button-less: if its lifecycle
+  // scaffolding is missing (legacy direct-create before auto-seeding existed),
+  // seed the 5 gates + 6 signatures on load so COLLECT/SIGN always render.
+  // Gated to the OPS tier (the RPC also enforces it); attempt-once per mount.
+  const seedLifecycle = useSeedProjectLifecycle();
+  const healedRef = useRef(false);
+  const needsHeal =
+    Boolean(lc) && canCollect && (lc!.payments.length === 0 || lc!.signatures.length === 0);
+  useEffect(() => {
+    if (needsHeal && !healedRef.current && !seedLifecycle.isPending) {
+      healedRef.current = true;
+      seedLifecycle.mutate(
+        { projectId, budget },
+        { onError: (e) => toast.error(`Couldn't initialise lifecycle: ${e instanceof Error ? e.message : "unknown error"}`) },
+      );
+    }
+  }, [needsHeal, projectId, budget, seedLifecycle]);
+
+  // While healing (or still loading) show the loading state rather than a
+  // flash of the empty "no lifecycle" view. If the seed errored, fall through
+  // to the normal render (the error was toasted) so we never get stuck here.
+  if (isLoading || (needsHeal && !seedLifecycle.isError)) {
     return (
       <div className="rounded-2xl p-8 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
         <p className="text-xs" style={{ color: "var(--t-5)" }}>Loading lifecycle…</p>
@@ -1203,6 +1544,17 @@ function LifecycleTab({ projectId, clientName, projectName }: { projectId: strin
 
   return (
     <div className="space-y-5">
+      {/* Customer context (meeting note #3) — checkpoints belong to this client. */}
+      {clientName && (
+        <div className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
+          <User size={13} style={{ color: "var(--acc)" }} />
+          <p className="text-xs" style={{ color: "var(--t-3)" }}>
+            <span style={{ color: "var(--t-5)" }}>Customer:</span> {clientName}
+            {clientContact && <span style={{ color: "var(--t-5)" }}> · {clientContact}</span>}
+          </p>
+        </div>
+      )}
+
       {/* —— Summary header: Payment + Document Sign progress —— */}
       <div className="grid grid-cols-2 gap-3">
         <SummaryCard
@@ -1295,6 +1647,18 @@ function LifecycleTab({ projectId, clientName, projectName }: { projectId: strin
                               {stage.description}
                             </p>
                           )}
+                          {/* Estimated date for milestone stages (Phase 2).
+                              Payment/signature stages carry their date on the row below. */}
+                          {!payments && !signature && (
+                            <div className="mt-1">
+                              <StageDateControl
+                                value={stageDates[stage.id]}
+                                canEdit={canCollect}
+                                onSet={(d) => setMilestoneDate(stage.id, d)}
+                                saving={setStageDate.isPending}
+                              />
+                            </div>
+                          )}
                         </div>
                         <span
                           className="text-[9px] font-label px-2 py-0.5 rounded-full shrink-0"
@@ -1318,6 +1682,11 @@ function LifecycleTab({ projectId, clientName, projectName }: { projectId: strin
                               payment={p}
                               projectId={projectId}
                               canCollect={canCollect}
+                              staffById={staffById}
+                              onSetDate={(d) => setPaymentDate(p.id, d)}
+                              onSetAmount={(amt) => setPaymentAmount(p.id, amt)}
+                              onRevert={() => doRevertPayment(p)}
+                              reverting={revertPayment.isPending}
                               onCollect={() =>
                                 setCollectTarget({
                                   id: p.id,
@@ -1327,6 +1696,19 @@ function LifecycleTab({ projectId, clientName, projectName }: { projectId: strin
                                   gate: p.gate,
                                   reference: p.reference,
                                   notes: p.notes,
+                                })
+                              }
+                              onEdit={() =>
+                                setCollectTarget({
+                                  id: p.id,
+                                  projectId,
+                                  label: p.label,
+                                  amount: p.amount,
+                                  gate: p.gate,
+                                  reference: p.reference,
+                                  notes: p.notes,
+                                  collectedDate: p.collectedDate,
+                                  mode: "edit",
                                 })
                               }
                             />
@@ -1339,6 +1721,10 @@ function LifecycleTab({ projectId, clientName, projectName }: { projectId: strin
                         <SignatureRow
                           signature={signature}
                           canSign={canSign}
+                          staffById={staffById}
+                          onSetDate={(d) => setSignatureDate(signature.id, d)}
+                          onRevert={() => doRevertSignature(signature)}
+                          reverting={revertSignature.isPending}
                           onSign={() =>
                             setSignTarget({
                               id: signature.id,
@@ -1502,19 +1888,89 @@ function GateBadge({
   );
 }
 
+// Inline edit/collection history for one checkpoint (note #2) — reads the
+// audit_log via the ops-or-team-member RPC and renders a compact change list.
+function CheckpointHistory({ table, rowId, staffById }: {
+  table: "payment_records" | "signature_records"; rowId: number; staffById?: Record<string, string>;
+}) {
+  const { data: entries = [], isLoading, isError } = useCheckpointHistory(table, rowId, true);
+  const fields = table === "payment_records"
+    ? ["status", "amount", "collected_date", "reference", "collected_by", "notes"]
+    : ["status", "signed_date", "signed_by", "document_ref", "recorded_by", "notes"];
+  const fmtVal = (k: string, v: unknown): string => {
+    if (v == null || v === "") return "—";
+    if (k === "amount") return formatRM(Number(v));
+    if (k.endsWith("_by")) return staffById?.[String(v)] ?? String(v);
+    if (k.endsWith("_date")) return fmtDueDate(String(v));
+    return String(v);
+  };
+  const summarize = (e: AuditLogRow): string => {
+    if (e.action === "INSERT") return "Created";
+    if (e.action === "DELETE") return "Deleted";
+    const before = (e.before_data ?? {}) as Record<string, unknown>;
+    const after = (e.after_data ?? {}) as Record<string, unknown>;
+    const parts: string[] = [];
+    for (const k of fields) {
+      if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) {
+        parts.push(`${k.replace(/_/g, " ")}: ${fmtVal(k, before[k])} → ${fmtVal(k, after[k])}`);
+      }
+    }
+    return parts.length ? parts.join(" · ") : "Updated";
+  };
+  if (isLoading) return <p className="text-[9px] px-2 py-1" style={{ color: "var(--t-6)" }}>Loading history…</p>;
+  if (isError) return <p className="text-[9px] px-2 py-1" style={{ color: "var(--t-6)" }}>Couldn't load history.</p>;
+  if (entries.length === 0) return <p className="text-[9px] px-2 py-1" style={{ color: "var(--t-6)" }}>No changes recorded yet.</p>;
+  return (
+    <div className="rounded-lg px-2 py-1.5 space-y-1" style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}>
+      {entries.map((e) => (
+        <div key={e.id} className="text-[9px] flex gap-1.5" style={{ color: "var(--t-5)" }}>
+          <span className="shrink-0" style={{ color: "var(--t-6)", minWidth: 74 }}>
+            {new Date(e.changed_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}{" "}
+            {new Date(e.changed_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <span className="flex-1 leading-snug">{summarize(e)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PaymentRow({
   payment,
   canCollect,
   onCollect,
+  onEdit,
+  onSetDate,
+  onSetAmount,
+  onRevert,
+  reverting,
+  staffById,
 }: {
   payment: PaymentRecord;
   projectId: string;
   canCollect: boolean;
   onCollect: () => void;
+  onEdit?: () => void;
+  onSetDate?: (ddmm: string | null) => void;
+  onSetAmount?: (amount: number) => void;
+  onRevert?: () => void;
+  reverting?: boolean;
+  staffById?: Record<string, string>;
 }) {
   const sc = checkpointStatusConfig[payment.status];
   const isOpen = payment.status !== "completed" && payment.status !== "skipped";
+  const isCompleted = payment.status === "completed";
+  const [editingAmount, setEditingAmount] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const audit = checkpointAuditLine({
+    createdBy: payment.createdBy,
+    createdAt: payment.createdAt,
+    actorBy: payment.collectedBy,
+    actorVerb: "Collected",
+    staffById,
+  });
   return (
+    <div className="space-y-1">
     <div
       className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
       style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}
@@ -1536,14 +1992,69 @@ function PaymentRow({
           <p className="text-[9px]" style={{ color: "var(--t-5)" }}>
             {payment.status === "completed"
               ? `Collected ${payment.collectedDate} · ${payment.reference || "—"}`
-              : `Due ${payment.dueDate || "TBD"}${payment.notes ? " · " + payment.notes : ""}`}
+              : payment.notes || "Pending collection"}
           </p>
+          {audit && (
+            <p className="text-[9px] truncate" style={{ color: "var(--t-6)" }} title={audit}>{audit}</p>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <p className="text-[11px] font-display font-semibold" style={{ color: sc.color }}>
-          {formatRM(payment.amount)}
-        </p>
+        {isOpen && onSetDate && (
+          <StageDateControl value={payment.dueDate} canEdit={canCollect} onSet={onSetDate} />
+        )}
+        {editingAmount && canCollect && onSetAmount ? (
+          <input
+            type="number"
+            autoFocus
+            defaultValue={payment.amount}
+            onBlur={() => setEditingAmount(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") setEditingAmount(false);
+            }}
+            onChange={(e) => {
+              const v = Number(e.currentTarget.value);
+              if (Number.isFinite(v) && v >= 0 && v !== payment.amount) onSetAmount(v);
+              setEditingAmount(false);
+            }}
+            className="w-24 text-[11px] rounded-md px-1.5 py-0.5 text-right"
+            style={{ background: "var(--s-2)", border: "1px solid var(--b-strong)", color: "var(--t-1)" }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => canCollect && onSetAmount && setEditingAmount(true)}
+            disabled={!canCollect || !onSetAmount}
+            className="text-[11px] font-display font-semibold inline-flex items-center gap-1"
+            style={{ color: sc.color, cursor: canCollect && onSetAmount ? "pointer" : "default" }}
+            title={canCollect && onSetAmount ? "Edit amount" : undefined}
+          >
+            {formatRM(payment.amount)}
+            {canCollect && onSetAmount && <Pencil size={9} style={{ color: "var(--t-5)" }} />}
+          </button>
+        )}
+        {isCompleted && canCollect && onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="text-[9px] font-label px-2 py-0.5 rounded-md"
+            style={{ background: "var(--s-2)", color: "var(--t-3)", border: "1px solid var(--b-strong)", letterSpacing: "0.04em", fontWeight: 700 }}
+          >
+            EDIT
+          </button>
+        )}
+        {isCompleted && canCollect && onRevert && (
+          <button
+            type="button"
+            onClick={onRevert}
+            disabled={reverting}
+            className="text-[9px] font-label px-2 py-0.5 rounded-md"
+            style={{ background: "oklch(0.68 0.12 25 / 10%)", color: "oklch(0.50 0.12 25)", border: "1px solid oklch(0.68 0.12 25 / 25%)", opacity: reverting ? 0.6 : 1, letterSpacing: "0.04em", fontWeight: 700 }}
+          >
+            REVERT
+          </button>
+        )}
         {isOpen && canCollect && (
           <motion.button
             whileTap={{ scale: 0.94 }}
@@ -1561,7 +2072,18 @@ function PaymentRow({
             </span>
           </motion.button>
         )}
+        <button
+          type="button"
+          onClick={() => setShowHistory((v) => !v)}
+          title="Change history"
+          className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+          style={{ background: showHistory ? "var(--b-2)" : "transparent", color: "var(--t-5)" }}
+        >
+          <History size={11} />
+        </button>
       </div>
+    </div>
+    {showHistory && <CheckpointHistory table="payment_records" rowId={payment.id} staffById={staffById} />}
     </div>
   );
 }
@@ -1570,16 +2092,33 @@ function SignatureRow({
   signature,
   canSign,
   onSign,
+  onSetDate,
+  onRevert,
+  reverting,
+  staffById,
 }: {
   signature: DocumentSignRecord;
   canSign: boolean;
   onSign: () => void;
+  onSetDate?: (ddmm: string | null) => void;
+  onRevert?: () => void;
+  reverting?: boolean;
+  staffById?: Record<string, string>;
 }) {
   const sc = checkpointStatusConfig[signature.status];
   const isOpen = signature.status !== "completed" && signature.status !== "skipped";
+  const isCompleted = signature.status === "completed";
+  const audit = checkpointAuditLine({
+    createdBy: signature.createdBy,
+    createdAt: signature.createdAt,
+    actorBy: signature.recordedBy,
+    actorVerb: "Recorded",
+    staffById,
+  });
   const hasStoredDoc = isStorageDocRef(signature.documentRef);
   const hasLegacyDoc = !!signature.documentRef && !hasStoredDoc;
   const [viewLoading, setViewLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   async function handleViewPdf(e: React.MouseEvent) {
     e.stopPropagation();
@@ -1602,8 +2141,9 @@ function SignatureRow({
   }
 
   return (
+    <div className="mt-2 space-y-1">
     <div
-      className="mt-2 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
+      className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
       style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}
     >
       <div className="flex items-center gap-2 min-w-0">
@@ -1623,9 +2163,26 @@ function SignatureRow({
               ? `Signed ${signature.signedDate} · ${signature.signedBy}`
               : signature.notes || "Awaiting client signature"}
           </p>
+          {audit && (
+            <p className="text-[9px] truncate" style={{ color: "var(--t-6)" }} title={audit}>{audit}</p>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
+        {isOpen && onSetDate && (
+          <StageDateControl value={signature.estimatedDate} canEdit={canSign} onSet={onSetDate} />
+        )}
+        {isCompleted && canSign && onRevert && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRevert(); }}
+            disabled={reverting}
+            className="text-[9px] font-label px-2 py-0.5 rounded-md"
+            style={{ background: "oklch(0.68 0.12 25 / 10%)", color: "oklch(0.50 0.12 25)", border: "1px solid oklch(0.68 0.12 25 / 25%)", opacity: reverting ? 0.6 : 1, letterSpacing: "0.04em", fontWeight: 700 }}
+          >
+            REVERT
+          </button>
+        )}
         {(hasStoredDoc || hasLegacyDoc) && (
           <button
             onClick={handleViewPdf}
@@ -1667,7 +2224,18 @@ function SignatureRow({
             </span>
           </motion.button>
         )}
+        <button
+          type="button"
+          onClick={() => setShowHistory((v) => !v)}
+          title="Change history"
+          className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+          style={{ background: showHistory ? "var(--b-2)" : "transparent", color: "var(--t-5)" }}
+        >
+          <History size={11} />
+        </button>
       </div>
+    </div>
+    {showHistory && <CheckpointHistory table="signature_records" rowId={signature.id} staffById={staffById} />}
     </div>
   );
 }

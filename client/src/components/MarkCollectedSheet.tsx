@@ -42,6 +42,8 @@ export type MarkCollectedTarget = {
   gate: 1 | 2 | 3 | 4 | 5;
   reference?: string;
   notes?: string;
+  collectedDate?: string;          // DD/MM/YYYY — prefill when editing a collected payment
+  mode?: "collect" | "edit";       // "edit" = amend an already-collected payment (status stays completed)
 };
 
 export default function MarkCollectedSheet({
@@ -64,7 +66,11 @@ export default function MarkCollectedSheet({
   useEffect(() => {
     if (open && target) {
       setAmount(target.amount ? String(target.amount) : "");
-      setCollectedDateIso(isoToday());
+      // Editing a collected payment prefills its existing date; a fresh collect defaults to today.
+      const iso = target.collectedDate
+        ? `${target.collectedDate.slice(6, 10)}-${target.collectedDate.slice(3, 5)}-${target.collectedDate.slice(0, 2)}`
+        : isoToday();
+      setCollectedDateIso(iso || isoToday());
       setReference(target.reference ?? "");
       setNotes(target.notes ?? "");
     }
@@ -72,6 +78,7 @@ export default function MarkCollectedSheet({
 
   if (!target) return null;
 
+  const isEdit = target.mode === "edit";
   const gateLabel = ["①", "②", "③", "④", "⑤"][target.gate - 1];
   const collectedDDMM = isoToDDMM(collectedDateIso);
   const isValidDate = collectedDDMM.length > 0;
@@ -102,7 +109,7 @@ export default function MarkCollectedSheet({
         reference: reference.trim(),
         notes: notes.trim() || null,
       });
-      toast.success(`Payment ${gateLabel} marked collected`, {
+      toast.success(isEdit ? `Payment ${gateLabel} updated` : `Payment ${gateLabel} marked collected`, {
         description: `${formatRM(amountNum)} · ${reference.trim()}`,
       });
       // Server-side advancement trigger may have moved the project forward
@@ -173,7 +180,7 @@ export default function MarkCollectedSheet({
                 </div>
                 <div>
                   <p className="font-display text-base font-semibold leading-tight" style={{ color: "var(--t-1)" }}>
-                    Mark Collected
+                    {isEdit ? "Edit Payment" : "Mark Collected"}
                   </p>
                   <p className="text-[11px]" style={{ color: "var(--t-5)" }}>
                     {target.label} · {gateLabel}
@@ -325,7 +332,7 @@ export default function MarkCollectedSheet({
                 ) : (
                   <>
                     <Check size={15} />
-                    Mark Collected
+                    {isEdit ? "Save Changes" : "Mark Collected"}
                   </>
                 )}
               </motion.button>
