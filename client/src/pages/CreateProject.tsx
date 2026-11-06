@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 import { Check, ImagePlus } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import { useCreateProject, useInquiries } from "@/lib/queries";
+import { useAuth } from "@/contexts/AuthContext";
 import SearchableSelect from "@/components/SearchableSelect";
 import { toast } from "sonner";
 
@@ -32,6 +33,7 @@ const propertyTypes = {
 export default function CreateProject() {
   const [, navigate] = useLocation();
   const createProject = useCreateProject();
+  const { staff: me } = useAuth();
   const { data: inquiries = [] } = useInquiries();
   const [step, setStep] = useState(1);
   const [linkInquiryId, setLinkInquiryId] = useState("");
@@ -144,6 +146,9 @@ export default function CreateProject() {
         description: form.notes.trim() || null,
         linkInquiryId: linkInquiryId || null,
         imageFile,
+        // The staff member creating the project becomes its Lead Designer by
+        // default (meeting note #6). Editable later via EditProjectSheet.
+        designerId: me?.id ?? null,
       });
       toast.success("Project created successfully!", { description: `${project.name} (${project.id}) has been added.` });
       navigate(`/projects/${project.id}`);

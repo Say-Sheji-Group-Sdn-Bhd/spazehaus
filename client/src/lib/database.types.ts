@@ -608,8 +608,10 @@ export type Database = {
       payment_records: {
         Row: {
           amount: number
+          collected_by: string | null
           collected_date: string | null
           created_at: string
+          created_by: string | null
           due_date: string | null
           gate: number
           id: number
@@ -624,8 +626,10 @@ export type Database = {
         }
         Insert: {
           amount: number
+          collected_by?: string | null
           collected_date?: string | null
           created_at?: string
+          created_by?: string | null
           due_date?: string | null
           gate: number
           id?: number
@@ -640,8 +644,10 @@ export type Database = {
         }
         Update: {
           amount?: number
+          collected_by?: string | null
           collected_date?: string | null
           created_at?: string
+          created_by?: string | null
           due_date?: string | null
           gate?: number
           id?: number
@@ -655,6 +661,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payment_records_collected_by_fkey"
+            columns: ["collected_by"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_records_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payment_records_project_id_fkey"
             columns: ["project_id"]
@@ -702,6 +722,35 @@ export type Database = {
           },
           {
             foreignKeyName: "project_reviews_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_stage_dates: {
+        Row: {
+          estimated_date: string | null
+          project_id: string
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          estimated_date?: string | null
+          project_id: string
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          estimated_date?: string | null
+          project_id?: string
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_stage_dates_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -1079,12 +1128,15 @@ export type Database = {
       signature_records: {
         Row: {
           created_at: string
+          created_by: string | null
           document_ref: string | null
+          estimated_date: string | null
           group_name: string
           id: number
           label: string
           notes: string | null
           project_id: string
+          recorded_by: string | null
           signature_key: string
           signed_by: string | null
           signed_date: string | null
@@ -1093,12 +1145,15 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           document_ref?: string | null
+          estimated_date?: string | null
           group_name: string
           id?: number
           label: string
           notes?: string | null
           project_id: string
+          recorded_by?: string | null
           signature_key: string
           signed_by?: string | null
           signed_date?: string | null
@@ -1107,12 +1162,15 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           document_ref?: string | null
+          estimated_date?: string | null
           group_name?: string
           id?: number
           label?: string
           notes?: string | null
           project_id?: string
+          recorded_by?: string | null
           signature_key?: string
           signed_by?: string | null
           signed_date?: string | null
@@ -1121,10 +1179,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "signature_records_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "signature_records_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_records_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "staff"
             referencedColumns: ["id"]
           },
         ]
@@ -1176,6 +1248,51 @@ export type Database = {
             columns: ["uploaded_by_id"]
             isOneToOne: false
             referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_reports: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: number
+          project_id: string
+          summary: string | null
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: number
+          project_id: string
+          summary?: string | null
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: number
+          project_id?: string
+          summary?: string | null
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -1593,8 +1710,13 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["staff_role"]
       }
+      get_checkpoint_history: {
+        Args: { p_table: string; p_row_id: string }
+        Returns: Database["public"]["Tables"]["audit_log"]["Row"][]
+      }
       get_client_portal_data: { Args: { p_token: string }; Returns: Json }
       is_admin_tier: { Args: never; Returns: boolean }
+      is_project_team_member: { Args: { p_project_id: string }; Returns: boolean }
       is_ops_tier: { Args: never; Returns: boolean }
       log_wa_click: {
         Args: {
@@ -1615,6 +1737,10 @@ export type Database = {
       recalc_project_photo_rollup: {
         Args: { p_project_id: string }
         Returns: undefined
+      }
+      recompute_project_stage: {
+        Args: { p_project_id: string }
+        Returns: string
       }
       recalc_project_task_rollup: {
         Args: { p_project_id: string }

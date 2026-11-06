@@ -118,6 +118,10 @@ export type PaymentRecord = {
   instalment?: number;
   ofInstalments?: number;
   notes?: string;
+  // Audit trail (Phase 1) — staff ids; resolve to names in the UI.
+  createdBy?: string;
+  collectedBy?: string;
+  createdAt?: string;        // ISO timestamp (row creation)
 };
 
 export type DocumentSignRecord = {
@@ -130,6 +134,11 @@ export type DocumentSignRecord = {
   signedBy?: string;
   documentRef?: string;
   notes?: string;
+  estimatedDate?: string;    // DD/MM/YYYY — Phase 2 planned sign-off date
+  // Audit trail (Phase 1) — staff ids; resolve to names in the UI.
+  createdBy?: string;
+  recordedBy?: string;
+  createdAt?: string;        // ISO timestamp (row creation)
 };
 
 export type ProjectLifecycle = {
@@ -224,6 +233,9 @@ function mapPayment(row: PaymentRecordRow): PaymentRecord {
     instalment: row.instalment ?? undefined,
     ofInstalments: row.of_instalments ?? undefined,
     notes: row.notes ?? undefined,
+    createdBy: row.created_by ?? undefined,
+    collectedBy: row.collected_by ?? undefined,
+    createdAt: row.created_at ?? undefined,
   };
 }
 
@@ -240,6 +252,10 @@ function mapSignature(row: SignatureRecordRow): DocumentSignRecord {
     signedBy: row.signed_by ?? undefined,
     documentRef: row.document_ref ?? undefined,
     notes: row.notes ?? undefined,
+    estimatedDate: isoToDDMMYYYY(row.estimated_date) || undefined,
+    createdBy: row.created_by ?? undefined,
+    recordedBy: row.recorded_by ?? undefined,
+    createdAt: row.created_at ?? undefined,
   };
 }
 
@@ -274,6 +290,8 @@ export const qk = {
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
   projectLifecycle: (id: string) => ["projects", id, "lifecycle"] as const,
+  projectStageDates: (id: string) => ["projects", id, "stage_dates"] as const,
+  siteReports: (id: string) => ["projects", id, "site_reports"] as const,
   projectTasks: (id: string) => ["project_tasks", id] as const,
   projectReviews: (id: string) => ["project_reviews", id] as const,
   openPayments: ["payments", "open"] as const,
@@ -525,6 +543,7 @@ export type CreateProjectArgs = {
   description?: string | null;
   linkInquiryId?: string | null;   // optional: link back to a customer/inquiry (sets awarded_project_id)
   imageFile?: File | null;         // optional cover image → project-images bucket; empty = default
+  designerId?: string | null;      // → designer_id; the creator becomes the Lead Designer by default
 };
 
 /** Create a brand-new project from the wizard. Server-side gating: the
@@ -572,6 +591,7 @@ export function useCreateProject() {
         priority: "medium",
         areas: args.areas ?? [],
         description: args.description ?? null,
+        designer_id: args.designerId ?? null,
         current_stage_id: "new-inquiry",
         lifecycle_started_at: new Date().toISOString(),
       };
@@ -651,6 +671,28 @@ export function useCreateProject() {
 /** Returns true when the role may edit project metadata — OPS tier, same as
  *  the payment/signature write gate (`canEditPayments`). */
 export const canEditProject = canEditPayments;
+
+/** True when the current staff is on a specific project's team — its Lead
+ *  Designer (designerId), PM (pmId), or a team member (avatar_code ∈ team).
+ *  Mirrors the `projects_update_assigned` + `*_write_team` RLS policies. */
+export function isProjectTeamMember(
+  project: Pick<Project, "designerId" | "pmId" | "team"> | null | undefined,
+  me: Pick<StaffRow, "id" | "avatar_code"> | null | undefined,
+): boolean {
+  if (!project || !me) return false;
+  return project.designerId === me.id
+    || project.pmId === me.id
+    || (!!me.avatar_code && (project.team ?? []).includes(me.avatar_code));
+}
+
+/** Phase 5 — OPS tier OR a member of this project's team may edit the project's
+ *  data (payments, signatures, dates, photos, reports, tasks, metadata). */
+export function canEditProjectData(
+  me: StaffRow | null | undefined,
+  project: Pick<Project, "designerId" | "pmId" | "team"> | null | undefined,
+): boolean {
+  return canEditPayments(me?.role) || isProjectTeamMember(project, me);
+}
 
 // ─── PROJECT TASKS ──────────────────────────────────────────────────────────
 
@@ -893,6 +935,87 @@ export function useProjectLifecycle(projectId: string | undefined) {
         payments: (payRes.data ?? []).map(mapPayment),
         signatures: (sigRes.data ?? []).map(mapSignature),
       };
+    },
+  });
+}
+
+/**
+ * Self-heal a project's lifecycle scaffolding (Phase 0A). Calls the idempotent
+ * `seed_project_lifecycle` RPC so a project always has its 5 payment gates + 6
+ * signature records — otherwise the Lifecycle tab renders no COLLECT/SIGN
+ * buttons and the project can never be advanced (the real-world "it won't
+ * proceed" failure). Gated server-side to the OPS tier; a project created via
+ * the wizard or convert flow is already seeded, so this only fires for legacy
+ * rows created before auto-seeding existed. */
+export function useSeedProjectLifecycle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; budget: number }): Promise<void> => {
+      const { error } = await supabase.rpc("seed_project_lifecycle", {
+        p_project_id: args.projectId,
+        p_budget: args.budget ?? 0,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.projectLifecycle(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
+// ─── ESTIMATED STAGE DATES (Phase 2) ────────────────────────────────────────
+// Milestone stages (the ~18 non-checkpoint stages) carry their estimated date
+// in project_stage_dates; payment stages reuse payment_records.due_date and
+// signature stages use signature_records.estimated_date.
+
+/** Map of stage_id → estimated_date (DD/MM/YYYY) for a project's milestones. */
+export function useProjectStageDates(projectId: string | undefined) {
+  return useQuery({
+    queryKey: qk.projectStageDates(projectId ?? ""),
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await supabase
+        .from("project_stage_dates")
+        .select("stage_id, estimated_date")
+        .eq("project_id", projectId ?? "");
+      if (error) throw error;
+      const out: Record<string, string> = {};
+      for (const r of data ?? []) {
+        if (r.estimated_date) out[r.stage_id] = isoToDDMMYYYY(r.estimated_date);
+      }
+      return out;
+    },
+  });
+}
+
+/** Upsert (or clear) a milestone stage's estimated date. OPS-tier only (RLS). */
+export function useSetStageDate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; stageId: string; date: string | null }): Promise<void> => {
+      if (args.date == null || args.date === "") {
+        const { error } = await supabase
+          .from("project_stage_dates")
+          .delete()
+          .eq("project_id", args.projectId)
+          .eq("stage_id", args.stageId);
+        if (error) throw error;
+        return;
+      }
+      const iso = ddmmyyyyToIso(args.date);
+      if (!iso) throw new Error("Invalid date — expected DD/MM/YYYY");
+      const { error } = await supabase
+        .from("project_stage_dates")
+        .upsert(
+          { project_id: args.projectId, stage_id: args.stageId, estimated_date: iso },
+          { onConflict: "project_id,stage_id" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.projectStageDates(args.projectId) });
     },
   });
 }
@@ -1186,6 +1309,7 @@ export type UpdateSignatureArgs = {
   signedBy?: string | null;
   documentRef?: string | null;        // Storage path or legacy filename
   notes?: string | null;
+  estimatedDate?: string | null;      // DD/MM/YYYY — planned sign-off date (null clears)
 };
 
 export function useUpdateSignature() {
@@ -1201,6 +1325,9 @@ export function useUpdateSignature() {
       if (args.signedBy !== undefined) payload.signed_by = args.signedBy;
       if (args.documentRef !== undefined) payload.document_ref = args.documentRef;
       if (args.notes !== undefined) payload.notes = args.notes;
+      if (args.estimatedDate !== undefined) {
+        payload.estimated_date = args.estimatedDate ? ddmmyyyyToIso(args.estimatedDate) : null;
+      }
 
       // Snapshot the project's stage before the write to detect auto-advance.
       const beforeStage = await fetchProjectStage(args.projectId);
@@ -1234,6 +1361,92 @@ export function useUpdateSignature() {
       qc.invalidateQueries({ queryKey: qk.projectLifecycle(args.projectId) });
       qc.invalidateQueries({ queryKey: qk.projects });
       qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
+    },
+  });
+}
+
+// ─── REVERT CHECKPOINTS (Phase 3) ───────────────────────────────────────────
+// Undo a collected payment / signed document: set it back to pending, clear the
+// completion fields, then recompute_project_stage() to move the timeline BACK to
+// that stage. Open question (a) default: reverting a payment does NOT re-open any
+// linked quotation/invoice (kept as separate systems). OPS-tier only (RLS + the
+// recompute RPC's own is_ops_tier guard).
+
+/** Shared shape: where the project ended up after the backward recompute. */
+export type RevertResult = {
+  from: string | null;
+  to: string | null;
+  fromLabel: string | null;
+  toLabel: string | null;
+};
+
+function invalidateCheckpointQueries(qc: ReturnType<typeof useQueryClient>, projectId: string) {
+  qc.invalidateQueries({ queryKey: qk.openPayments });
+  qc.invalidateQueries({ queryKey: qk.openSignatures });
+  qc.invalidateQueries({ queryKey: qk.projectLifecycle(projectId) });
+  qc.invalidateQueries({ queryKey: qk.projects });
+  qc.invalidateQueries({ queryKey: qk.project(projectId) });
+}
+
+export function useRevertPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: number; projectId: string }): Promise<RevertResult> => {
+      const before = await fetchProjectStage(args.projectId);
+      // Back to pending; clear the collection trail (keep amount + created_by).
+      const { error } = await supabase
+        .from("payment_records")
+        .update({ status: "pending", collected_date: null, reference: null, collected_by: null })
+        .eq("id", args.id);
+      if (error) throw error;
+      const { error: rErr } = await supabase.rpc("recompute_project_stage", { p_project_id: args.projectId });
+      if (rErr) throw rErr;
+      const after = await fetchProjectStage(args.projectId);
+      return { from: before.id, to: after.id, fromLabel: before.label, toLabel: after.label };
+    },
+    onSuccess: (_r, args) => invalidateCheckpointQueries(qc, args.projectId),
+  });
+}
+
+export function useRevertSignature() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: number; projectId: string }): Promise<RevertResult> => {
+      const before = await fetchProjectStage(args.projectId);
+      // Back to pending; clear the signing trail (keep estimated_date + created_by).
+      const { error } = await supabase
+        .from("signature_records")
+        .update({ status: "pending", signed_date: null, signed_by: null, document_ref: null, recorded_by: null })
+        .eq("id", args.id);
+      if (error) throw error;
+      const { error: rErr } = await supabase.rpc("recompute_project_stage", { p_project_id: args.projectId });
+      if (rErr) throw rErr;
+      const after = await fetchProjectStage(args.projectId);
+      return { from: before.id, to: after.id, fromLabel: before.label, toLabel: after.label };
+    },
+    onSuccess: (_r, args) => invalidateCheckpointQueries(qc, args.projectId),
+  });
+}
+
+/** Audit history for one checkpoint (Phase: note #2). Reads via the
+ *  `get_checkpoint_history` RPC, which authorizes OPS tier OR the project's team
+ *  members (so a designer can see their own checkpoint's full history even though
+ *  audit_log itself is admin-only). Lazy — pass enabled to fetch on expand. */
+export function useCheckpointHistory(
+  table: "payment_records" | "signature_records",
+  rowId: number | undefined,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["checkpoint_history", table, rowId ?? 0],
+    enabled: enabled && rowId != null,
+    queryFn: async (): Promise<AuditLogRow[]> => {
+      const { data, error } = await supabase.rpc("get_checkpoint_history", {
+        p_table: table,
+        p_row_id: String(rowId),
+      });
+      if (error) throw error;
+      return (data ?? []) as AuditLogRow[];
     },
   });
 }
@@ -2589,19 +2802,20 @@ export function useUploadSitePhoto() {
         });
       if (upErr) throw upErr;
 
-      // 2. Insert row (upsert by unique project_id+photo_date — replaces if user re-uploads)
+      // 2. Insert a fresh row per upload. Each photo is its own record now
+      //    (meeting note #7) — many photos per day, each with its own caption —
+      //    instead of the old upsert that replaced the single row per day.
+      //    Requires dropping the (project_id, photo_date) unique constraint
+      //    (migration 20261106000000_site_photos_multi_upload.sql).
       const { data, error: dbErr } = await supabase
         .from("site_photos")
-        .upsert(
-          {
-            project_id: args.projectId,
-            photo_date: iso,
-            storage_path: path,
-            uploaded_by_id: args.uploadedById ?? null,
-            notes: args.notes ?? null,
-          },
-          { onConflict: "project_id,photo_date" }
-        )
+        .insert({
+          project_id: args.projectId,
+          photo_date: iso,
+          storage_path: path,
+          uploaded_by_id: args.uploadedById ?? null,
+          notes: args.notes ?? null,
+        })
         .select()
         .single();
       if (dbErr) throw dbErr;
@@ -2632,6 +2846,64 @@ export function useDeleteSitePhoto() {
       qc.invalidateQueries({ queryKey: qk.sitePhotos });
       qc.invalidateQueries({ queryKey: qk.projectSitePhotos(args.projectId) });
       qc.invalidateQueries({ queryKey: qk.projects }); // photo_count rollup (20260710000004)
+    },
+  });
+}
+
+// ─── WEEKLY SITE REPORTS (Phase 4) ──────────────────────────────────────────
+// The report itself is the project's site_photos bucketed by ISO week in the UI;
+// this hook/mutation manage the optional per-week staff summary (site_reports).
+
+export type SiteReportRow = {
+  id: number;
+  week_start: string;   // ISO date (Monday)
+  summary: string | null;
+  created_by: string | null;
+};
+
+/** Per-week summaries for a project, keyed by week_start ISO date. */
+export function useSiteReports(projectId: string | undefined) {
+  return useQuery({
+    queryKey: qk.siteReports(projectId ?? ""),
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<Record<string, SiteReportRow>> => {
+      const { data, error } = await supabase
+        .from("site_reports")
+        .select("id, week_start, summary, created_by")
+        .eq("project_id", projectId ?? "");
+      if (error) throw error;
+      const out: Record<string, SiteReportRow> = {};
+      for (const r of (data ?? []) as SiteReportRow[]) out[r.week_start] = r;
+      return out;
+    },
+  });
+}
+
+/** Upsert (or clear when blank) a week's site-report summary. OPS-tier (RLS). */
+export function useSetSiteReportSummary() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; weekStart: string; summary: string }): Promise<void> => {
+      const trimmed = args.summary.trim();
+      if (!trimmed) {
+        const { error } = await supabase
+          .from("site_reports")
+          .delete()
+          .eq("project_id", args.projectId)
+          .eq("week_start", args.weekStart);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase
+        .from("site_reports")
+        .upsert(
+          { project_id: args.projectId, week_start: args.weekStart, summary: trimmed },
+          { onConflict: "project_id,week_start" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.siteReports(args.projectId) });
     },
   });
 }
