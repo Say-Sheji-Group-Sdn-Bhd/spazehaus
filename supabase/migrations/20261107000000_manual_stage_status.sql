@@ -56,6 +56,11 @@ drop trigger if exists "trg_signatures_advance_stage" on "public"."signature_rec
 -- is always implicitly completed and never carries a selector. defect-period is
 -- excluded from the "must be completed" set — its completion lives on
 -- projects.defect_period_completed_at (see 20261106070000_defect_period_completion).
+--
+-- NOTE: this first definition is intentionally UNGUARDED so the backfill below
+-- (which runs as the migration role with no auth context) can call it. An authz
+-- guard matching recompute_project_stage() is added at the END of this migration,
+-- AFTER the backfill, so the function ships to prod guarded.
 create or replace function "public"."recompute_current_stage_from_status"("p_project_id" "text")
 returns "text"
 language "plpgsql"
@@ -130,3 +135,41 @@ begin
     perform public.recompute_current_stage_from_status(r.id);
   end loop;
 end $$;
+
+-- ── 5. Add the authz guard (defense-in-depth, matches recompute_project_stage) ─
+-- Done AFTER the backfill: the trigger (tr_stage_status_recompute) only ever calls
+-- this for a project the caller already passed the project_stage_dates write-team
+-- RLS on (is_ops_tier OR is_project_team_member), so the guard never blocks the
+-- normal flow — it just stops a direct call for an unrelated project.
+create or replace function "public"."recompute_current_stage_from_status"("p_project_id" "text")
+returns "text"
+language "plpgsql"
+security definer
+set "search_path" to 'public'
+as $$
+declare
+  v_target text;
+  v_last   text;
+begin
+  if not (public.is_ops_tier() or public.is_project_team_member(p_project_id)) then
+    raise exception 'Not authorized to recompute project stage' using errcode = '42501';
+  end if;
+
+  select id into v_last from lifecycle_stages order by order_index desc limit 1;
+
+  select s.id into v_target
+    from lifecycle_stages s
+    left join project_stage_dates d
+      on d.project_id = p_project_id and d.stage_id = s.id
+   where s.order_index > 1
+     and s.id <> v_last
+     and coalesce(d.status, 'pending') <> 'completed'
+   order by s.order_index
+   limit 1;
+
+  v_target := coalesce(v_target, v_last);
+
+  update projects set current_stage_id = v_target where id = p_project_id;
+  return v_target;
+end;
+$$;
