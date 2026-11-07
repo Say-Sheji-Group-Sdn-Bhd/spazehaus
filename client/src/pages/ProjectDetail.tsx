@@ -46,6 +46,7 @@ import {
   useSetStageDate,
   useProjectStageStatuses,
   useSetStageStatus,
+  useMarkStagesComplete,
   useUpdatePayment,
   useUpdateSignature,
   useRevertPayment,
@@ -1492,6 +1493,8 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const { data: stageStatuses = {} } = useProjectStageStatuses(projectId);
   const setStageDate = useSetStageDate();
   const setStageStatus = useSetStageStatus();
+  const markStagesComplete = useMarkStagesComplete();
+  const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
   const setDefectDone = useSetDefectPeriodDone(projectId);
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
@@ -1549,6 +1552,16 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       },
     );
   };
+  const confirmBulkComplete = (stageIds: string[]) => {
+    markStagesComplete.mutate(
+      { projectId, stageIds, by: me?.avatar_code ?? null },
+      {
+        onSuccess: () => toast.success(`Marked ${stageIds.length} stage${stageIds.length === 1 ? "" : "s"} complete`),
+        onError: (e) => toast.error(`Couldn't update: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
+    setBulkCompleteOpen(false);
+  };
   const setPaymentDate = (id: number, ddmm: string | null) => {
     updatePayment.mutate(
       { id, projectId, dueDate: ddmm ?? "" },
@@ -1594,10 +1607,10 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
     const opts = {
       onSuccess: (r: RevertResult) => {
         revertResultToast(label, r);
-        // If the project had been marked complete, reverting a checkpoint regresses
-        // its lifecycle — clear the Defect Period completion + reset status so it no
-        // longer reads "Completed" while sitting at an earlier stage.
-        if (defectDone) setDefectDone.mutate({ done: false, by: null });
+        // Manual-status model (7 Nov 2026): un-collecting/un-signing does NOT touch
+        // the Defect Period. `workDelivered` derives from the manual stage statuses,
+        // so if a prior stage isn't Completed the project already stops reading
+        // "Completed" — no need to clear the stored completion here.
       },
       onError: (e: unknown) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
     };
@@ -1682,6 +1695,11 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   // window) is closed — until then the warranty is still active.
   const workDelivered = LIFECYCLE_STAGES.every(
     (s) => s.order === 1 || s.id === lastStageId || stageStatus(s, stageStatuses) === "completed",
+  );
+  // Stages (after New Inquiry, before Defect Period) not yet marked Completed —
+  // the closeout "mark all remaining complete" convenience targets exactly these.
+  const remainingStages = LIFECYCLE_STAGES.filter(
+    (s) => s.order > 1 && s.id !== lastStageId && stageStatus(s, stageStatuses) !== "completed",
   );
   const projectComplete = workDelivered && defectDone;
   const warrantyActive = workDelivered && !defectDone;
@@ -1956,7 +1974,6 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                               payment={p}
                               projectId={projectId}
                               canCollect={canCollect}
-                              isNext={status === "in-progress"}
                               staffById={staffById}
                               onSetDate={(d) => setPaymentDate(p.id, d)}
                               onSetAmount={(amt) => setPaymentAmount(p.id, amt)}
@@ -1996,7 +2013,6 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                         <SignatureRow
                           signature={signature}
                           canSign={canSign}
-                          isNext={status === "in-progress"}
                           staffById={staffById}
                           onSetDate={(d) => setSignatureDate(signature.id, d)}
                           onRevert={() => doRevertSignature(signature)}
@@ -2028,6 +2044,26 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
         );
       })}
 
+      {/* —— Closeout convenience: mark every remaining stage complete at once ——
+          Staff set each stage manually; near closeout that can be ~27 clicks before
+          the Defect Period unlocks, so offer a single bulk action (confirmed). */}
+      {canCollect && !workDelivered && remainingStages.length > 1 && (
+        <div className="flex flex-col items-center gap-1.5 pt-1">
+          <button
+            type="button"
+            onClick={() => setBulkCompleteOpen(true)}
+            disabled={markStagesComplete.isPending}
+            className="text-[11px] font-label inline-flex items-center gap-1.5 px-3 py-2 rounded-lg"
+            style={{ background: "oklch(0.55 0.09 145 / 10%)", color: "oklch(0.38 0.09 145)", border: "1px solid oklch(0.55 0.09 145 / 28%)", cursor: "pointer", letterSpacing: "0.03em" }}
+          >
+            <CheckSquare size={12} /> Mark all {remainingStages.length} remaining stages complete
+          </button>
+          <span className="text-[10px] text-center" style={{ color: "var(--t-6)" }}>
+            Unlocks the Defect Period · you can still change any stage afterwards
+          </span>
+        </div>
+      )}
+
       {/* —— Footer note —— */}
       <p className="text-[10px] text-center font-label" style={{ color: "var(--t-6)", letterSpacing: "0.06em" }}>
         SPAZEHAUS · DESIGN & RENOVATION WORKFLOW · 5 PAYMENT GATES · 6 DOCUMENT SIGNATURES
@@ -2046,6 +2082,26 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
         open={signTarget !== null}
         onClose={() => setSignTarget(null)}
       />
+
+      {/* Bulk "mark all remaining complete" confirm */}
+      <AlertDialog open={bulkCompleteOpen} onOpenChange={setBulkCompleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark all {remainingStages.length} remaining stages complete?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This sets every stage that isn’t Completed yet to <strong>Completed</strong>, which unlocks
+              the Defect Period. It doesn’t record any payments or signatures — you can still change any
+              individual stage afterwards.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmBulkComplete(remainingStages.map((s) => s.id))}>
+              Mark all complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* In-app revert confirm (replaces window.confirm) */}
       <AlertDialog open={revertTarget !== null} onOpenChange={(o) => { if (!o) setRevertTarget(null); }}>
@@ -2217,7 +2273,6 @@ function CheckpointActionsMenu({ onEdit, onRevert, disabled }: { onEdit?: () => 
 function PaymentRow({
   payment,
   canCollect,
-  isNext = true,
   onCollect,
   onEdit,
   onSetDate,
@@ -2229,7 +2284,6 @@ function PaymentRow({
   payment: PaymentRecord;
   projectId: string;
   canCollect: boolean;
-  isNext?: boolean;
   onCollect: () => void;
   onEdit?: () => void;
   onSetDate?: (ddmm: string | null) => void;
@@ -2320,13 +2374,12 @@ function PaymentRow({
           <motion.button
             whileTap={{ scale: 0.94 }}
             onClick={onCollect}
-            title={isNext ? undefined : "Not the current step — recording this won't advance the project yet"}
+            title="Record this payment"
             className="px-2 py-0.5 rounded-md flex items-center gap-1"
             style={{
               background: "oklch(0.55 0.09 145 / 12%)",
               color: "oklch(0.38 0.09 145)",
               border: "1px solid oklch(0.55 0.09 145 / 25%)",
-              opacity: isNext ? 1 : 0.45,
             }}
           >
             <Check size={9} strokeWidth={3} />
@@ -2344,7 +2397,6 @@ function PaymentRow({
 function SignatureRow({
   signature,
   canSign,
-  isNext = true,
   onSign,
   onSetDate,
   onRevert,
@@ -2353,7 +2405,6 @@ function SignatureRow({
 }: {
   signature: DocumentSignRecord;
   canSign: boolean;
-  isNext?: boolean;
   onSign: () => void;
   onSetDate?: (ddmm: string | null) => void;
   onRevert?: () => void;
@@ -2473,7 +2524,7 @@ function SignatureRow({
               e.stopPropagation();
               onSign();
             }}
-            title={isNext ? undefined : "Not the current step — recording this won't advance the project yet"}
+            title="Record this signature"
             className="px-2 py-0.5 rounded-md flex items-center gap-1"
             style={{
               background: signature.group === "contract"
@@ -2485,7 +2536,6 @@ function SignatureRow({
               border: signature.group === "contract"
                 ? "1px solid oklch(0.50 0.10 25 / 35%)"
                 : "1px solid oklch(0.38 0.09 240 / 35%)",
-              opacity: isNext ? 1 : 0.45,
             }}
           >
             <Upload size={9} />

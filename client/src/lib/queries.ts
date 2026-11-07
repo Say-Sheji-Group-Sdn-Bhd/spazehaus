@@ -1119,6 +1119,36 @@ export function useSetStageStatus() {
   });
 }
 
+/** Mark a batch of stages 'completed' in one upsert (+ audit). Used by the
+ *  closeout "mark all remaining complete" convenience so staff don't click ~27
+ *  stages one-by-one before the Defect Period unlocks. OPS-tier only (RLS). */
+export function useMarkStagesComplete() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; stageIds: string[]; by?: string | null }): Promise<void> => {
+      if (args.stageIds.length === 0) return;
+      const now = new Date().toISOString();
+      const rows = args.stageIds.map((stageId) => ({
+        project_id: args.projectId,
+        stage_id: stageId,
+        status: "completed" as ManualStageStatus,
+        status_set_by: args.by ?? null,
+        status_set_at: now,
+      }));
+      const { error } = await supabase
+        .from("project_stage_dates")
+        .upsert(rows, { onConflict: "project_id,stage_id" });
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.projectStageStatuses(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projectLifecycle(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
 // ─── CROSS-PROJECT: OPEN PAYMENTS + SIGNATURES ──────────────────────────────
 
 export type OpenPaymentRow = PaymentRecord & {
