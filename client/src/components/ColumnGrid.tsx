@@ -44,6 +44,7 @@ export default function ColumnGrid({
   description,
   canManage = false,
   maxColumns = 10,
+  minColumns = 0,
   withAmount = false,
   labelPlaceholder = "Name this column",
   addLabel = "Add column",
@@ -56,6 +57,7 @@ export default function ColumnGrid({
   description?: string;
   canManage?: boolean;
   maxColumns?: number;
+  minColumns?: number;
   withAmount?: boolean;
   labelPlaceholder?: string;
   addLabel?: string;
@@ -121,6 +123,7 @@ export default function ColumnGrid({
               projectId={projectId}
               section={section}
               canManage={canManage}
+              canDelete={canManage && columns.length > minColumns}
               withAmount={withAmount}
               labelPlaceholder={labelPlaceholder}
               accept={accept}
@@ -131,7 +134,8 @@ export default function ColumnGrid({
 
       {canManage && columns.length > 0 && (
         <p className="text-[10px]" style={{ color: "var(--t-6)" }}>
-          {columns.length}/{maxColumns} columns · files are stored at full resolution.
+          {columns.length}/{maxColumns} columns
+          {minColumns > 0 ? ` · at least ${minColumns} required` : ""} · files are stored at full resolution.
         </p>
       )}
     </div>
@@ -139,12 +143,13 @@ export default function ColumnGrid({
 }
 
 function ColumnCard({
-  col, projectId, section, canManage, withAmount, labelPlaceholder, accept,
+  col, projectId, section, canManage, canDelete, withAmount, labelPlaceholder, accept,
 }: {
   col: ProjectColumn;
   projectId: string;
   section: string;
   canManage: boolean;
+  canDelete: boolean;
   withAmount: boolean;
   labelPlaceholder: string;
   accept?: string;
@@ -212,7 +217,7 @@ function ColumnCard({
             {col.label || "Untitled"}
           </p>
         )}
-        {canManage && (
+        {canManage && canDelete && (
           confirmingDelete ? (
             <span className="inline-flex items-center gap-1 shrink-0">
               <button

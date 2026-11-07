@@ -2053,6 +2053,46 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                           }
                         />
                       )}
+
+                      {/* Site Inspections — user-named columns, each a date + an
+                          OPTIONAL file (sometimes just a date). Lives on its stage. */}
+                      {stage.id === "site-inspection" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="site-inspection"
+                            title="Site Inspections"
+                            description="Add a column per inspection (pre-renovation, wet-works, carpentry delivery, plumbing, installs…). A date is enough; attach a photo or report if you have one."
+                            canManage={canCollect}
+                            maxColumns={10}
+                            labelPlaceholder="Inspection (e.g. Pre-renovation)"
+                            addLabel="Add inspection"
+                            accept="image/*,application/pdf"
+                            emptyHint="No inspections logged yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Progressive Payment — 2–6 user-named instalment columns,
+                          each an estimated date + amount (big jobs pay in parts). */}
+                      {stage.id === "progressive-pay" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="progressive-payment"
+                            title="Progressive Payment instalments"
+                            description="Split the build payment into 2–6 instalments. Name each (e.g. 50% / 20% / …), set its estimated date and amount, and attach the invoice if issued."
+                            canManage={canCollect}
+                            withAmount
+                            maxColumns={6}
+                            minColumns={2}
+                            labelPlaceholder="Instalment (e.g. 50%)"
+                            addLabel="Add instalment"
+                            accept="application/pdf,image/*"
+                            emptyHint="No instalments set yet."
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
