@@ -13,12 +13,25 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { X, Sparkles, Calendar, Coins, AlertCircle, Check, ImagePlus } from "lucide-react";
+import {
+  ArrowLeft,
+  Sparkles,
+  Calendar,
+  Coins,
+  AlertCircle,
+  Check,
+  ImagePlus,
+} from "lucide-react";
 import { toast } from "sonner";
-import { useAllStaff, useConvertInquiry, useUpdateProject, useSetStageStatus, type Inquiry } from "@/lib/queries";
+import {
+  useAllStaff,
+  useConvertInquiry,
+  useUpdateProject,
+  useSetStageStatus,
+  type Inquiry,
+} from "@/lib/queries";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatRM } from "@/lib/quotationData";
-import { useIsDesktop } from "@/hooks/useMobile";
 
 type Priority = "high" | "medium" | "low";
 
@@ -26,18 +39,20 @@ type FormState = {
   projectName: string;
   designerStaffId: string;
   pmStaffId: string;
-  startDate: string;       // YYYY-MM-DD (input format)
+  startDate: string; // YYYY-MM-DD (input format)
   targetDate: string;
-  budget: string;          // string for input control
+  budget: string; // string for input control
   proposalDeposit: string;
   priority: Priority;
   serviceType: "Design" | "Renovation"; // drives the SD/SR project code
-  areas: string;           // comma-separated
-  showroomDone: boolean;   // start-choice: is the showroom meet-up already done?
+  areas: string; // comma-separated
+  showroomDone: boolean; // start-choice: is the showroom meet-up already done?
 };
 
 // —— date helpers ——
-function pad(n: number) { return String(n).padStart(2, "0"); }
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
 function isoToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -66,11 +81,16 @@ export default function ConvertInquiryDialog({
   const { data: allStaff = [] } = useAllStaff();
   const { staff: me } = useAuth();
   const convertMutation = useConvertInquiry();
-  const isDesktop = useIsDesktop();
 
   // Sensible defaults pulled from the inquiry
-  const designStaff = useMemo(() => allStaff.filter((s) => s.dept === "Design"), [allStaff]);
-  const opsStaff = useMemo(() => allStaff.filter((s) => s.dept === "Operations"), [allStaff]);
+  const designStaff = useMemo(
+    () => allStaff.filter(s => s.dept === "Design"),
+    [allStaff]
+  );
+  const opsStaff = useMemo(
+    () => allStaff.filter(s => s.dept === "Operations"),
+    [allStaff]
+  );
 
   // Lead Designer picker lists EVERY registered staff member (supervisor review —
   // "list all registered designers to choose from"), with Design-dept staff first
@@ -96,7 +116,8 @@ export default function ConvertInquiryDialog({
   const defaultDeposit = Math.max(2_000, Math.round(defaultBudget * 0.02));
 
   const [form, setForm] = useState<FormState>(() => ({
-    projectName: `${inquiry.client.split(/[\s.&-]+/)[0] || "New"} ${inquiry.propertyType}`.trim(),
+    projectName:
+      `${inquiry.client.split(/[\s.&-]+/)[0] || "New"} ${inquiry.propertyType}`.trim(),
     designerStaffId: defaultDesigner?.id ?? "",
     pmStaffId: defaultPM?.id ?? "",
     startDate: isoToday(),
@@ -121,7 +142,9 @@ export default function ConvertInquiryDialog({
   const designerTouched = useRef(false);
   useEffect(() => {
     if (designerTouched.current || !me?.id) return;
-    setForm((f) => (f.designerStaffId === me.id ? f : { ...f, designerStaffId: me.id }));
+    setForm(f =>
+      f.designerStaffId === me.id ? f : { ...f, designerStaffId: me.id }
+    );
   }, [me?.id]);
 
   // Derived validation
@@ -135,15 +158,16 @@ export default function ConvertInquiryDialog({
   // proposal deposit still applies, so the deposit is NOT capped by the budget.
   if (budgetNum < 0) errors.push("Budget can't be negative.");
   if (depositNum < 0) errors.push("Deposit must be ≥ 0.");
-  if (form.startDate >= form.targetDate) errors.push("Target date must be after start date.");
+  if (form.startDate >= form.targetDate)
+    errors.push("Target date must be after start date.");
   const isValid = errors.length === 0;
 
   async function handleSubmit() {
     if (!isValid || submitting) return;
     setSubmitting(true);
 
-    const designer = allStaff.find((s) => s.id === form.designerStaffId);
-    const pm = allStaff.find((s) => s.id === form.pmStaffId);
+    const designer = allStaff.find(s => s.id === form.designerStaffId);
+    const pm = allStaff.find(s => s.id === form.pmStaffId);
 
     try {
       const newId = await convertMutation.mutateAsync({
@@ -159,7 +183,7 @@ export default function ConvertInquiryDialog({
         priority: form.priority,
         areas: form.areas
           .split(",")
-          .map((s) => s.trim())
+          .map(s => s.trim())
           .filter(Boolean),
         proposalDeposit: depositNum,
         serviceType: form.serviceType,
@@ -168,14 +192,25 @@ export default function ConvertInquiryDialog({
 
       // Optional cover image for the new project (reuses the project cover upload).
       if (coverFile) {
-        try { await updateProject.mutateAsync({ id: newId, imageFile: coverFile }); }
-        catch { toast.error("Project created, but the cover image didn't upload"); }
+        try {
+          await updateProject.mutateAsync({ id: newId, imageFile: coverFile });
+        } catch {
+          toast.error("Project created, but the cover image didn't upload");
+        }
       }
       // Start-choice: if the showroom meet-up already happened, mark that stage done
       // (manual-status model — staff drive everything else from here).
       if (form.showroomDone) {
-        try { await setStageStatus.mutateAsync({ projectId: newId, stageId: "showroom-meet", status: "completed", by: me?.avatar_code ?? null }); }
-        catch { /* non-fatal */ }
+        try {
+          await setStageStatus.mutateAsync({
+            projectId: newId,
+            stageId: "showroom-meet",
+            status: "completed",
+            by: me?.avatar_code ?? null,
+          });
+        } catch {
+          /* non-fatal */
+        }
       }
 
       toast.success(`Converted to ${newId}`, {
@@ -194,65 +229,55 @@ export default function ConvertInquiryDialog({
   return (
     <AnimatePresence>
       {open && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-            className="fixed inset-0 z-40"
-            style={{ background: "oklch(0.11 0.004 285 / 0.55)", backdropFilter: "blur(4px)" }}
-          />
-
-          {/* Bottom sheet */}
-          <motion.div
-            initial={isDesktop ? { opacity: 0, scale: 0.96 } : { y: "100%" }}
-            animate={isDesktop ? { opacity: 1, scale: 1 } : { y: 0 }}
-            exit={isDesktop ? { opacity: 0, scale: 0.96 } : { y: "100%" }}
-            transition={isDesktop ? { duration: 0.18 } : { type: "spring", damping: 32, stiffness: 320 }}
-            className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-50 flex flex-col lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 lg:max-w-[480px]"
-            style={{
-              maxHeight: "92vh",
-              background: "var(--s-card)",
-              borderRadius: isDesktop ? 28 : "28px 28px 0 0",
-              boxShadow: "0 -12px 48px oklch(0 0 0 / 0.18)",
-            }}
-          >
-            {/* Drag handle (mobile bottom-sheet affordance only) */}
-            <div className="flex justify-center pt-2.5 pb-1.5 shrink-0 lg:hidden">
-              <div className="w-10 h-1 rounded-full" style={{ background: "var(--b-strong)" }} />
-            </div>
-
-            {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 10 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ background: "var(--s-page)" }}
+        >
+          {/* Full-page form shell (supervisor review: convert is a page, not a
+              bottom sheet) — content column centered on wide screens. */}
+          <div className="w-full max-w-[560px] mx-auto flex flex-col flex-1 min-h-0">
+            {/* Header with back */}
             <div
-              className="px-4 pb-3 flex items-start justify-between shrink-0"
+              className="px-4 pt-[calc(env(safe-area-inset-top,0px)+14px)] pb-3 flex items-center gap-3 shrink-0"
               style={{ borderBottom: "1px solid var(--b-2)" }}
             >
-              <div className="flex items-center gap-2.5">
+              <button
+                onClick={onClose}
+                aria-label="Back"
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: "var(--s-2)", cursor: "pointer" }}
+              >
+                <ArrowLeft size={16} style={{ color: "var(--acc-ink)" }} />
+              </button>
+              <div className="flex items-center gap-2.5 min-w-0">
                 <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg, var(--acc-strong), var(--acc-2))" }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, var(--acc-strong), var(--acc-2))",
+                  }}
                 >
                   <Sparkles size={16} className="text-white" />
                 </div>
-                <div>
-                  <p className="font-display text-base font-semibold leading-tight" style={{ color: "var(--t-1)" }}>
+                <div className="min-w-0">
+                  <p
+                    className="font-display text-base font-semibold leading-tight truncate"
+                    style={{ color: "var(--t-1)" }}
+                  >
                     Convert to Project
                   </p>
-                  <p className="text-[11px]" style={{ color: "var(--t-5)" }}>
+                  <p
+                    className="text-[11px] truncate"
+                    style={{ color: "var(--t-5)" }}
+                  >
                     {inquiry.client} · {inquiry.id}
                   </p>
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ background: "var(--s-2)" }}
-              >
-                <X size={14} style={{ color: "var(--acc-ink)" }} />
-              </button>
             </div>
 
             {/* Body — scrollable */}
@@ -260,7 +285,7 @@ export default function ConvertInquiryDialog({
               <FieldGroup label="PROJECT NAME">
                 <TextInput
                   value={form.projectName}
-                  onChange={(v) => setForm({ ...form, projectName: v })}
+                  onChange={v => setForm({ ...form, projectName: v })}
                   placeholder="The Paragon Residence"
                 />
               </FieldGroup>
@@ -270,7 +295,10 @@ export default function ConvertInquiryDialog({
                   <Select
                     testid="convert-designer"
                     value={form.designerStaffId}
-                    onChange={(v) => { designerTouched.current = true; setForm({ ...form, designerStaffId: v }); }}
+                    onChange={v => {
+                      designerTouched.current = true;
+                      setForm({ ...form, designerStaffId: v });
+                    }}
                     options={designerOptions}
                   />
                 </FieldGroup>
@@ -278,34 +306,50 @@ export default function ConvertInquiryDialog({
                   <Select
                     testid="convert-pm"
                     value={form.pmStaffId}
-                    onChange={(v) => setForm({ ...form, pmStaffId: v })}
-                    options={opsStaff.map((s) => ({ value: s.id, label: s.name }))}
+                    onChange={v => setForm({ ...form, pmStaffId: v })}
+                    options={opsStaff.map(s => ({
+                      value: s.id,
+                      label: s.name,
+                    }))}
                   />
                 </FieldGroup>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <FieldGroup label="START DATE" icon={Calendar}>
-                  <DateInput value={form.startDate} onChange={(v) => setForm({ ...form, startDate: v })} />
+                  <DateInput
+                    value={form.startDate}
+                    onChange={v => setForm({ ...form, startDate: v })}
+                  />
                 </FieldGroup>
                 <FieldGroup label="TARGET COMPLETION" icon={Calendar}>
-                  <DateInput value={form.targetDate} onChange={(v) => setForm({ ...form, targetDate: v })} />
+                  <DateInput
+                    value={form.targetDate}
+                    onChange={v => setForm({ ...form, targetDate: v })}
+                  />
                 </FieldGroup>
               </div>
 
               <FieldGroup label="CONFIRMED BUDGET (RM)" icon={Coins}>
                 <NumberInput
                   value={form.budget}
-                  onChange={(v) => setForm({ ...form, budget: v })}
+                  onChange={v => setForm({ ...form, budget: v })}
                   prefix="RM"
-                  hint={inquiry.estimatedBudget ? `Estimated at inquiry: ${formatRM(inquiry.estimatedBudget)}` : undefined}
+                  hint={
+                    inquiry.estimatedBudget
+                      ? `Estimated at inquiry: ${formatRM(inquiry.estimatedBudget)}`
+                      : undefined
+                  }
                 />
               </FieldGroup>
 
-              <FieldGroup label="① PROPOSAL DEPOSIT (collected today)" icon={Coins}>
+              <FieldGroup
+                label="① PROPOSAL DEPOSIT (collected today)"
+                icon={Coins}
+              >
                 <NumberInput
                   value={form.proposalDeposit}
-                  onChange={(v) => setForm({ ...form, proposalDeposit: v })}
+                  onChange={v => setForm({ ...form, proposalDeposit: v })}
                   prefix="RM"
                   hint="Booking fee for the design phase. Sets gate ① as collected."
                 />
@@ -313,7 +357,7 @@ export default function ConvertInquiryDialog({
 
               <FieldGroup label="SERVICE TYPE">
                 <div className="grid grid-cols-2 gap-2">
-                  {(["Design", "Renovation"] as const).map((st) => {
+                  {(["Design", "Renovation"] as const).map(st => {
                     const active = form.serviceType === st;
                     return (
                       <button
@@ -321,9 +365,13 @@ export default function ConvertInquiryDialog({
                         onClick={() => setForm({ ...form, serviceType: st })}
                         className="py-2 rounded-lg text-xs font-label"
                         style={{
-                          background: active ? "oklch(0.62 0.09 68 / 12%)" : "var(--s-page)",
+                          background: active
+                            ? "oklch(0.62 0.09 68 / 12%)"
+                            : "var(--s-page)",
                           color: active ? "var(--acc-ink)" : "var(--t-5)",
-                          border: active ? "1.5px solid var(--acc-ink)" : "1px solid var(--b-1)",
+                          border: active
+                            ? "1.5px solid var(--acc-ink)"
+                            : "1px solid var(--b-1)",
                           letterSpacing: "0.06em",
                           fontWeight: active ? 700 : 500,
                         }}
@@ -337,11 +385,23 @@ export default function ConvertInquiryDialog({
 
               <FieldGroup label="PRIORITY">
                 <div className="grid grid-cols-3 gap-2">
-                  {([
-                    { p: "high"   as Priority, tint: "oklch(0.50 0.12 25)",  bg: "oklch(0.60 0.12 25 / 12%)" },
-                    { p: "medium" as Priority, tint: "var(--acc-ink)",  bg: "oklch(0.62 0.09 68 / 12%)" },
-                    { p: "low"    as Priority, tint: "oklch(0.38 0.09 145)", bg: "oklch(0.55 0.09 145 / 12%)" },
-                  ]).map(({ p, tint, bg }) => {
+                  {[
+                    {
+                      p: "high" as Priority,
+                      tint: "oklch(0.50 0.12 25)",
+                      bg: "oklch(0.60 0.12 25 / 12%)",
+                    },
+                    {
+                      p: "medium" as Priority,
+                      tint: "var(--acc-ink)",
+                      bg: "oklch(0.62 0.09 68 / 12%)",
+                    },
+                    {
+                      p: "low" as Priority,
+                      tint: "oklch(0.38 0.09 145)",
+                      bg: "oklch(0.55 0.09 145 / 12%)",
+                    },
+                  ].map(({ p, tint, bg }) => {
                     const active = form.priority === p;
                     return (
                       <button
@@ -351,7 +411,9 @@ export default function ConvertInquiryDialog({
                         style={{
                           background: active ? bg : "var(--s-page)",
                           color: active ? tint : "var(--t-5)",
-                          border: active ? `1.5px solid ${tint}` : "1px solid var(--b-1)",
+                          border: active
+                            ? `1.5px solid ${tint}`
+                            : "1px solid var(--b-1)",
                           letterSpacing: "0.06em",
                           fontWeight: active ? 700 : 500,
                         }}
@@ -366,19 +428,33 @@ export default function ConvertInquiryDialog({
               <FieldGroup label="PROJECT AREAS (optional, comma-separated)">
                 <TextInput
                   value={form.areas}
-                  onChange={(v) => setForm({ ...form, areas: v })}
+                  onChange={v => setForm({ ...form, areas: v })}
                   placeholder="Living Room, Master Bedroom, Kitchen"
                 />
               </FieldGroup>
 
               {/* Cover image (optional) */}
               <FieldGroup label="COVER IMAGE (optional)">
-                <input ref={coverRef} type="file" accept="image/*" className="hidden"
-                  onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)} />
-                <button type="button" onClick={() => coverRef.current?.click()}
+                <input
+                  ref={coverRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => setCoverFile(e.target.files?.[0] ?? null)}
+                />
+                <button
+                  type="button"
+                  onClick={() => coverRef.current?.click()}
                   className="w-full flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-label"
-                  style={{ background: "transparent", color: "var(--acc-ink)", border: "1px dashed var(--b-strong)", cursor: "pointer" }}>
-                  <ImagePlus size={14} /> {coverFile ? coverFile.name : "Add a cover image"}
+                  style={{
+                    background: "transparent",
+                    color: "var(--acc-ink)",
+                    border: "1px dashed var(--b-strong)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <ImagePlus size={14} />{" "}
+                  {coverFile ? coverFile.name : "Add a cover image"}
                 </button>
               </FieldGroup>
 
@@ -388,12 +464,23 @@ export default function ConvertInquiryDialog({
                   {[
                     { done: false, label: "Start at New Inquiry" },
                     { done: true, label: "Showroom meet-up done" },
-                  ].map((opt) => {
+                  ].map(opt => {
                     const active = form.showroomDone === opt.done;
                     return (
-                      <button key={opt.label} type="button" onClick={() => setForm({ ...form, showroomDone: opt.done })}
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() =>
+                          setForm({ ...form, showroomDone: opt.done })
+                        }
                         className="rounded-xl px-3 py-2.5 text-xs font-label"
-                        style={{ background: active ? "var(--acc)" : "var(--s-2)", color: active ? "oklch(1 0 0)" : "var(--t-3)", border: active ? "none" : "1px solid var(--b-strong)", cursor: "pointer" }}>
+                        style={{
+                          background: active ? "var(--acc)" : "var(--s-2)",
+                          color: active ? "oklch(1 0 0)" : "var(--t-3)",
+                          border: active ? "none" : "1px solid var(--b-strong)",
+                          cursor: "pointer",
+                        }}
+                      >
                         {opt.label}
                       </button>
                     );
@@ -405,29 +492,58 @@ export default function ConvertInquiryDialog({
               <div
                 className="rounded-2xl p-3"
                 style={{
-                  background: "linear-gradient(135deg, oklch(0.62 0.09 68 / 5%), oklch(1 0 0))",
+                  background:
+                    "linear-gradient(135deg, oklch(0.62 0.09 68 / 5%), oklch(1 0 0))",
                   border: "1px solid oklch(0.62 0.09 68 / 25%)",
                 }}
               >
-                <p className="text-[10px] font-label mb-2" style={{ color: "var(--acc-ink)", letterSpacing: "0.10em", fontWeight: 700 }}>
+                <p
+                  className="text-[10px] font-label mb-2"
+                  style={{
+                    color: "var(--acc-ink)",
+                    letterSpacing: "0.10em",
+                    fontWeight: 700,
+                  }}
+                >
                   WHAT HAPPENS ON CONVERT
                 </p>
                 <Bullet text="A new project is created at status “Assigned”." />
-                <Bullet text={form.showroomDone ? "Lifecycle starts with Showroom Meet-up marked done; staff set the rest." : "Lifecycle starts at New Inquiry; staff set each stage's status."} />
-                <Bullet text={`Gate ① Proposal Deposit (${formatRM(depositNum)}) marked collected today.`} />
-                <Bullet text={`Inquiry ${inquiry.id} flips to “Awarded” and links to the new project.`} />
+                <Bullet
+                  text={
+                    form.showroomDone
+                      ? "Lifecycle starts with Showroom Meet-up marked done; staff set the rest."
+                      : "Lifecycle starts at New Inquiry; staff set each stage's status."
+                  }
+                />
+                <Bullet
+                  text={`Gate ① Proposal Deposit (${formatRM(depositNum)}) marked collected today.`}
+                />
+                <Bullet
+                  text={`Inquiry ${inquiry.id} flips to “Awarded” and links to the new project.`}
+                />
               </div>
 
               {/* Errors */}
               {errors.length > 0 && (
                 <div
                   className="rounded-xl p-3 flex items-start gap-2"
-                  style={{ background: "oklch(0.60 0.12 25 / 8%)", border: "1px solid oklch(0.60 0.12 25 / 25%)" }}
+                  style={{
+                    background: "oklch(0.60 0.12 25 / 8%)",
+                    border: "1px solid oklch(0.60 0.12 25 / 25%)",
+                  }}
                 >
-                  <AlertCircle size={14} style={{ color: "oklch(0.50 0.12 25)" }} className="mt-0.5 shrink-0" />
+                  <AlertCircle
+                    size={14}
+                    style={{ color: "oklch(0.50 0.12 25)" }}
+                    className="mt-0.5 shrink-0"
+                  />
                   <div>
-                    {errors.map((e) => (
-                      <p key={e} className="text-[11px]" style={{ color: "oklch(0.50 0.12 25)" }}>
+                    {errors.map(e => (
+                      <p
+                        key={e}
+                        className="text-[11px]"
+                        style={{ color: "oklch(0.50 0.12 25)" }}
+                      >
                         {e}
                       </p>
                     ))}
@@ -439,7 +555,10 @@ export default function ConvertInquiryDialog({
             {/* Footer */}
             <div
               className="px-4 py-3 flex gap-2 shrink-0"
-              style={{ borderTop: "1px solid var(--b-2)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+              style={{
+                borderTop: "1px solid var(--b-2)",
+                paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+              }}
             >
               <button
                 onClick={onClose}
@@ -468,7 +587,9 @@ export default function ConvertInquiryDialog({
                   letterSpacing: "0.06em",
                   fontWeight: 700,
                   opacity: isValid ? 1 : 0.6,
-                  boxShadow: isValid ? "0 4px 16px oklch(0.62 0.09 68 / 0.30)" : "none",
+                  boxShadow: isValid
+                    ? "0 4px 16px oklch(0.62 0.09 68 / 0.30)"
+                    : "none",
                 }}
               >
                 {submitting ? (
@@ -481,8 +602,8 @@ export default function ConvertInquiryDialog({
                 )}
               </motion.button>
             </div>
-          </motion.div>
-        </>
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
@@ -503,7 +624,14 @@ function FieldGroup({
     <div>
       <div className="flex items-center gap-1.5 mb-1.5">
         {Icon && <Icon size={11} style={{ color: "var(--t-5)" }} />}
-        <p className="text-[10px] font-label" style={{ color: "var(--t-5)", letterSpacing: "0.08em", fontWeight: 700 }}>
+        <p
+          className="text-[10px] font-label"
+          style={{
+            color: "var(--t-5)",
+            letterSpacing: "0.08em",
+            fontWeight: 700,
+          }}
+        >
           {label}
         </p>
       </div>
@@ -512,12 +640,20 @@ function FieldGroup({
   );
 }
 
-function TextInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
   return (
     <input
       type="text"
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
       className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
       style={{
@@ -547,7 +683,10 @@ function NumberInput({
         style={{ background: "var(--s-page)", border: "1px solid var(--b-1)" }}
       >
         {prefix && (
-          <span className="text-[10px] font-label" style={{ color: "var(--t-5)", letterSpacing: "0.04em" }}>
+          <span
+            className="text-[10px] font-label"
+            style={{ color: "var(--t-5)", letterSpacing: "0.04em" }}
+          >
             {prefix}
           </span>
         )}
@@ -555,7 +694,7 @@ function NumberInput({
           type="number"
           inputMode="decimal"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={e => onChange(e.target.value)}
           className="flex-1 bg-transparent outline-none text-sm font-display font-semibold"
           style={{ color: "var(--t-2)" }}
         />
@@ -569,12 +708,18 @@ function NumberInput({
   );
 }
 
-function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function DateInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <input
       type="date"
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={e => onChange(e.target.value)}
       className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
       style={{
         background: "var(--s-page)",
@@ -599,7 +744,7 @@ function Select({
   return (
     <select
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={e => onChange(e.target.value)}
       data-testid={testid}
       className="w-full px-3 py-2.5 rounded-xl text-sm outline-none appearance-none"
       style={{
@@ -609,7 +754,7 @@ function Select({
       }}
     >
       <option value="">— select —</option>
-      {options.map((o) => (
+      {options.map(o => (
         <option key={o.value} value={o.value}>
           {o.label}
         </option>
@@ -621,7 +766,12 @@ function Select({
 function Bullet({ text }: { text: string }) {
   return (
     <div className="flex items-start gap-1.5 mb-1">
-      <Check size={11} style={{ color: "oklch(0.38 0.09 145)" }} className="mt-0.5 shrink-0" strokeWidth={3} />
+      <Check
+        size={11}
+        style={{ color: "oklch(0.38 0.09 145)" }}
+        className="mt-0.5 shrink-0"
+        strokeWidth={3}
+      />
       <p className="text-[11px] leading-snug" style={{ color: "var(--t-3)" }}>
         {text}
       </p>
