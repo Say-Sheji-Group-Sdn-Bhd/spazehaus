@@ -53,7 +53,8 @@ export default function CreateProject() {
     clientName: "", clientContact: "", clientEmail: "", source: "",
     projectName: "", projectType: "Residential", propertyType: "Condominium",
     serviceType: "Design", // "Design" | "Renovation" — drives the SD/SR project number
-    location: "", size: "", budget: "", startDate: "", targetDate: "",
+    propertyOther: "", // free-text property type when "Others" is picked
+    location: "", size: "", budget: "", areas: "", startDate: "", targetDate: "",
     notes: "",
   });
 
@@ -140,7 +141,9 @@ export default function CreateProject() {
         clientContact: form.clientContact.trim() || null,
         clientEmail: form.clientEmail.trim() || null,
         type: form.projectType,
-        propertyType: form.propertyType,
+        propertyType: form.propertyType === "Others" && form.propertyOther.trim()
+          ? form.propertyOther.trim()
+          : form.propertyType,
         serviceType: form.serviceType as "Design" | "Renovation",
         source: form.source || null,
         location: form.location.trim(),
@@ -148,7 +151,7 @@ export default function CreateProject() {
         budget: form.budget ? Number(form.budget) : 0,
         startDate: toDMY(form.startDate) || null,
         targetDate: toDMY(form.targetDate) || null,
-        areas: [],
+        areas: form.areas.split(",").map((s) => s.trim()).filter(Boolean),
         description: form.notes.trim() || null,
         linkInquiryId: linkInquiryId || null,
         imageFile,
@@ -340,6 +343,23 @@ export default function CreateProject() {
                       </button>
                     ))}
                   </div>
+                  {form.propertyType === "Others" && (
+                    <input
+                      style={{ ...inputStyle, marginTop: 8 }}
+                      placeholder="Type the property type (free-text)"
+                      value={form.propertyOther}
+                      onChange={(e) => update("propertyOther", e.target.value)}
+                    />
+                  )}
+                </div>
+                <div>
+                  <label style={labelStyle}>PROJECT AREAS (comma-separated)</label>
+                  <input
+                    style={inputStyle}
+                    placeholder="Living Room, Master Bedroom, Kitchen"
+                    value={form.areas}
+                    onChange={(e) => update("areas", e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={labelStyle}>LOCATION / ADDRESS *</label>

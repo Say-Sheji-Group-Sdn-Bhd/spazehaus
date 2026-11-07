@@ -72,12 +72,28 @@ describe("effectivePaymentStatus", () => {
   });
 });
 
-describe("stageStatus", () => {
-  const current = "design-contract"; // order 9
-  it("marks earlier stages completed, current in-progress, later pending", () => {
-    expect(stageStatus(stageById("proposal-deposit")!, current)).toBe("completed"); // order 5
-    expect(stageStatus(stageById("design-contract")!, current)).toBe("in-progress");// order 9
-    expect(stageStatus(stageById("kick-off")!, current)).toBe("pending");           // order 19
+describe("stageStatus (manual per-stage status — 7 Nov 2026)", () => {
+  it("New Inquiry is always Completed and ignores the map", () => {
+    expect(stageStatus(stageById("new-inquiry")!, {})).toBe("completed");
+    expect(stageStatus(stageById("new-inquiry")!, { "new-inquiry": "pending" })).toBe("completed");
+  });
+  it("defaults a stage with no stored status to pending", () => {
+    expect(stageStatus(stageById("design-contract")!, {})).toBe("pending");
+    expect(stageStatus(stageById("kick-off")!, {})).toBe("pending");
+  });
+  it("reflects the staff-set manual status (out of order)", () => {
+    const map = {
+      "proposal-deposit": "completed",
+      "design-contract": "refer",
+      "kick-off": "completed", // completed out of order while earlier stages aren't
+      "site-inspection": "not-yet",
+    } as const;
+    expect(stageStatus(stageById("proposal-deposit")!, map)).toBe("completed");
+    expect(stageStatus(stageById("design-contract")!, map)).toBe("refer");
+    expect(stageStatus(stageById("kick-off")!, map)).toBe("completed");
+    expect(stageStatus(stageById("site-inspection")!, map)).toBe("not-yet");
+    // a stage absent from the map still defaults to pending
+    expect(stageStatus(stageById("handover")!, map)).toBe("pending");
   });
 });
 

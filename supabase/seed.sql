@@ -108,12 +108,21 @@ insert into signature_records (project_id, signature_key, label, group_name, sta
   ('PRJ002','handover',            'Handover Acceptance',        'contract', 'pending',    null, null);
 
 -- ── (2e) inquiries — convertible + attribution pair + awarded + rejected ─────
-insert into inquiries (id, inquiry_date, client_name, contact, email, category, tier, source, property_type, location, estimated_size, estimated_budget, stage, assigned_to_id, notes, awarded_project_id, awarded_date, rejected_date, rejection_reason, contact_log, last_updated) values
-  ('INQ001','2026-05-20','Wong Family',   '+60127880001','wong@example.com','Residential','Standard','Website','Condominium','Cheras, KL',        1100, 140000, 'showroom-meet', 'SH007', 'Ready to convert — proposal accepted.', null, null, null, null, '[]'::jsonb, '2026-05-28'),
-  ('INQ002','2026-05-22','Ng Enterprise', '+60127880002','ng@example.com',  'Commercial', 'Repeat',  'Referral','Retail',     'Bangsar, KL',      900,  220000, 'showroom-meet', 'SH005', 'Jamie''s lead — retail shop.',          null, null, null, null, '[]'::jsonb, '2026-05-27'),
-  ('INQ003','2026-05-23','Siti Residence','+60127880003','siti@example.com','Residential','Standard','Website','Landed',      'Shah Alam',        1800, 260000, 'showroom-meet', 'SH006', 'Jordan''s lead — landed house.',        null, null, null, null, '[]'::jsonb, '2026-05-26'),
-  ('INQ004','2026-02-10','Lim Holdings',  '+60127880004','lim@example.com', 'Commercial', 'VIP',     'Referral','Office',      'KLCC, KL',         3500, 480000, 'awarded',       'SH003', 'Won — became PRJ002.',                  'PRJ002', '2026-03-10', null, null, '[]'::jsonb, '2026-03-10'),
-  ('INQ005','2026-04-05','Tan Boutique',  '+60127880005','tanb@example.com','F&B',        'Standard','Walk-in', 'F&B',         'Petaling Jaya',    700,  90000,  'rejected',      'SH006', 'Budget mismatch.',                      null, null, '2026-04-18', 'Budget too low for scope', '[]'::jsonb, '2026-04-18');
+-- Customers (Phase 5): one per seed inquiry (local reset applies migrations BEFORE
+-- this seed, so the backfill migration can't see these rows — seed them here).
+insert into customers (id, name, contact, email, category, tier, source) values
+  ('CUS001','Wong Family',   '+60127880001','wong@example.com','Residential','Standard','Website'),
+  ('CUS002','Ng Enterprise', '+60127880002','ng@example.com',  'Commercial', 'Repeat',  'Referral'),
+  ('CUS003','Siti Residence','+60127880003','siti@example.com','Residential','Standard','Website'),
+  ('CUS004','Lim Holdings',  '+60127880004','lim@example.com', 'Commercial', 'VIP',     'Referral'),
+  ('CUS005','Tan Boutique',  '+60127880005','tanb@example.com','F&B',        'Standard','Walk-in');
+
+insert into inquiries (id, customer_id, inquiry_date, client_name, contact, email, category, tier, source, property_type, location, estimated_size, estimated_budget, stage, assigned_to_id, notes, awarded_project_id, awarded_date, rejected_date, rejection_reason, contact_log, last_updated) values
+  ('INQ001','CUS001','2026-05-20','Wong Family',   '+60127880001','wong@example.com','Residential','Standard','Website','Condominium','Cheras, KL',        1100, 140000, 'showroom-meet', 'SH007', 'Ready to convert — proposal accepted.', null, null, null, null, '[]'::jsonb, '2026-05-28'),
+  ('INQ002','CUS002','2026-05-22','Ng Enterprise', '+60127880002','ng@example.com',  'Commercial', 'Repeat',  'Referral','Retail',     'Bangsar, KL',      900,  220000, 'showroom-meet', 'SH005', 'Jamie''s lead — retail shop.',          null, null, null, null, '[]'::jsonb, '2026-05-27'),
+  ('INQ003','CUS003','2026-05-23','Siti Residence','+60127880003','siti@example.com','Residential','Standard','Website','Landed',      'Shah Alam',        1800, 260000, 'showroom-meet', 'SH006', 'Jordan''s lead — landed house.',        null, null, null, null, '[]'::jsonb, '2026-05-26'),
+  ('INQ004','CUS004','2026-02-10','Lim Holdings',  '+60127880004','lim@example.com', 'Commercial', 'VIP',     'Referral','Office',      'KLCC, KL',         3500, 480000, 'awarded',       'SH003', 'Won — became PRJ002.',                  'PRJ002', '2026-03-10', null, null, '[]'::jsonb, '2026-03-10'),
+  ('INQ005','CUS005','2026-04-05','Tan Boutique',  '+60127880005','tanb@example.com','F&B',        'Standard','Walk-in', 'F&B',         'Petaling Jaya',    700,  90000,  'rejected',      'SH006', 'Budget mismatch.',                      null, null, '2026-04-18', 'Budget too low for scope', '[]'::jsonb, '2026-04-18');
 
 -- ── (2f) quotation + items (for PRJ001) ──────────────────────────────────────
 insert into quotations (id, project_id, doc_type, status, client_name, client_contact, client_email, issue_date, valid_until, tax_rate, notes, revision, created_by) values

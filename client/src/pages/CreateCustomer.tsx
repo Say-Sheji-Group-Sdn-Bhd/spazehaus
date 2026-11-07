@@ -12,7 +12,7 @@ import { useLocation } from "wouter";
 import { UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import AppHeader from "@/components/AppHeader";
-import { useCreateInquiry, useAllStaff, type CreateInquiryArgs } from "@/lib/queries";
+import { useCreateCustomer, useAllStaff, type CreateInquiryArgs } from "@/lib/queries";
 import type { CustomerCategory, CustomerTier, InquiryStage } from "@/lib/dbTypes";
 
 const CATEGORIES: CustomerCategory[] = ["Residential", "Commercial", "F&B", "Office", "Investor"];
@@ -25,7 +25,7 @@ const SOURCES = ["Direct", "Website", "Referral", "Social Media", "Walk-in", "Ex
 
 export default function CreateCustomer() {
   const [, navigate] = useLocation();
-  const createInquiry = useCreateInquiry();
+  const createCustomer = useCreateCustomer();
   const { data: allStaff = [] } = useAllStaff();
 
   const [name, setName] = useState("");
@@ -72,9 +72,9 @@ export default function CreateCustomer() {
     };
 
     try {
-      const created = await createInquiry.mutateAsync(args);
-      toast.success("Customer added", { description: `${created.client_name} · ${created.id}` });
-      navigate(`/customers/${created.id}`);
+      const created = await createCustomer.mutateAsync(args);
+      toast.success("Customer added", { description: `${args.clientName} · ${created.customerId}` });
+      navigate(`/customers/${created.customerId}`);
     } catch (err) {
       toast.error(`Could not add customer: ${err instanceof Error ? err.message : "unknown error"}`);
     }
@@ -169,21 +169,21 @@ export default function CreateCustomer() {
         <div className="flex gap-2 pt-2">
           <button
             onClick={() => navigate("/customers")}
-            disabled={createInquiry.isPending}
+            disabled={createCustomer.isPending}
             className="flex-1 py-3 rounded-xl text-sm font-label"
-            style={{ background: "var(--s-2)", color: "var(--t-3)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: createInquiry.isPending ? 0.5 : 1 }}
+            style={{ background: "var(--s-2)", color: "var(--t-3)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: createCustomer.isPending ? 0.5 : 1 }}
           >
             Cancel
           </button>
           <motion.button
-            whileTap={createInquiry.isPending ? undefined : { scale: 0.96 }}
+            whileTap={createCustomer.isPending ? undefined : { scale: 0.96 }}
             onClick={handleSubmit}
-            disabled={createInquiry.isPending}
+            disabled={createCustomer.isPending}
             data-testid="cc-submit"
             className="flex-1 py-3 rounded-xl text-sm font-label font-semibold flex items-center justify-center gap-2"
-            style={{ background: "linear-gradient(135deg, var(--acc-strong), var(--acc-2))", color: "oklch(1 0 0)", letterSpacing: "0.04em", opacity: createInquiry.isPending ? 0.7 : 1 }}
+            style={{ background: "linear-gradient(135deg, var(--acc-strong), var(--acc-2))", color: "oklch(1 0 0)", letterSpacing: "0.04em", opacity: createCustomer.isPending ? 0.7 : 1 }}
           >
-            {createInquiry.isPending ? <span>Adding…</span> : (<><UserPlus size={15} />Add Customer</>)}
+            {createCustomer.isPending ? <span>Adding…</span> : (<><UserPlus size={15} />Add Customer</>)}
           </motion.button>
         </div>
       </div>

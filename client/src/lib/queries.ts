@@ -27,6 +27,8 @@ import type {
   CandidateRow,
   AnnouncementRow,
   SitePhotoRow,
+  ProjectColumnRow,
+  CustomerRow,
   SalesTargetRow,
   CalendarEventRow,
   CalendarEventStaffRow,
@@ -49,7 +51,7 @@ import type {
   WaClickRow,
 } from "@/lib/dbTypes";
 import type { TablesUpdate, TablesInsert } from "@/lib/database.types";
-import type { PaymentGate, SignatureKey } from "@/lib/lifecycleData";
+import type { PaymentGate, SignatureKey, ManualStageStatus } from "@/lib/lifecycleData";
 import type { LineItem } from "@/lib/quotationData";
 
 // ─── DATE HELPERS ───────────────────────────────────────────────────────────
@@ -105,6 +107,7 @@ export type Project = {
   lifecycleStartedAt: string | null;
   defectPeriodCompletedAt: string | null;  // set → warranty window closed, project truly done
   defectPeriodCompletedBy: string | null;  // staff avatar_code who closed it (audit)
+  hasVariationOrder: boolean;  // yes/no gate for the Variation Order section
   clientAccessToken: string;   // UUID for the read-only /portal/:token route
 };
 
@@ -218,6 +221,7 @@ function mapProject(row: ProjectWithStaffJoin): Project {
     lifecycleStartedAt: row.lifecycle_started_at,
     defectPeriodCompletedAt: row.defect_period_completed_at,
     defectPeriodCompletedBy: row.defect_period_completed_by,
+    hasVariationOrder: row.has_variation_order ?? false,
     clientAccessToken: row.client_access_token,
   };
 }
@@ -295,6 +299,8 @@ export const qk = {
   project: (id: string) => ["projects", id] as const,
   projectLifecycle: (id: string) => ["projects", id, "lifecycle"] as const,
   projectStageDates: (id: string) => ["projects", id, "stage_dates"] as const,
+  projectStageStatuses: (id: string) => ["projects", id, "stage_statuses"] as const,
+  projectColumns: (id: string, section: string) => ["projects", id, "columns", section] as const,
   siteReports: (id: string) => ["projects", id, "site_reports"] as const,
   projectTasks: (id: string) => ["project_tasks", id] as const,
   projectReviews: (id: string) => ["project_reviews", id] as const,
@@ -302,6 +308,8 @@ export const qk = {
   openSignatures: ["signatures", "open"] as const,
   inquiries: ["inquiries"] as const,
   inquiry: (id: string) => ["inquiries", id] as const,
+  customers: ["customers"] as const,
+  customer: (id: string) => ["customers", id] as const,
   quotations: ["quotations"] as const,
   quotation: (id: string) => ["quotations", id] as const,
   leaveRequests: ["leave_requests"] as const,
@@ -1055,6 +1063,250 @@ export function useSetStageDate() {
   });
 }
 
+// ─── MANUAL PER-STAGE STATUS (supervisor review, 7 Nov 2026) ─────────────────
+// Stages no longer auto-complete from a payment/signature. Every stage after
+// "New Inquiry" carries a manual status staff set: Completed · Pending · Refer ·
+// Not-yet. Stored on project_stage_dates.status (nullable → "pending"); a DB
+// trigger mirrors projects.current_stage_id to the earliest non-completed stage.
+
+/** Map of stage_id → the staff-set manual status for a project. Stages with no
+ *  stored status are omitted (callers default them to "pending"). */
+export function useProjectStageStatuses(projectId: string | undefined) {
+  return useQuery({
+    queryKey: qk.projectStageStatuses(projectId ?? ""),
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<Record<string, ManualStageStatus>> => {
+      const { data, error } = await supabase
+        .from("project_stage_dates")
+        .select("stage_id, status")
+        .eq("project_id", projectId ?? "");
+      if (error) throw error;
+      const out: Record<string, ManualStageStatus> = {};
+      for (const r of data ?? []) {
+        if (r.status) out[r.stage_id] = r.status as ManualStageStatus;
+      }
+      return out;
+    },
+  });
+}
+
+export type SetStageStatusArgs = {
+  projectId: string;
+  stageId: string;
+  status: ManualStageStatus;
+  by?: string | null;          // staff.avatar_code (audit)
+};
+
+/** Upsert one stage's manual status (+ audit). OPS-tier only (RLS). The DB
+ *  trigger re-mirrors current_stage_id, so invalidate the project + lifecycle too. */
+export function useSetStageStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: SetStageStatusArgs): Promise<void> => {
+      const { error } = await supabase
+        .from("project_stage_dates")
+        .upsert(
+          {
+            project_id: args.projectId,
+            stage_id: args.stageId,
+            status: args.status,
+            status_set_by: args.by ?? null,
+            status_set_at: new Date().toISOString(),
+          },
+          { onConflict: "project_id,stage_id" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.projectStageStatuses(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projectLifecycle(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
+/** Mark a batch of stages 'completed' in one upsert (+ audit). Used by the
+ *  closeout "mark all remaining complete" convenience so staff don't click ~27
+ *  stages one-by-one before the Defect Period unlocks. OPS-tier only (RLS). */
+export function useMarkStagesComplete() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; stageIds: string[]; by?: string | null }): Promise<void> => {
+      if (args.stageIds.length === 0) return;
+      const now = new Date().toISOString();
+      const rows = args.stageIds.map((stageId) => ({
+        project_id: args.projectId,
+        stage_id: stageId,
+        status: "completed" as ManualStageStatus,
+        status_set_by: args.by ?? null,
+        status_set_at: now,
+      }));
+      const { error } = await supabase
+        .from("project_stage_dates")
+        .upsert(rows, { onConflict: "project_id,stage_id" });
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.projectStageStatuses(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projectLifecycle(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
+// ─── REUSABLE "ADD-COLUMN" UPLOADER (Phase 2 — 7 Nov 2026) ──────────────────
+// User-named columns per project section (drawings / site-inspection /
+// progressive-payment / variation-order), each with a date, an optional
+// full-resolution file, and (progressive-payment) an amount. Files live in the
+// private `project-documents` bucket at `${projectId}/${section}/${id}/${ts}.ext`
+// — the first path segment is the project id, which the storage RLS checks.
+
+export type ProjectColumn = ProjectColumnRow;
+
+/** All columns for a project's section, ordered. */
+export function useProjectColumns(projectId: string | undefined, section: string) {
+  return useQuery({
+    queryKey: qk.projectColumns(projectId ?? "", section),
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<ProjectColumn[]> => {
+      const { data, error } = await supabase
+        .from("project_columns")
+        .select("*")
+        .eq("project_id", projectId ?? "")
+        .eq("section", section)
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ProjectColumn[];
+    },
+  });
+}
+
+const invalidateColumns = (qc: ReturnType<typeof useQueryClient>, projectId: string, section: string) =>
+  qc.invalidateQueries({ queryKey: qk.projectColumns(projectId, section) });
+
+/** Add a blank column at the end (staff fill in the label next). */
+export function useAddColumn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; section: string; by?: string | null; afterSort?: number; colDate?: string | null }): Promise<void> => {
+      const { error } = await supabase.from("project_columns").insert({
+        project_id: args.projectId,
+        section: args.section,
+        label: "",
+        col_date: args.colDate ?? null, // optional default (e.g. today) for date-it-happened sections
+        sort_order: (args.afterSort ?? 0) + 1,
+        created_by: args.by ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Patch a column's label / date / amount (status-free metadata). */
+export function useUpdateColumn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: number; projectId: string; section: string;
+      label?: string; colDate?: string | null; amount?: number | null;
+      signedBy?: string | null; signedDate?: string | null;
+    }): Promise<void> => {
+      const payload: TablesUpdate<"project_columns"> = {};
+      if (args.label !== undefined) payload.label = args.label;
+      if (args.colDate !== undefined) payload.col_date = args.colDate ? ddmmyyyyToIso(args.colDate) : null;
+      if (args.amount !== undefined) payload.amount = args.amount;
+      if (args.signedBy !== undefined) payload.signed_by = args.signedBy || null;
+      if (args.signedDate !== undefined) payload.signed_date = args.signedDate ? ddmmyyyyToIso(args.signedDate) : null;
+      const { error } = await supabase.from("project_columns").update(payload).eq("id", args.id);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Upload (or replace) a column's file — stored at full resolution, no compression. */
+export function useUploadColumnFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: number; projectId: string; section: string; file: File; prevPath?: string | null }): Promise<void> => {
+      const ext = args.file.name.split(".").pop()?.toLowerCase() ?? "bin";
+      const path = `${args.projectId}/${args.section}/${args.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("project-documents")
+        .upload(path, args.file, { cacheControl: "3600", upsert: false, contentType: args.file.type || "application/octet-stream" });
+      if (upErr) throw upErr;
+      const { error: dbErr } = await supabase
+        .from("project_columns")
+        .update({ file_path: path, file_name: args.file.name, file_size: args.file.size })
+        .eq("id", args.id);
+      if (dbErr) throw dbErr;
+      // Best-effort cleanup of the previous file (ignore failure).
+      if (args.prevPath) await supabase.storage.from("project-documents").remove([args.prevPath]);
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Remove a column's file (clears the row + deletes the storage object). */
+export function useRemoveColumnFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: number; projectId: string; section: string; path: string }): Promise<void> => {
+      const { error } = await supabase
+        .from("project_columns")
+        .update({ file_path: null, file_name: null, file_size: null })
+        .eq("id", args.id);
+      if (error) throw error;
+      await supabase.storage.from("project-documents").remove([args.path]);
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Delete a column entirely (and its file, if any). */
+export function useDeleteColumn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: number; projectId: string; section: string; path?: string | null }): Promise<void> => {
+      const { error } = await supabase.from("project_columns").delete().eq("id", args.id);
+      if (error) throw error;
+      if (args.path) await supabase.storage.from("project-documents").remove([args.path]);
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Toggle the project's "has a Variation Order?" yes/no gate. */
+export function useSetVariationOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; value: boolean }): Promise<void> => {
+      const { error } = await supabase
+        .from("projects")
+        .update({ has_variation_order: args.value })
+        .eq("id", args.projectId);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
+/** Mint a short-lived signed URL for viewing/downloading a column's file. */
+export async function getColumnFileUrl(storagePath: string, expiresInSec = 3600): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from("project-documents")
+    .createSignedUrl(storagePath, expiresInSec);
+  if (error || !data) return null;
+  return data.signedUrl;
+}
+
 // ─── CROSS-PROJECT: OPEN PAYMENTS + SIGNATURES ──────────────────────────────
 
 export type OpenPaymentRow = PaymentRecord & {
@@ -1439,8 +1691,8 @@ export function useRevertPayment() {
         .update({ status: "pending", collected_date: null, reference: null, collected_by: null })
         .eq("id", args.id);
       if (error) throw error;
-      const { error: rErr } = await supabase.rpc("recompute_project_stage", { p_project_id: args.projectId });
-      if (rErr) throw rErr;
+      // Manual-status model (7 Nov 2026): un-collecting does NOT move the stage —
+      // stage status is staff-driven. No recompute; staff reopen the stage manually.
       const after = await fetchProjectStage(args.projectId);
       return { from: before.id, to: after.id, fromLabel: before.label, toLabel: after.label };
     },
@@ -1459,8 +1711,8 @@ export function useRevertSignature() {
         .update({ status: "pending", signed_date: null, signed_by: null, document_ref: null, recorded_by: null })
         .eq("id", args.id);
       if (error) throw error;
-      const { error: rErr } = await supabase.rpc("recompute_project_stage", { p_project_id: args.projectId });
-      if (rErr) throw rErr;
+      // Manual-status model (7 Nov 2026): un-signing does NOT move the stage —
+      // stage status is staff-driven. No recompute; staff reopen the stage manually.
       const after = await fetchProjectStage(args.projectId);
       return { from: before.id, to: after.id, fromLabel: before.label, toLabel: after.label };
     },
@@ -1610,23 +1862,194 @@ export type CreateInquiryArgs = {
   notes?: string | null;
 };
 
-/** Create a brand-new customer/inquiry. Insert is allowed for any authenticated
- *  user (`inquiries_insert_any_authenticated` RLS policy). The `INQ###` id isn't
- *  DB-generated — compute the next one from the current max and retry on a
- *  unique-violation (concurrent-create race), mirroring `useCreateProject`. */
-export function useCreateInquiry() {
+// (useCreateInquiry removed in Phase 5 — CreateCustomer now uses useCreateCustomer,
+//  which creates the customer + its first opportunity together.)
+
+// ─── CUSTOMERS (Phase 5 — one customer holds many opportunities/projects) ────
+// A customer is the canonical client record; each inquiry is ONE opportunity
+// (its own New Inquiry → Showroom Meet → Awarded pipeline) under the customer.
+// "Add New Project" = a new inquiry under the customer.
+
+export type Customer = CustomerRow;
+export type CustomerWithOpportunities = { customer: Customer; opportunities: Inquiry[] };
+
+/** All customers, each with their opportunities (inquiries), newest-updated first. */
+export function useCustomers() {
+  return useQuery({
+    queryKey: qk.customers,
+    queryFn: async (): Promise<CustomerWithOpportunities[]> => {
+      const [custRes, inqRes, staffRes] = await Promise.all([
+        supabase.from("customers").select("*").order("created_at", { ascending: true }),
+        supabase.from("inquiries").select("*").order("last_updated", { ascending: false }),
+        supabase.from("staff").select("*"),
+      ]);
+      if (custRes.error) throw custRes.error;
+      if (inqRes.error) throw inqRes.error;
+      if (staffRes.error) throw staffRes.error;
+      const staffById = new Map(((staffRes.data ?? []) as StaffRow[]).map((s) => [s.id, s]));
+      const byCustomer = new Map<string, Inquiry[]>();
+      for (const row of (inqRes.data ?? []) as InquiryRow[]) {
+        const inq = mapInquiry(row, staffById);
+        if (!row.customer_id) continue;
+        (byCustomer.get(row.customer_id) ?? byCustomer.set(row.customer_id, []).get(row.customer_id)!).push(inq);
+      }
+      return ((custRes.data ?? []) as CustomerRow[]).map((c) => ({
+        customer: c,
+        opportunities: byCustomer.get(c.id) ?? [],
+      }));
+    },
+  });
+}
+
+/** One customer + its opportunities (inquiries). */
+export function useCustomer(id: string | undefined) {
+  return useQuery({
+    queryKey: qk.customer(id ?? ""),
+    enabled: Boolean(id),
+    queryFn: async (): Promise<CustomerWithOpportunities | null> => {
+      const safeId = id ?? "";
+      const [custRes, inqRes, staffRes] = await Promise.all([
+        supabase.from("customers").select("*").eq("id", safeId).maybeSingle(),
+        supabase.from("inquiries").select("*").eq("customer_id", safeId).order("last_updated", { ascending: false }),
+        supabase.from("staff").select("*"),
+      ]);
+      if (custRes.error) throw custRes.error;
+      if (inqRes.error) throw inqRes.error;
+      if (staffRes.error) throw staffRes.error;
+      if (!custRes.data) return null;
+      const staffById = new Map(((staffRes.data ?? []) as StaffRow[]).map((s) => [s.id, s]));
+      return {
+        customer: custRes.data as CustomerRow,
+        opportunities: ((inqRes.data ?? []) as InquiryRow[]).map((r) => mapInquiry(r, staffById)),
+      };
+    },
+  });
+}
+
+/** Look up the customer that owns an inquiry (for redirecting old inquiry-id links). */
+export async function findCustomerIdForInquiry(inquiryId: string): Promise<string | null> {
+  const { data, error } = await supabase.from("inquiries").select("customer_id").eq("id", inquiryId).maybeSingle();
+  if (error || !data) return null;
+  return data.customer_id ?? null;
+}
+
+const nextSeqId = async (table: "customers" | "inquiries", prefix: string): Promise<number> => {
+  const { data, error } = await supabase.from(table).select("id");
+  if (error) throw error;
+  const re = new RegExp(`^${prefix}(\\d+)$`);
+  return (data ?? []).reduce((max, r: { id: string }) => {
+    const m = re.exec(r.id);
+    return m ? Math.max(max, parseInt(m[1], 10)) : max;
+  }, 0);
+};
+
+/** Insert a new opportunity (inquiry) under an existing customer, seeding the
+ *  opportunity-level fields from the customer's identity. Returns the inquiry id. */
+export function useAddProjectToCustomer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: CreateInquiryArgs): Promise<InquiryRow> => {
-      const { data: existing, error: listErr } = await supabase.from("inquiries").select("id");
-      if (listErr) throw listErr;
-      const maxNum = (existing ?? []).reduce((max, r) => {
-        const m = /^INQ(\d+)$/.exec(r.id);
-        return m ? Math.max(max, parseInt(m[1], 10)) : max;
-      }, 0);
-
+    mutationFn: async (args: {
+      customerId: string; source?: string; propertyType?: string; location?: string;
+      estimatedBudget?: number | null; assignedToId?: string | null; by?: string | null;
+    }): Promise<string> => {
+      const { data: cust, error: cErr } = await supabase.from("customers").select("*").eq("id", args.customerId).single();
+      if (cErr) throw cErr;
+      const c = cust as CustomerRow;
       const today = new Date().toISOString().slice(0, 10);
+      const maxNum = await nextSeqId("inquiries", "INQ");
       const base: Omit<TablesInsert<"inquiries">, "id"> = {
+        customer_id: c.id,
+        inquiry_date: today,
+        client_name: c.name,
+        contact: c.contact,
+        email: c.email,
+        category: c.category,
+        tier: c.tier,
+        source: args.source ?? "Repeat",
+        property_type: args.propertyType ?? "",
+        location: args.location ?? "",
+        estimated_budget: args.estimatedBudget ?? null,
+        stage: "new-inquiry",
+        assigned_to_id: args.assignedToId ?? null,
+        contact_log: [],
+        last_updated: today,
+      };
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const id = `INQ${String(maxNum + 1 + attempt).padStart(3, "0")}`;
+        const { data, error } = await supabase.from("inquiries").insert({ ...base, id }).select("id").single();
+        if (!error) return (data as { id: string }).id;
+        if (error.code !== "23505") throw error;
+      }
+      throw new Error("Could not allocate a unique opportunity id. Please retry.");
+    },
+    onSuccess: (_id, args) => {
+      qc.invalidateQueries({ queryKey: qk.customer(args.customerId) });
+      qc.invalidateQueries({ queryKey: qk.customers });
+      qc.invalidateQueries({ queryKey: qk.inquiries });
+    },
+  });
+}
+
+/** Manually set an opportunity's pipeline stage (new-inquiry ↔ showroom-meet). */
+export function useSetInquiryStage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { inquiryId: string; customerId?: string; stage: InquiryStage }): Promise<void> => {
+      const { error } = await supabase
+        .from("inquiries")
+        .update({ stage: args.stage, last_updated: new Date().toISOString().slice(0, 10) })
+        .eq("id", args.inquiryId);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      if (args.customerId) qc.invalidateQueries({ queryKey: qk.customer(args.customerId) });
+      qc.invalidateQueries({ queryKey: qk.customers });
+      qc.invalidateQueries({ queryKey: qk.inquiries });
+      qc.invalidateQueries({ queryKey: qk.inquiry(args.inquiryId) });
+    },
+  });
+}
+
+/** Edit an opportunity's lead source (Direct → Repeat → Referral). */
+export function useSetInquirySource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { inquiryId: string; customerId?: string; source: string }): Promise<void> => {
+      const { error } = await supabase.from("inquiries").update({ source: args.source }).eq("id", args.inquiryId);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      if (args.customerId) qc.invalidateQueries({ queryKey: qk.customer(args.customerId) });
+      qc.invalidateQueries({ queryKey: qk.customers });
+      qc.invalidateQueries({ queryKey: qk.inquiries });
+      qc.invalidateQueries({ queryKey: qk.inquiry(args.inquiryId) });
+    },
+  });
+}
+
+/** Create a new customer AND its first opportunity (inquiry) in one step. */
+export function useCreateCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: CreateInquiryArgs & { address?: string | null; by?: string | null }): Promise<{ customerId: string; inquiryId: string }> => {
+      const today = new Date().toISOString().slice(0, 10);
+      const custMax = await nextSeqId("customers", "CUS");
+      let customerId = "";
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const id = `CUS${String(custMax + 1 + attempt).padStart(3, "0")}`;
+        const { error } = await supabase.from("customers").insert({
+          id, name: args.clientName, contact: args.contact ?? null, email: args.email ?? null,
+          address: args.address ?? null, category: args.category, tier: args.tier,
+          source: args.source ?? "Direct", created_by: args.by ?? null,
+        });
+        if (!error) { customerId = id; break; }
+        if (error.code !== "23505") throw error;
+      }
+      if (!customerId) throw new Error("Could not allocate a unique customer id. Please retry.");
+
+      const inqMax = await nextSeqId("inquiries", "INQ");
+      const base: Omit<TablesInsert<"inquiries">, "id"> = {
+        customer_id: customerId,
         inquiry_date: today,
         client_name: args.clientName,
         contact: args.contact ?? null,
@@ -1644,21 +2067,76 @@ export function useCreateInquiry() {
         contact_log: [],
         last_updated: today,
       };
-
       for (let attempt = 0; attempt < 5; attempt++) {
-        const id = `INQ${String(maxNum + 1 + attempt).padStart(3, "0")}`;
-        const { data, error } = await supabase
-          .from("inquiries")
-          .insert({ ...base, id })
-          .select()
-          .single();
-        if (!error) return data as InquiryRow;
-        if (error.code !== "23505") throw error; // 23505 = unique_violation → next id
+        const id = `INQ${String(inqMax + 1 + attempt).padStart(3, "0")}`;
+        const { error } = await supabase.from("inquiries").insert({ ...base, id });
+        if (!error) return { customerId, inquiryId: id };
+        if (error.code !== "23505") throw error;
       }
-      throw new Error("Could not allocate a unique customer id after several attempts. Please retry.");
+      throw new Error("Could not allocate a unique opportunity id. Please retry.");
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.customers });
       qc.invalidateQueries({ queryKey: qk.inquiries });
+    },
+  });
+}
+
+/** Edit a customer's identity (name / contact / email / address). Syncs the
+ *  denormalized client_name/contact/email onto this customer's inquiries so the
+ *  many existing inq.client reads stay correct. Ops-tier (RLS). */
+export function useUpdateCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; name?: string; contact?: string | null; email?: string | null; address?: string | null }): Promise<string[]> => {
+      const payload: TablesUpdate<"customers"> = {};
+      if (args.name !== undefined) payload.name = args.name;
+      if (args.contact !== undefined) payload.contact = args.contact;
+      if (args.email !== undefined) payload.email = args.email;
+      if (args.address !== undefined) payload.address = args.address;
+      const { error } = await supabase.from("customers").update(payload).eq("id", args.id);
+      if (error) throw error;
+
+      // Keep the denormalized inquiry identity fields in sync.
+      const sync: TablesUpdate<"inquiries"> = {};
+      if (args.name !== undefined) sync.client_name = args.name;
+      if (args.contact !== undefined) sync.contact = args.contact;
+      if (args.email !== undefined) sync.email = args.email;
+      if (Object.keys(sync).length > 0) {
+        const { error: sErr } = await supabase.from("inquiries").update(sync).eq("customer_id", args.id);
+        if (sErr) throw sErr;
+      }
+
+      // ...and onto any already-CONVERTED projects (they keep a denormalized copy
+      // of the client identity from convert time), so the edit propagates everywhere.
+      const projSync: TablesUpdate<"projects"> = {};
+      if (args.name !== undefined) projSync.client_name = args.name;
+      if (args.contact !== undefined) projSync.client_contact = args.contact;
+      if (args.email !== undefined) projSync.client_email = args.email;
+      let projectIds: string[] = [];
+      if (Object.keys(projSync).length > 0) {
+        const { data: awarded, error: aErr } = await supabase
+          .from("inquiries")
+          .select("awarded_project_id")
+          .eq("customer_id", args.id)
+          .not("awarded_project_id", "is", null);
+        if (aErr) throw aErr;
+        projectIds = ((awarded ?? []) as { awarded_project_id: string | null }[])
+          .map((r) => r.awarded_project_id)
+          .filter((v): v is string => Boolean(v));
+        if (projectIds.length > 0) {
+          const { error: pErr } = await supabase.from("projects").update(projSync).in("id", projectIds);
+          if (pErr) throw pErr;
+        }
+      }
+      return projectIds;
+    },
+    onSuccess: (projectIds, args) => {
+      qc.invalidateQueries({ queryKey: qk.customer(args.id) });
+      qc.invalidateQueries({ queryKey: qk.customers });
+      qc.invalidateQueries({ queryKey: qk.inquiries });
+      qc.invalidateQueries({ queryKey: qk.projects });
+      for (const pid of projectIds ?? []) qc.invalidateQueries({ queryKey: qk.project(pid) });
     },
   });
 }

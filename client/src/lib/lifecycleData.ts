@@ -106,7 +106,23 @@ export const LIFECYCLE_STAGES: LifecycleStage[] = [
 // Live row mapping happens in queries.ts via `useProjectLifecycle()`.
 // —————————————————————————————————————————————————————————————
 
-export type CheckpointStatus = "completed" | "in-progress" | "pending" | "overdue" | "skipped";
+export type CheckpointStatus = "completed" | "in-progress" | "pending" | "overdue" | "skipped" | "refer" | "not-yet";
+
+/**
+ * The MANUAL status a staff member sets on every stage after "New Inquiry"
+ * (supervisor review, 7 Nov 2026). This is the subset of CheckpointStatus that
+ * the stored `project_stage_dates.status` column can hold — stages no longer
+ * auto-complete from a payment/signature; staff drive each stage's status.
+ */
+export type ManualStageStatus = "completed" | "pending" | "refer" | "not-yet";
+
+/** The four manual statuses, in the order shown in the selector. */
+export const MANUAL_STAGE_STATUSES: readonly ManualStageStatus[] = [
+  "completed",
+  "pending",
+  "refer",
+  "not-yet",
+] as const;
 
 export type PaymentRecord = {
   gate: PaymentGate;
@@ -163,6 +179,8 @@ export const checkpointStatusConfig: Record<CheckpointStatus, { label: string; c
   pending:      { label: "Pending",     color: "oklch(0.42 0.09 68)",  bg: "oklch(0.62 0.09 68 / 12%)",  border: "oklch(0.62 0.09 68 / 25%)" },
   overdue:      { label: "Overdue",     color: "oklch(0.50 0.12 25)",  bg: "oklch(0.60 0.12 25 / 12%)",  border: "oklch(0.60 0.12 25 / 25%)" },
   skipped:      { label: "Skipped",     color: "oklch(0.55 0.006 80)", bg: "oklch(0.55 0.006 80 / 12%)", border: "oklch(0.55 0.006 80 / 25%)" },
+  refer:        { label: "Refer",       color: "oklch(0.45 0.13 285)", bg: "oklch(0.58 0.13 285 / 12%)", border: "oklch(0.58 0.13 285 / 28%)" },
+  "not-yet":    { label: "Not Yet",     color: "oklch(0.50 0.015 60)", bg: "oklch(0.60 0.015 60 / 14%)", border: "oklch(0.55 0.015 60 / 28%)" },
 };
 
 // —————————————————————————————————————————————————————————————
@@ -188,14 +206,19 @@ export function signatureSummary(lc: ProjectLifecycle) {
 }
 
 /**
- * Resolve the *displayed* status for a stage given a project's currentStageId.
- * Stages before current → completed; the current stage → in-progress; after → pending.
+ * Resolve the *displayed* status for a stage from the MANUAL per-stage status
+ * map (supervisor review, 7 Nov 2026 — stages no longer auto-complete).
+ *
+ * "New Inquiry" (the first stage) is always implicitly Completed and carries no
+ * selector. Every other stage shows the status staff set; a stage with no stored
+ * status yet defaults to "pending".
  */
-export function stageStatus(stage: LifecycleStage, currentStageId: string): CheckpointStatus {
-  const cur = stageOrder(currentStageId);
-  if (stage.order < cur) return "completed";
-  if (stage.order === cur) return "in-progress";
-  return "pending";
+export function stageStatus(
+  stage: LifecycleStage,
+  statusMap: Record<string, ManualStageStatus>,
+): CheckpointStatus {
+  if (stage.id === "new-inquiry") return "completed";
+  return statusMap[stage.id] ?? "pending";
 }
 
 // —————————————————————————————————————————————————————————————

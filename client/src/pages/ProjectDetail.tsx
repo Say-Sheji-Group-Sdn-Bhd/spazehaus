@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useLocation } from "wouter";
-import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, MoreHorizontal, Undo2 } from "lucide-react";
+import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, MoreHorizontal, Undo2, ChevronDown } from "lucide-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
@@ -30,8 +30,10 @@ import {
   stageStatus,
   phaseColors,
   checkpointStatusConfig,
+  MANUAL_STAGE_STATUSES,
   type StagePhase,
   type CheckpointStatus,
+  type ManualStageStatus,
 } from "@/lib/lifecycleData";
 import {
   useProject,
@@ -42,6 +44,11 @@ import {
   useSeedProjectLifecycle,
   useProjectStageDates,
   useSetStageDate,
+  useProjectStageStatuses,
+  useSetStageStatus,
+  useMarkStagesComplete,
+  useSetVariationOrder,
+  useProjectColumns,
   useUpdatePayment,
   useUpdateSignature,
   useRevertPayment,
@@ -75,12 +82,13 @@ import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import EditProjectSheet from "@/components/EditProjectSheet";
 import ManageTeamSheet from "@/components/ManageTeamSheet";
+import ColumnGrid from "@/components/ColumnGrid";
 import { toast } from "sonner";
 
 const CARD_BG1 = "/hero/card1.jpg";
 const CARD_BG2 = "/hero/card2.jpg";
 
-const tabs = ["Overview", "Lifecycle", "Tasks", "Quotations", "Photos", "Reports", "Team"];
+const tabs = ["Overview", "Lifecycle", "Tasks", "Quotations", "Drawings", "Photos", "Reports", "Team"];
 
 const TASK_STATUS_OPTIONS: { value: ProjectTaskStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -147,6 +155,71 @@ function StageDateControl({
       <CalendarClock size={9} />
       {value ? `${setPrefix} ${value}` : pickLabel}
     </button>
+  );
+}
+
+/**
+ * Manual per-stage status control (supervisor review, 7 Nov 2026).
+ * Every stage after "New Inquiry" carries a staff-set status; this replaces the
+ * passive status pill on the right of the row. A dropdown (not a 4-wide segmented
+ * control) keeps it legible on a 375px phone and matches the app's ⋯ menu pattern:
+ * the trigger shows the current status as a colored pill + chevron; the menu lists
+ * the four options with a color dot and a check on the current one.
+ *
+ * Read-only / New-Inquiry rows fall back to the static pill.
+ */
+function StageStatusControl({
+  status, canEdit, onChange, saving, interactive = true,
+}: {
+  status: CheckpointStatus;
+  canEdit: boolean;
+  onChange?: (next: ManualStageStatus) => void;
+  saving?: boolean;
+  interactive?: boolean;
+}) {
+  const cfg = checkpointStatusConfig[status];
+  const pill = (
+    <span
+      className="text-[9px] font-label px-2 py-1 rounded-full shrink-0 inline-flex items-center gap-1"
+      style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, letterSpacing: "0.04em" }}
+    >
+      {cfg.label}
+      {interactive && canEdit && <ChevronDown size={10} style={{ opacity: 0.7 }} />}
+    </span>
+  );
+
+  if (!interactive || !canEdit || !onChange) return pill;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild disabled={saving}>
+        <button
+          type="button"
+          aria-label={`Set stage status — currently ${cfg.label}`}
+          className="shrink-0 rounded-full"
+          style={{ cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
+        >
+          {pill}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[9rem]">
+        {MANUAL_STAGE_STATUSES.map((s) => {
+          const c = checkpointStatusConfig[s];
+          const active = s === status;
+          return (
+            <DropdownMenuItem
+              key={s}
+              onSelect={() => { if (!active) onChange(s); }}
+              className="gap-2 text-xs"
+            >
+              <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} />
+              <span className="flex-1" style={{ color: "var(--t-2)" }}>{c.label}</span>
+              {active && <Check size={13} style={{ color: c.color }} />}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -779,6 +852,24 @@ export default function ProjectDetail() {
                     </>
                   );
                 })()}
+              </div>
+            )}
+
+            {activeTab === "Drawings" && (
+              <div className="space-y-4">
+                <ColumnGrid
+                  projectId={project.id}
+                  section="drawings"
+                  defaultDateToday
+                  title="Drawings"
+                  description="Add a column per trade (wet works, plumbing, M&E, electrical, carpentry, wall-painting, furniture). Name each, set a date, and attach the full-resolution PDF."
+                  canManage={canEdit}
+                  maxColumns={10}
+                  labelPlaceholder="Trade (e.g. Plumbing, M&E)"
+                  addLabel="Add drawing"
+                  accept="application/pdf,image/*"
+                  emptyHint="No drawing columns yet."
+                />
               </div>
             )}
 
@@ -1420,7 +1511,19 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const { data: project } = useProject(projectId);
   const { data: rosterStaff = [] } = useAllStaff();
   const { data: stageDates = {} } = useProjectStageDates(projectId);
+  const { data: stageStatuses = {} } = useProjectStageStatuses(projectId);
   const setStageDate = useSetStageDate();
+  const setStageStatus = useSetStageStatus();
+  const markStagesComplete = useMarkStagesComplete();
+  const setVariationOrder = useSetVariationOrder();
+  const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
+  const hasVO = !!project?.hasVariationOrder;
+  const { data: voColumns = [] } = useProjectColumns(projectId, "variation-order");
+  const toggleVO = (value: boolean) =>
+    setVariationOrder.mutate(
+      { projectId, value },
+      { onError: (e) => toast.error(`Couldn't update: ${e instanceof Error ? e.message : "unknown error"}`) },
+    );
   const setDefectDone = useSetDefectPeriodDone(projectId);
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
@@ -1467,6 +1570,27 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       { onError: (e) => toast.error(`Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`) },
     );
   };
+  // Manual per-stage status (7 Nov 2026) — staff set each stage's status; nothing
+  // auto-completes. The DB trigger re-mirrors current_stage_id from the statuses.
+  const changeStageStatus = (stageId: string, next: ManualStageStatus) => {
+    setStageStatus.mutate(
+      { projectId, stageId, status: next, by: me?.avatar_code ?? null },
+      {
+        onSuccess: () => toast.success("Stage status updated"),
+        onError: (e) => toast.error(`Couldn't update status: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
+  };
+  const confirmBulkComplete = (stageIds: string[]) => {
+    markStagesComplete.mutate(
+      { projectId, stageIds, by: me?.avatar_code ?? null },
+      {
+        onSuccess: () => toast.success(`Marked ${stageIds.length} stage${stageIds.length === 1 ? "" : "s"} complete`),
+        onError: (e) => toast.error(`Couldn't update: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
+    );
+    setBulkCompleteOpen(false);
+  };
   const setPaymentDate = (id: number, ddmm: string | null) => {
     updatePayment.mutate(
       { id, projectId, dueDate: ddmm ?? "" },
@@ -1512,10 +1636,10 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
     const opts = {
       onSuccess: (r: RevertResult) => {
         revertResultToast(label, r);
-        // If the project had been marked complete, reverting a checkpoint regresses
-        // its lifecycle — clear the Defect Period completion + reset status so it no
-        // longer reads "Completed" while sitting at an earlier stage.
-        if (defectDone) setDefectDone.mutate({ done: false, by: null });
+        // Manual-status model (7 Nov 2026): un-collecting/un-signing does NOT touch
+        // the Defect Period. `workDelivered` derives from the manual stage statuses,
+        // so if a prior stage isn't Completed the project already stops reading
+        // "Completed" — no need to clear the stored completion here.
       },
       onError: (e: unknown) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
     };
@@ -1580,21 +1704,32 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const sigByKey = Object.fromEntries(lc.signatures.map((s) => [s.key, s]));
 
   // ── Next step (guide, don't block) ──────────────────────────────────────────
-  // The project only advances when the CURRENT stage's checkpoint(s) are done.
-  // Compute that one action set, so we can show a "Next step" banner and mark
-  // which checkpoint is live vs. an out-of-order one.
-  const currentStage = LIFECYCLE_STAGES.find((s) => stageStatus(s, lc.currentStageId) === "in-progress");
+  // Stages no longer auto-complete (7 Nov 2026). The "DO THIS NEXT" guidance now
+  // points at the FIRST stage (after New Inquiry) staff haven't marked Completed —
+  // a hint, not a gate: staff can still act on any stage's payment/signature out of
+  // order via its row. `lastStageId` (Defect Period) is handled by its own marker.
+  const lastStageId = LIFECYCLE_STAGES[LIFECYCLE_STAGES.length - 1]?.id;
+  const currentStage = LIFECYCLE_STAGES.find(
+    (s) => s.order > 1 && s.id !== lastStageId && stageStatus(s, stageStatuses) !== "completed",
+  );
   const nextPayments = currentStage?.paymentGate
     ? (paymentsByGate[currentStage.paymentGate] ?? []).filter((p) => p.status !== "completed" && p.status !== "skipped")
     : [];
   const nextSigRec = currentStage?.signatureKey ? sigByKey[currentStage.signatureKey] : undefined;
   const nextSignature = nextSigRec && nextSigRec.status !== "completed" && nextSigRec.status !== "skipped" ? nextSigRec : undefined;
   const hasNextAction = nextPayments.length > 0 || !!nextSignature;
-  const lastStageId = LIFECYCLE_STAGES[LIFECYCLE_STAGES.length - 1]?.id;
-  // Work is fully delivered once the project reaches the final stage with no
-  // payment/signature left. It's only TRULY complete once the Defect Period
-  // (warranty window) is closed — until then the warranty is still active.
-  const workDelivered = lc.currentStageId === lastStageId && !hasNextAction;
+  // Work is fully delivered once EVERY stage after New Inquiry (except the final
+  // Defect Period) is manually marked Completed — order-independent, matching the
+  // out-of-order reality. It's only TRULY complete once the Defect Period (warranty
+  // window) is closed — until then the warranty is still active.
+  const workDelivered = LIFECYCLE_STAGES.every(
+    (s) => s.order === 1 || s.id === lastStageId || stageStatus(s, stageStatuses) === "completed",
+  );
+  // Stages (after New Inquiry, before Defect Period) not yet marked Completed —
+  // the closeout "mark all remaining complete" convenience targets exactly these.
+  const remainingStages = LIFECYCLE_STAGES.filter(
+    (s) => s.order > 1 && s.id !== lastStageId && stageStatus(s, stageStatuses) !== "completed",
+  );
   const projectComplete = workDelivered && defectDone;
   const warrantyActive = workDelivered && !defectDone;
   const warrantyEndDate = stageDates["defect-period"];
@@ -1721,14 +1856,18 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
               {phaseStages.map((stage, i) => {
                 // Defect Period's status is the stored completion marker — but ONLY
                 // once the project has actually reached the final stage (workDelivered).
-                // Before that it stays positional (pending), so the Done button can't
-                // appear on a project that's still mid-lifecycle.
+                // Before that it stays "pending", so the Done button can't appear on a
+                // project that's still mid-lifecycle. Every other stage (after New
+                // Inquiry) shows its MANUAL status, which staff set via the selector.
                 const status =
                   stage.id === "defect-period" && workDelivered
                     ? defectDone
                       ? "completed"
                       : "in-progress"
-                    : stageStatus(stage, lc.currentStageId);
+                    : stageStatus(stage, stageStatuses);
+                // New Inquiry is always Completed (no selector); Defect Period uses its
+                // own Done/Revert controls; every other stage gets the manual selector.
+                const manualStatusStage = stage.order > 1 && stage.id !== "defect-period";
                 const isLast = i === phaseStages.length - 1;
                 const payments = stage.paymentGate ? paymentsByGate[stage.paymentGate] : undefined;
                 const signature = stage.signatureKey ? sigByKey[stage.signatureKey] : undefined;
@@ -1846,17 +1985,13 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                             </p>
                           )}
                         </div>
-                        <span
-                          className="text-[9px] font-label px-2 py-0.5 rounded-full shrink-0"
-                          style={{
-                            background: checkpointStatusConfig[status].bg,
-                            color: checkpointStatusConfig[status].color,
-                            border: `1px solid ${checkpointStatusConfig[status].border}`,
-                            letterSpacing: "0.04em",
-                          }}
-                        >
-                          {checkpointStatusConfig[status].label}
-                        </span>
+                        <StageStatusControl
+                          status={status}
+                          canEdit={canCollect}
+                          interactive={manualStatusStage}
+                          saving={setStageStatus.isPending}
+                          onChange={(next) => changeStageStatus(stage.id, next)}
+                        />
                       </div>
 
                       {/* Payment detail (one or more rows for gate 4) */}
@@ -1868,7 +2003,6 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                               payment={p}
                               projectId={projectId}
                               canCollect={canCollect}
-                              isNext={status === "in-progress"}
                               staffById={staffById}
                               onSetDate={(d) => setPaymentDate(p.id, d)}
                               onSetAmount={(amt) => setPaymentAmount(p.id, amt)}
@@ -1908,7 +2042,6 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                         <SignatureRow
                           signature={signature}
                           canSign={canSign}
-                          isNext={status === "in-progress"}
                           staffById={staffById}
                           onSetDate={(d) => setSignatureDate(signature.id, d)}
                           onRevert={() => doRevertSignature(signature)}
@@ -1931,6 +2064,108 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                           }
                         />
                       )}
+
+                      {/* Site Inspections — user-named columns, each a date + an
+                          OPTIONAL file (sometimes just a date). Lives on its stage. */}
+                      {stage.id === "site-inspection" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="site-inspection"
+                            defaultDateToday
+                            title="Site Inspections"
+                            description="Add a column per inspection (pre-renovation, wet-works, carpentry delivery, plumbing, installs…). A date is enough; attach a photo or report if you have one."
+                            canManage={canCollect}
+                            maxColumns={10}
+                            labelPlaceholder="Inspection (e.g. Pre-renovation)"
+                            addLabel="Add inspection"
+                            accept="image/*,application/pdf"
+                            emptyHint="No inspections logged yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Progressive Payment — 2–6 user-named instalment columns,
+                          each an estimated date + amount (big jobs pay in parts). */}
+                      {stage.id === "progressive-pay" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="progressive-payment"
+                            title="Progressive Payment instalments"
+                            description="Split the build payment into 2–6 instalments. Name each (e.g. 50% / 20% / …), set its estimated date and amount, and attach the invoice if issued."
+                            canManage={canCollect}
+                            withAmount
+                            maxColumns={6}
+                            minColumns={2}
+                            labelPlaceholder="Instalment (e.g. 50%)"
+                            addLabel="Add instalment"
+                            accept="application/pdf,image/*"
+                            emptyHint="No instalments set yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Design Proposal versioning — Version 1 → Revision 1 → … */}
+                      {stage.id === "design-proposal" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="design-proposal"
+                            defaultDateToday
+                            title="Design Proposal versions"
+                            description="Track each version the client sees — Version 1, then Revision 1, Revision 2… Set the date and attach each version's file."
+                            canManage={canCollect}
+                            maxColumns={10}
+                            labelPlaceholder="Version (e.g. V1, Revision 1)"
+                            addLabel="Add version"
+                            accept="application/pdf,image/*"
+                            emptyHint="No versions yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Work Schedule — signed PDF, by BOTH the PM and the owner.
+                          One column per signatory captures each sign-off. */}
+                      {stage.id === "work-schedule" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="work-schedule"
+                            defaultDateToday
+                            title="Work Schedule sign-off"
+                            description="Upload the work-schedule PDF, signed by BOTH the Project Manager and the owner. Add a column per signatory with their sign-off and the signed copy."
+                            canManage={canCollect}
+                            withSignoff
+                            maxColumns={4}
+                            labelPlaceholder="Signatory (PM / Owner)"
+                            addLabel="Add sign-off"
+                            accept="application/pdf,image/*"
+                            emptyHint="No work-schedule sign-offs yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Contractor Briefing — sign-off sheet confirming contractors
+                          attended and understood scope + timeline. */}
+                      {stage.id === "contractor-brief" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="contractor-brief"
+                            defaultDateToday
+                            title="Contractor Briefing sign-off"
+                            description="Attach the signed briefing sheet (with its date) confirming all contractors attended and understood the scope + timeline — so this isn't marked done before they were actually briefed."
+                            canManage={canCollect}
+                            withSignoff
+                            maxColumns={6}
+                            labelPlaceholder="Briefing / trade"
+                            addLabel="Add sign-off"
+                            accept="application/pdf,image/*"
+                            emptyHint="No briefing sign-offs yet."
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -1939,6 +2174,84 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
           </div>
         );
       })}
+
+      {/* —— Variation Order (VO) — client adds items mid-renovation (~60–70% of
+          projects). Gated by a yes/no; when yes, reuse ColumnGrid with a per-VO
+          client sign-off. Sits near Closeout. */}
+      <div className="rounded-2xl p-3.5 space-y-3" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>Variation Order</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--t-5)" }}>
+              Does this project have a Variation Order? (Client-requested changes mid-build.)
+            </p>
+          </div>
+          {canCollect && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => toggleVO(true)}
+                disabled={setVariationOrder.isPending}
+                className="text-[11px] font-label px-3 py-1.5 rounded-lg"
+                style={{ background: hasVO ? "var(--acc)" : "var(--s-2)", color: hasVO ? "oklch(1 0 0)" : "var(--t-3)", border: hasVO ? "none" : "1px solid var(--b-strong)", cursor: "pointer" }}
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleVO(false)}
+                disabled={setVariationOrder.isPending}
+                className="text-[11px] font-label px-3 py-1.5 rounded-lg"
+                style={{ background: !hasVO ? "var(--acc)" : "var(--s-2)", color: !hasVO ? "oklch(1 0 0)" : "var(--t-3)", border: !hasVO ? "none" : "1px solid var(--b-strong)", cursor: "pointer" }}
+              >
+                No
+              </button>
+            </div>
+          )}
+        </div>
+        {hasVO ? (
+          <ColumnGrid
+            projectId={projectId}
+            section="variation-order"
+            defaultDateToday
+            title="Variation Orders"
+            description="One column per VO: describe the change, set the date, attach the VO quotation/invoice, and record the client's sign-off before work proceeds."
+            canManage={canCollect}
+            maxColumns={10}
+            withSignoff
+            labelPlaceholder="Describe the VO (e.g. 2 extra plug points)"
+            addLabel="Add VO"
+            accept="application/pdf,image/*"
+            emptyHint="No variation orders yet."
+          />
+        ) : (
+          <p className="text-[11px]" style={{ color: voColumns.length > 0 ? "var(--acc-ink)" : "var(--t-6)" }}>
+            {voColumns.length > 0
+              ? `${voColumns.length} variation order${voColumns.length === 1 ? "" : "s"} hidden — tap "Yes" to show ${voColumns.length === 1 ? "it" : "them"} again.`
+              : canCollect ? 'Tap "Yes" to start logging variation orders.' : "No variation orders on this project."}
+          </p>
+        )}
+      </div>
+
+      {/* —— Closeout convenience: mark every remaining stage complete at once ——
+          Staff set each stage manually; near closeout that can be ~27 clicks before
+          the Defect Period unlocks, so offer a single bulk action (confirmed). */}
+      {canCollect && !workDelivered && remainingStages.length > 1 && (
+        <div className="flex flex-col items-center gap-1.5 pt-1">
+          <button
+            type="button"
+            onClick={() => setBulkCompleteOpen(true)}
+            disabled={markStagesComplete.isPending}
+            className="text-[11px] font-label inline-flex items-center gap-1.5 px-3 py-2 rounded-lg"
+            style={{ background: "oklch(0.55 0.09 145 / 10%)", color: "oklch(0.38 0.09 145)", border: "1px solid oklch(0.55 0.09 145 / 28%)", cursor: "pointer", letterSpacing: "0.03em" }}
+          >
+            <CheckSquare size={12} /> Mark all {remainingStages.length} remaining stages complete
+          </button>
+          <span className="text-[10px] text-center" style={{ color: "var(--t-6)" }}>
+            Unlocks the Defect Period · you can still change any stage afterwards
+          </span>
+        </div>
+      )}
 
       {/* —— Footer note —— */}
       <p className="text-[10px] text-center font-label" style={{ color: "var(--t-6)", letterSpacing: "0.06em" }}>
@@ -1958,6 +2271,26 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
         open={signTarget !== null}
         onClose={() => setSignTarget(null)}
       />
+
+      {/* Bulk "mark all remaining complete" confirm */}
+      <AlertDialog open={bulkCompleteOpen} onOpenChange={setBulkCompleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark all {remainingStages.length} remaining stages complete?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This sets every stage that isn’t Completed yet to <strong>Completed</strong>, which unlocks
+              the Defect Period. It doesn’t record any payments or signatures — you can still change any
+              individual stage afterwards.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmBulkComplete(remainingStages.map((s) => s.id))}>
+              Mark all complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* In-app revert confirm (replaces window.confirm) */}
       <AlertDialog open={revertTarget !== null} onOpenChange={(o) => { if (!o) setRevertTarget(null); }}>
@@ -2129,7 +2462,6 @@ function CheckpointActionsMenu({ onEdit, onRevert, disabled }: { onEdit?: () => 
 function PaymentRow({
   payment,
   canCollect,
-  isNext = true,
   onCollect,
   onEdit,
   onSetDate,
@@ -2141,7 +2473,6 @@ function PaymentRow({
   payment: PaymentRecord;
   projectId: string;
   canCollect: boolean;
-  isNext?: boolean;
   onCollect: () => void;
   onEdit?: () => void;
   onSetDate?: (ddmm: string | null) => void;
@@ -2232,13 +2563,12 @@ function PaymentRow({
           <motion.button
             whileTap={{ scale: 0.94 }}
             onClick={onCollect}
-            title={isNext ? undefined : "Not the current step — recording this won't advance the project yet"}
+            title="Record this payment"
             className="px-2 py-0.5 rounded-md flex items-center gap-1"
             style={{
               background: "oklch(0.55 0.09 145 / 12%)",
               color: "oklch(0.38 0.09 145)",
               border: "1px solid oklch(0.55 0.09 145 / 25%)",
-              opacity: isNext ? 1 : 0.45,
             }}
           >
             <Check size={9} strokeWidth={3} />
@@ -2256,7 +2586,6 @@ function PaymentRow({
 function SignatureRow({
   signature,
   canSign,
-  isNext = true,
   onSign,
   onSetDate,
   onRevert,
@@ -2265,7 +2594,6 @@ function SignatureRow({
 }: {
   signature: DocumentSignRecord;
   canSign: boolean;
-  isNext?: boolean;
   onSign: () => void;
   onSetDate?: (ddmm: string | null) => void;
   onRevert?: () => void;
@@ -2385,7 +2713,7 @@ function SignatureRow({
               e.stopPropagation();
               onSign();
             }}
-            title={isNext ? undefined : "Not the current step — recording this won't advance the project yet"}
+            title="Record this signature"
             className="px-2 py-0.5 rounded-md flex items-center gap-1"
             style={{
               background: signature.group === "contract"
@@ -2397,7 +2725,6 @@ function SignatureRow({
               border: signature.group === "contract"
                 ? "1px solid oklch(0.50 0.10 25 / 35%)"
                 : "1px solid oklch(0.38 0.09 240 / 35%)",
-              opacity: isNext ? 1 : 0.45,
             }}
           >
             <Upload size={9} />

@@ -318,6 +318,48 @@ export type Database = {
         }
         Relationships: []
       }
+      customers: {
+        Row: {
+          address: string | null
+          category: Database["public"]["Enums"]["customer_category"]
+          contact: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          name: string
+          source: string | null
+          tier: Database["public"]["Enums"]["customer_tier"]
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          category?: Database["public"]["Enums"]["customer_category"]
+          contact?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id: string
+          name: string
+          source?: string | null
+          tier?: Database["public"]["Enums"]["customer_tier"]
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          category?: Database["public"]["Enums"]["customer_category"]
+          contact?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          source?: string | null
+          tier?: Database["public"]["Enums"]["customer_tier"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       inquiries: {
         Row: {
           assigned_to_id: string | null
@@ -328,6 +370,7 @@ export type Database = {
           contact: string | null
           contact_log: Json
           created_at: string
+          customer_id: string | null
           email: string | null
           estimated_budget: number | null
           estimated_size: number | null
@@ -353,6 +396,7 @@ export type Database = {
           contact?: string | null
           contact_log?: Json
           created_at?: string
+          customer_id?: string | null
           email?: string | null
           estimated_budget?: number | null
           estimated_size?: number | null
@@ -378,6 +422,7 @@ export type Database = {
           contact?: string | null
           contact_log?: Json
           created_at?: string
+          customer_id?: string | null
           email?: string | null
           estimated_budget?: number | null
           estimated_size?: number | null
@@ -729,23 +774,94 @@ export type Database = {
           },
         ]
       }
+      project_columns: {
+        Row: {
+          amount: number | null
+          col_date: string | null
+          created_at: string
+          created_by: string | null
+          file_name: string | null
+          file_path: string | null
+          file_size: number | null
+          id: number
+          label: string
+          project_id: string
+          section: string
+          signed_by: string | null
+          signed_date: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          col_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: never
+          label?: string
+          project_id: string
+          section: string
+          signed_by?: string | null
+          signed_date?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          col_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: never
+          label?: string
+          project_id?: string
+          section?: string
+          signed_by?: string | null
+          signed_date?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_columns_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_stage_dates: {
         Row: {
           estimated_date: string | null
           project_id: string
           stage_id: string
+          status: string | null
+          status_set_at: string | null
+          status_set_by: string | null
           updated_at: string
         }
         Insert: {
           estimated_date?: string | null
           project_id: string
           stage_id: string
+          status?: string | null
+          status_set_at?: string | null
+          status_set_by?: string | null
           updated_at?: string
         }
         Update: {
           estimated_date?: string | null
           project_id?: string
           stage_id?: string
+          status?: string | null
+          status_set_at?: string | null
+          status_set_by?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -838,6 +954,7 @@ export type Database = {
           defect_period_completed_by: string | null
           description: string | null
           designer_id: string | null
+          has_variation_order: boolean
           id: string
           image_path: string | null
           lifecycle_started_at: string | null
@@ -876,6 +993,7 @@ export type Database = {
           defect_period_completed_by?: string | null
           description?: string | null
           designer_id?: string | null
+          has_variation_order?: boolean
           id: string
           image_path?: string | null
           lifecycle_started_at?: string | null
@@ -914,6 +1032,7 @@ export type Database = {
           defect_period_completed_by?: string | null
           description?: string | null
           designer_id?: string | null
+          has_variation_order?: boolean
           id?: string
           image_path?: string | null
           lifecycle_started_at?: string | null
