@@ -10,19 +10,67 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useLocation } from "wouter";
-import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, MoreHorizontal, Undo2, ChevronDown } from "lucide-react";
 import {
-  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
-  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+  Upload,
+  UserPlus,
+  User,
+  CheckSquare,
+  MapPin,
+  Maximize2,
+  Phone,
+  FileText,
+  Receipt,
+  Coins,
+  PenSquare,
+  Check,
+  Clock,
+  AlertCircle,
+  Share2,
+  Plus,
+  Pencil,
+  Trash2,
+  Star,
+  X,
+  ImagePlus,
+  CalendarClock,
+  MoreHorizontal,
+  Undo2,
+  ChevronDown,
+} from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import AppHeader from "@/components/AppHeader";
-import MarkCollectedSheet, { type MarkCollectedTarget } from "@/components/MarkCollectedSheet";
-import SignDocumentSheet, { type SignDocumentTarget } from "@/components/SignDocumentSheet";
-import { statusConfig, priorityConfig, DEFAULT_STATUS_CONFIG, DEFAULT_PRIORITY_CONFIG } from "@/lib/mockData";
-import { statusConfig as qStatusConfig, computeTotals, formatRM } from "@/lib/quotationData";
+import MarkCollectedSheet, {
+  type MarkCollectedTarget,
+} from "@/components/MarkCollectedSheet";
+import SignDocumentSheet, {
+  type SignDocumentTarget,
+} from "@/components/SignDocumentSheet";
+import {
+  statusConfig,
+  priorityConfig,
+  DEFAULT_STATUS_CONFIG,
+  DEFAULT_PRIORITY_CONFIG,
+} from "@/lib/mockData";
+import {
+  statusConfig as qStatusConfig,
+  computeTotals,
+  formatRM,
+} from "@/lib/quotationData";
 import {
   LIFECYCLE_STAGES,
   paymentSummary,
@@ -78,7 +126,12 @@ import {
   type PaymentRecord,
   type DocumentSignRecord,
 } from "@/lib/queries";
-import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow } from "@/lib/dbTypes";
+import type {
+  ProjectTaskRow,
+  ProjectReviewRow,
+  SitePhotoRow,
+  StaffRow,
+} from "@/lib/dbTypes";
 import { useAuth } from "@/contexts/AuthContext";
 import EditProjectSheet from "@/components/EditProjectSheet";
 import ManageTeamSheet from "@/components/ManageTeamSheet";
@@ -88,7 +141,16 @@ import { toast } from "sonner";
 const CARD_BG1 = "/hero/card1.jpg";
 const CARD_BG2 = "/hero/card2.jpg";
 
-const tabs = ["Overview", "Lifecycle", "Tasks", "Quotations", "Drawings", "Photos", "Reports", "Team"];
+const tabs = [
+  "Overview",
+  "Lifecycle",
+  "Tasks",
+  "Quotations",
+  "Drawings",
+  "Photos",
+  "Reports",
+  "Team",
+];
 
 const TASK_STATUS_OPTIONS: { value: ProjectTaskStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -114,27 +176,49 @@ function ddmmToIsoDate(ddmm: string | undefined): string {
  *  Shows the date (or "Set est. date") and opens a native date picker on click.
  *  `value` is DD/MM/YYYY; `onSet` receives DD/MM/YYYY or null (cleared). */
 function StageDateControl({
-  value, canEdit, onSet, saving, pickLabel = "Set est. date", setPrefix = "Est.",
+  value,
+  canEdit,
+  onSet,
+  saving,
+  pickLabel = "Set est. date",
+  setPrefix = "Est.",
 }: {
-  value?: string; canEdit: boolean; onSet: (ddmm: string | null) => void; saving?: boolean;
-  pickLabel?: string; setPrefix?: string;
+  value?: string;
+  canEdit: boolean;
+  onSet: (ddmm: string | null) => void;
+  saving?: boolean;
+  pickLabel?: string;
+  setPrefix?: string;
 }) {
   const [editing, setEditing] = useState(false);
   if (!canEdit && !value) return null;
   if (editing && canEdit) {
+    // Commit on blur / Enter — NOT on change. A native date input fires onChange
+    // for every intermediate valid date while you type the year (12/01/0002 →
+    // 0020 → 0202 → 2026), so committing + closing on change traps you on the
+    // first digit. Letting the field live until blur lets all segments be typed.
+    const commit = (raw: string) => {
+      onSet(
+        raw ? `${raw.slice(8, 10)}/${raw.slice(5, 7)}/${raw.slice(0, 4)}` : null
+      );
+      setEditing(false);
+    };
     return (
       <input
         type="date"
         autoFocus
         defaultValue={ddmmToIsoDate(value)}
-        onBlur={() => setEditing(false)}
-        onChange={(e) => {
-          const v = e.target.value; // YYYY-MM-DD or ""
-          onSet(v ? `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)}` : null);
-          setEditing(false);
+        onBlur={e => commit(e.currentTarget.value)}
+        onKeyDown={e => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") setEditing(false);
         }}
         className="text-[9px] rounded-md px-1.5 py-0.5"
-        style={{ background: "var(--s-2)", border: "1px solid var(--b-strong)", color: "var(--t-2)" }}
+        style={{
+          background: "var(--s-2)",
+          border: "1px solid var(--b-strong)",
+          color: "var(--t-2)",
+        }}
       />
     );
   }
@@ -169,7 +253,11 @@ function StageDateControl({
  * Read-only / New-Inquiry rows fall back to the static pill.
  */
 function StageStatusControl({
-  status, canEdit, onChange, saving, interactive = true,
+  status,
+  canEdit,
+  onChange,
+  saving,
+  interactive = true,
 }: {
   status: CheckpointStatus;
   canEdit: boolean;
@@ -181,10 +269,17 @@ function StageStatusControl({
   const pill = (
     <span
       className="text-[9px] font-label px-2 py-1 rounded-full shrink-0 inline-flex items-center gap-1"
-      style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, letterSpacing: "0.04em" }}
+      style={{
+        background: cfg.bg,
+        color: cfg.color,
+        border: `1px solid ${cfg.border}`,
+        letterSpacing: "0.04em",
+      }}
     >
       {cfg.label}
-      {interactive && canEdit && <ChevronDown size={10} style={{ opacity: 0.7 }} />}
+      {interactive && canEdit && (
+        <ChevronDown size={10} style={{ opacity: 0.7 }} />
+      )}
     </span>
   );
 
@@ -197,23 +292,33 @@ function StageStatusControl({
           type="button"
           aria-label={`Set stage status — currently ${cfg.label}`}
           className="shrink-0 rounded-full"
-          style={{ cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
+          style={{
+            cursor: saving ? "default" : "pointer",
+            opacity: saving ? 0.6 : 1,
+          }}
         >
           {pill}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[9rem]">
-        {MANUAL_STAGE_STATUSES.map((s) => {
+        {MANUAL_STAGE_STATUSES.map(s => {
           const c = checkpointStatusConfig[s];
           const active = s === status;
           return (
             <DropdownMenuItem
               key={s}
-              onSelect={() => { if (!active) onChange(s); }}
+              onSelect={() => {
+                if (!active) onChange(s);
+              }}
               className="gap-2 text-xs"
             >
-              <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} />
-              <span className="flex-1" style={{ color: "var(--t-2)" }}>{c.label}</span>
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ background: c.color }}
+              />
+              <span className="flex-1" style={{ color: "var(--t-2)" }}>
+                {c.label}
+              </span>
               {active && <Check size={13} style={{ color: c.color }} />}
             </DropdownMenuItem>
           );
@@ -226,10 +331,17 @@ function StageStatusControl({
 /** Build the checkpoint audit line (Phase 1): "Created by X · DATE · Collected by Y".
  *  Returns null when no audit info is available (e.g. legacy/seed rows). */
 function checkpointAuditLine({
-  createdBy, createdAt, actorBy, actorVerb, staffById,
+  createdBy,
+  createdAt,
+  actorBy,
+  actorVerb,
+  staffById,
 }: {
-  createdBy?: string; createdAt?: string; actorBy?: string;
-  actorVerb: string; staffById?: Record<string, string>;
+  createdBy?: string;
+  createdAt?: string;
+  actorBy?: string;
+  actorVerb: string;
+  staffById?: Record<string, string>;
 }): string | null {
   const name = (id?: string) => (id ? (staffById?.[id] ?? id) : undefined);
   const fmtTs = (iso?: string) => {
@@ -237,23 +349,44 @@ function checkpointAuditLine({
     const d = new Date(iso);
     return Number.isNaN(d.getTime())
       ? undefined
-      : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+      : d.toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
   };
   const parts: string[] = [];
   const creator = name(createdBy);
   const createdLabel = fmtTs(createdAt);
   if (creator || createdLabel) {
-    parts.push(`Created${creator ? ` by ${creator}` : ""}${createdLabel ? ` · ${createdLabel}` : ""}`);
+    parts.push(
+      `Created${creator ? ` by ${creator}` : ""}${createdLabel ? ` · ${createdLabel}` : ""}`
+    );
   }
   const actor = name(actorBy);
   if (actor) parts.push(`${actorVerb} by ${actor}`);
   return parts.length ? parts.join(" · ") : null;
 }
 
-const taskStatusConfig: Record<string, { label: string; bg: string; color: string }> = {
-  "completed":   { label: "Done",        bg: "oklch(0.55 0.09 145 / 12%)", color: "oklch(0.38 0.09 145)" },
-  "in-progress": { label: "In Progress", bg: "oklch(0.55 0.09 240 / 12%)", color: "oklch(0.38 0.09 240)" },
-  "pending":     { label: "Pending",     bg: "oklch(0.62 0.09 68 / 12%)",  color: "var(--acc-ink)" },
+const taskStatusConfig: Record<
+  string,
+  { label: string; bg: string; color: string }
+> = {
+  completed: {
+    label: "Done",
+    bg: "oklch(0.55 0.09 145 / 12%)",
+    color: "oklch(0.38 0.09 145)",
+  },
+  "in-progress": {
+    label: "In Progress",
+    bg: "oklch(0.55 0.09 240 / 12%)",
+    color: "oklch(0.38 0.09 240)",
+  },
+  pending: {
+    label: "Pending",
+    bg: "oklch(0.62 0.09 68 / 12%)",
+    color: "var(--acc-ink)",
+  },
 };
 
 /** Read `?tab=` from the URL once on mount so deep-links from Checkpoints land on the right tab. */
@@ -264,7 +397,7 @@ function getInitialTab(): string {
   if (!t) return "Overview";
   // Normalise — accept any casing
   const lower = t.toLowerCase();
-  return tabs.find((x) => x.toLowerCase() === lower) || "Overview";
+  return tabs.find(x => x.toLowerCase() === lower) || "Overview";
 }
 
 export default function ProjectDetail() {
@@ -293,7 +426,10 @@ export default function ProjectDetail() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverMenuOpen, setCoverMenuOpen] = useState(false);
-  const [lightbox, setLightbox] = useState<{ url: string; label: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{
+    url: string;
+    label: string;
+  } | null>(null);
   const [photoCaption, setPhotoCaption] = useState("");
   const updateCover = useUpdateProject();
 
@@ -308,15 +444,25 @@ export default function ProjectDetail() {
   if (isError) {
     return (
       <div className="mobile-container" style={{ background: "var(--s-page)" }}>
-        <AppHeader title="Couldn't load project" subtitle="—" showBack compact />
+        <AppHeader
+          title="Couldn't load project"
+          subtitle="—"
+          showBack
+          compact
+        />
         <div className="px-4 py-8 text-center space-y-3">
           <p className="text-sm" style={{ color: "var(--t-5)" }}>
-            Something went wrong loading this project. Check your connection and try again.
+            Something went wrong loading this project. Check your connection and
+            try again.
           </p>
           <button
             onClick={() => refetch()}
             className="px-4 py-2 rounded-xl text-sm font-label"
-            style={{ background: "var(--acc-bright)", color: "oklch(1 0 0)", letterSpacing: "0.04em" }}
+            style={{
+              background: "var(--acc-bright)",
+              color: "oklch(1 0 0)",
+              letterSpacing: "0.04em",
+            }}
           >
             Retry
           </button>
@@ -339,13 +485,17 @@ export default function ProjectDetail() {
 
   // Fall back to a neutral chip if a status/priority value isn't in the maps
   // (DB enums can drift from these hardcoded configs) — never crash on sc.bg.
-  const sc = statusConfig[project.status as keyof typeof statusConfig] ?? DEFAULT_STATUS_CONFIG;
-  const pc = priorityConfig[project.priority as keyof typeof priorityConfig] ?? DEFAULT_PRIORITY_CONFIG;
+  const sc =
+    statusConfig[project.status as keyof typeof statusConfig] ??
+    DEFAULT_STATUS_CONFIG;
+  const pc =
+    priorityConfig[project.priority as keyof typeof priorityConfig] ??
+    DEFAULT_PRIORITY_CONFIG;
   // Full project roster (Lead Designer + PM + team) — single source of truth so
   // cards, the Team tab, the side rail, and the task-assignee pool never disagree.
   const rosterMembers = resolveProjectRoster(project, allStaff);
-  const rosterStaff = rosterMembers.map((r) => r.staff);
-  const roster = rosterMembers.map((r) => ({
+  const rosterStaff = rosterMembers.map(r => r.staff);
+  const roster = rosterMembers.map(r => ({
     id: r.staff.id,
     name: r.staff.name,
     avatar_code: r.staff.avatar_code,
@@ -360,12 +510,17 @@ export default function ProjectDetail() {
     e.target.value = "";
     setCoverMenuOpen(false);
     if (!file || !project) return;
-    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file");
+      return;
+    }
     try {
       await updateCover.mutateAsync({ id: project.id, imageFile: file });
       toast.success("Cover updated");
     } catch (err) {
-      toast.error(`Cover update failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(
+        `Cover update failed: ${err instanceof Error ? err.message : "unknown error"}`
+      );
     }
   }
   async function handleRemoveCover() {
@@ -375,26 +530,43 @@ export default function ProjectDetail() {
       await updateCover.mutateAsync({ id: project.id, removeImage: true });
       toast.success("Cover removed — default shown");
     } catch (err) {
-      toast.error(`Remove failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(
+        `Remove failed: ${err instanceof Error ? err.message : "unknown error"}`
+      );
     }
   }
 
   // Task helpers (real DB tasks replace the old sampleTasks mock).
-  const staffById = new Map(allStaff.map((s) => [s.id, s]));
-  const doneTasks = tasks.filter((t) => t.status === "completed").length;
+  const staffById = new Map(allStaff.map(s => [s.id, s]));
+  const doneTasks = tasks.filter(t => t.status === "completed").length;
   const totalTasks = tasks.length;
-  const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
+  const avgRating = reviews.length
+    ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
+    : 0;
 
-  const openAddTask = () => { setEditingTask(null); setTaskDialogOpen(true); };
-  const openEditTask = (t: ProjectTaskRow) => { setEditingTask(t); setTaskDialogOpen(true); };
+  const openAddTask = () => {
+    setEditingTask(null);
+    setTaskDialogOpen(true);
+  };
+  const openEditTask = (t: ProjectTaskRow) => {
+    setEditingTask(t);
+    setTaskDialogOpen(true);
+  };
 
   const cycleTaskStatus = async (t: ProjectTaskRow) => {
     const order: ProjectTaskStatus[] = ["pending", "in-progress", "completed"];
-    const next = order[(order.indexOf(t.status as ProjectTaskStatus) + 1) % order.length];
+    const next =
+      order[(order.indexOf(t.status as ProjectTaskStatus) + 1) % order.length];
     try {
-      await updateTask.mutateAsync({ id: t.id, projectId: project.id, status: next });
+      await updateTask.mutateAsync({
+        id: t.id,
+        projectId: project.id,
+        status: next,
+      });
     } catch (err) {
-      toast.error(`Couldn't update task: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(
+        `Couldn't update task: ${err instanceof Error ? err.message : "unknown error"}`
+      );
     }
   };
 
@@ -404,7 +576,9 @@ export default function ProjectDetail() {
       await deleteTask.mutateAsync({ id: t.id, projectId: project.id });
       toast.success("Task deleted");
     } catch (err) {
-      toast.error(`Couldn't delete task: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(
+        `Couldn't delete task: ${err instanceof Error ? err.message : "unknown error"}`
+      );
     }
   };
 
@@ -414,23 +588,36 @@ export default function ProjectDetail() {
       await deleteReview.mutateAsync({ id: r.id, projectId: project.id });
       toast.success("Review deleted");
     } catch (err) {
-      toast.error(`Couldn't delete review: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(
+        `Couldn't delete review: ${err instanceof Error ? err.message : "unknown error"}`
+      );
     }
   };
 
   const handleDeletePhoto = async (p: SitePhotoRow) => {
     if (!window.confirm("Delete this photo?")) return;
     try {
-      await deletePhoto.mutateAsync({ id: p.id, projectId: project.id, storagePath: p.storage_path });
+      await deletePhoto.mutateAsync({
+        id: p.id,
+        projectId: project.id,
+        storagePath: p.storage_path,
+      });
       toast.success("Photo deleted");
     } catch (err) {
-      toast.error(`Couldn't delete photo: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(
+        `Couldn't delete photo: ${err instanceof Error ? err.message : "unknown error"}`
+      );
     }
   };
 
   const handlePhotosPicked = async (fileList: FileList | null) => {
-    const files = Array.from(fileList ?? []).filter((f) => f.type.startsWith("image/"));
-    if (files.length === 0) { toast.error("Please choose one or more image files"); return; }
+    const files = Array.from(fileList ?? []).filter(f =>
+      f.type.startsWith("image/")
+    );
+    if (files.length === 0) {
+      toast.error("Please choose one or more image files");
+      return;
+    }
     const t = new Date();
     const ddmmyyyy = `${String(t.getDate()).padStart(2, "0")}/${String(t.getMonth() + 1).padStart(2, "0")}/${t.getFullYear()}`;
     // The caption applies to every photo in this batch; clear it once consumed.
@@ -438,10 +625,18 @@ export default function ProjectDetail() {
     let ok = 0;
     for (const file of files) {
       try {
-        await uploadPhoto.mutateAsync({ projectId: project.id, file, photoDate: ddmmyyyy, uploadedById: me?.id, notes: caption });
+        await uploadPhoto.mutateAsync({
+          projectId: project.id,
+          file,
+          photoDate: ddmmyyyy,
+          uploadedById: me?.id,
+          notes: caption,
+        });
         ok += 1;
       } catch (err) {
-        toast.error(`${file.name}: ${err instanceof Error ? err.message : "upload failed"}`);
+        toast.error(
+          `${file.name}: ${err instanceof Error ? err.message : "upload failed"}`
+        );
       }
     }
     if (ok > 0) {
@@ -454,7 +649,11 @@ export default function ProjectDetail() {
     <div className="mobile-container" style={{ background: "var(--s-page)" }}>
       <AppHeader
         title={project.name}
-        subtitle={project.projectCode ? `${project.projectCode} · ${project.type.toUpperCase()}` : project.type.toUpperCase()}
+        subtitle={
+          project.projectCode
+            ? `${project.projectCode} · ${project.type.toUpperCase()}`
+            : project.type.toUpperCase()
+        }
         showBack
         compact
         rightAction={
@@ -464,7 +663,12 @@ export default function ProjectDetail() {
               onClick={() => setEditOpen(true)}
               data-testid="project-edit"
               className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-xs font-label"
-              style={{ background: "var(--s-2)", border: "1px solid var(--b-1)", color: "var(--acc-ink)", letterSpacing: "0.04em" }}
+              style={{
+                background: "var(--s-2)",
+                border: "1px solid var(--b-1)",
+                color: "var(--acc-ink)",
+                letterSpacing: "0.04em",
+              }}
             >
               <PenSquare size={13} />
               Edit
@@ -486,71 +690,176 @@ export default function ProjectDetail() {
               <button
                 type="button"
                 data-testid="hero-cover-btn"
-                onClick={() => setCoverMenuOpen((v) => !v)}
+                onClick={() => setCoverMenuOpen(v => !v)}
                 disabled={updateCover.isPending}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-label"
-                style={{ background: "oklch(0.11 0.004 285 / 0.55)", color: "white", border: "1px solid oklch(1 0 0 / 0.25)", backdropFilter: "blur(4px)", opacity: updateCover.isPending ? 0.6 : 1 }}
+                style={{
+                  background: "oklch(0.11 0.004 285 / 0.55)",
+                  color: "white",
+                  border: "1px solid oklch(1 0 0 / 0.25)",
+                  backdropFilter: "blur(4px)",
+                  opacity: updateCover.isPending ? 0.6 : 1,
+                }}
               >
-                <ImagePlus size={13} />{updateCover.isPending ? "Saving…" : "Cover"}
+                <ImagePlus size={13} />
+                {updateCover.isPending ? "Saving…" : "Cover"}
               </button>
               {coverMenuOpen && !updateCover.isPending && (
-                <div className="absolute right-0 mt-1.5 rounded-xl overflow-hidden min-w-[150px]" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 8px 28px oklch(0 0 0 / 0.22)" }}>
-                  <button type="button" onClick={() => coverInputRef.current?.click()} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs" style={{ color: "var(--t-2)" }}>
-                    <ImagePlus size={13} style={{ color: "var(--acc-ink)" }} />{project.heroImage ? "Replace cover" : "Add cover"}
+                <div
+                  className="absolute right-0 mt-1.5 rounded-xl overflow-hidden min-w-[150px]"
+                  style={{
+                    background: "var(--s-card)",
+                    border: "1px solid var(--b-1)",
+                    boxShadow: "0 8px 28px oklch(0 0 0 / 0.22)",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs"
+                    style={{ color: "var(--t-2)" }}
+                  >
+                    <ImagePlus size={13} style={{ color: "var(--acc-ink)" }} />
+                    {project.heroImage ? "Replace cover" : "Add cover"}
                   </button>
                   {project.heroImage && (
-                    <button type="button" onClick={handleRemoveCover} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs" style={{ color: "oklch(0.55 0.16 25)", borderTop: "1px solid var(--b-2)" }}>
-                      <Trash2 size={13} />Remove cover
+                    <button
+                      type="button"
+                      onClick={handleRemoveCover}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs"
+                      style={{
+                        color: "oklch(0.55 0.16 25)",
+                        borderTop: "1px solid var(--b-2)",
+                      }}
+                    >
+                      <Trash2 size={13} />
+                      Remove cover
                     </button>
                   )}
                 </div>
               )}
-              <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={onCoverPicked} />
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={onCoverPicked}
+              />
             </div>
           )}
           <div className="absolute bottom-4 left-4 right-4 lg:bottom-6 lg:left-8 lg:right-8">
             <div className="flex items-end justify-between">
               <div>
-                <span className="status-pill" style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>{sc.label}</span>
-                <p className="text-white font-display text-lg lg:text-3xl font-semibold mt-1">{project.name}</p>
+                <span
+                  className="status-pill"
+                  style={{
+                    background: sc.bg,
+                    color: sc.color,
+                    border: `1px solid ${sc.border}`,
+                  }}
+                >
+                  {sc.label}
+                </span>
+                <p className="text-white font-display text-lg lg:text-3xl font-semibold mt-1">
+                  {project.name}
+                </p>
                 <div className="flex items-center gap-1 mt-0.5 lg:mt-1.5">
-                  <MapPin size={10} className="lg:hidden" style={{ color: "var(--acc-bright)" }} />
-                  <MapPin size={14} className="hidden lg:block" style={{ color: "var(--acc-bright)" }} />
-                  <span className="text-xs lg:text-sm" style={{ color: "var(--acc-bright)" }}>{project.location}</span>
+                  <MapPin
+                    size={10}
+                    className="lg:hidden"
+                    style={{ color: "var(--acc-bright)" }}
+                  />
+                  <MapPin
+                    size={14}
+                    className="hidden lg:block"
+                    style={{ color: "var(--acc-bright)" }}
+                  />
+                  <span
+                    className="text-xs lg:text-sm"
+                    style={{ color: "var(--acc-bright)" }}
+                  >
+                    {project.location}
+                  </span>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-xs text-white/60">Budget</p>
-                <p className="text-white font-semibold text-sm lg:text-xl">RM {project.budget.toLocaleString()}</p>
+                <p className="text-white font-semibold text-sm lg:text-xl">
+                  RM {project.budget.toLocaleString()}
+                </p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Progress bar */}
-        <div className="px-4 py-3" style={{ background: "var(--s-card)", borderBottom: "1px solid var(--b-1)" }}>
+        <div
+          className="px-4 py-3"
+          style={{
+            background: "var(--s-card)",
+            borderBottom: "1px solid var(--b-1)",
+          }}
+        >
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs" style={{ color: "var(--t-5)" }}>Overall Progress — {project.tasksCompleted}/{project.taskCount} tasks</span>
-            <span className="text-sm font-semibold" style={{ color: "var(--acc)" }}>{project.progress}%</span>
+            <span className="text-xs" style={{ color: "var(--t-5)" }}>
+              Overall Progress — {project.tasksCompleted}/{project.taskCount}{" "}
+              tasks
+            </span>
+            <span
+              className="text-sm font-semibold"
+              style={{ color: "var(--acc)" }}
+            >
+              {project.progress}%
+            </span>
           </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--b-2)" }}>
+          <div
+            className="h-2 rounded-full overflow-hidden"
+            style={{ background: "var(--b-2)" }}
+          >
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${project.progress}%` }}
               transition={{ duration: 1 }}
               className="h-full rounded-full"
-              style={{ background: "linear-gradient(90deg, var(--acc-strong), var(--acc-bright))" }}
+              style={{
+                background:
+                  "linear-gradient(90deg, var(--acc-strong), var(--acc-bright))",
+              }}
             />
           </div>
         </div>
 
         {/* Action buttons */}
-        <div className="px-4 py-3 flex gap-2" style={{ background: "var(--s-card)", borderBottom: "1px solid var(--b-1)" }}>
+        <div
+          className="px-4 py-3 flex gap-2"
+          style={{
+            background: "var(--s-card)",
+            borderBottom: "1px solid var(--b-1)",
+          }}
+        >
           {[
-            { label: "Upload Photos", icon: Upload, action: () => { setActiveTab("Photos"); photoInputRef.current?.click(); } },
-            { label: "Assign Tasks", icon: UserPlus, action: () => { setActiveTab("Tasks"); openAddTask(); } },
-            { label: "Reviews", icon: CheckSquare, action: () => setActiveTab("Overview") },
-          ].map((btn) => {
+            {
+              label: "Upload Photos",
+              icon: Upload,
+              action: () => {
+                setActiveTab("Photos");
+                photoInputRef.current?.click();
+              },
+            },
+            {
+              label: "Assign Tasks",
+              icon: UserPlus,
+              action: () => {
+                setActiveTab("Tasks");
+                openAddTask();
+              },
+            },
+            {
+              label: "Reviews",
+              icon: CheckSquare,
+              action: () => setActiveTab("Overview"),
+            },
+          ].map(btn => {
             const Icon = btn.icon;
             return (
               <motion.button
@@ -558,10 +867,18 @@ export default function ProjectDetail() {
                 whileTap={{ scale: 0.95 }}
                 onClick={btn.action}
                 className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl"
-                style={{ background: "var(--s-page)", border: "1px solid var(--b-1)" }}
+                style={{
+                  background: "var(--s-page)",
+                  border: "1px solid var(--b-1)",
+                }}
               >
                 <Icon size={16} style={{ color: "var(--acc)" }} />
-                <span className="text-[10px] font-label" style={{ color: "var(--t-5)", letterSpacing: "0.04em" }}>{btn.label}</span>
+                <span
+                  className="text-[10px] font-label"
+                  style={{ color: "var(--t-5)", letterSpacing: "0.04em" }}
+                >
+                  {btn.label}
+                </span>
               </motion.button>
             );
           })}
@@ -570,9 +887,12 @@ export default function ProjectDetail() {
         {/* Tabs */}
         <div
           className="flex overflow-x-auto scrollbar-hide"
-          style={{ background: "var(--s-card)", borderBottom: "1px solid var(--b-1)" }}
+          style={{
+            background: "var(--s-card)",
+            borderBottom: "1px solid var(--b-1)",
+          }}
         >
-          {tabs.map((tab) => (
+          {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -599,24 +919,57 @@ export default function ProjectDetail() {
             already eats ~200px, so a 360px rail only fits at ≥1280. Tablet
             (768–1279) stays single-column full-width. ── */}
         <div className="px-4 py-4 lg:px-8 lg:py-7 xl:grid xl:grid-cols-[1fr_360px] xl:gap-6 xl:items-start">
-
           {/* ── PRIMARY COLUMN (left) ── */}
           <div className="min-w-0">
             {activeTab === "Overview" && (
               <div className="space-y-4">
-                <div className="rounded-2xl p-4" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
-                  <h4 className="font-display text-base font-semibold mb-2" style={{ color: "var(--t-1)" }}>Description</h4>
-                  <p className="text-sm leading-relaxed" style={{ color: "var(--t-4)" }}>{project.description}</p>
+                <div
+                  className="rounded-2xl p-4"
+                  style={{
+                    background: "var(--s-card)",
+                    border: "1px solid var(--b-1)",
+                    boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+                  }}
+                >
+                  <h4
+                    className="font-display text-base font-semibold mb-2"
+                    style={{ color: "var(--t-1)" }}
+                  >
+                    Description
+                  </h4>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: "var(--t-4)" }}
+                  >
+                    {project.description}
+                  </p>
                 </div>
 
-                <div className="rounded-2xl p-4" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
-                  <h4 className="font-display text-base font-semibold mb-3" style={{ color: "var(--t-1)" }}>Project Areas</h4>
+                <div
+                  className="rounded-2xl p-4"
+                  style={{
+                    background: "var(--s-card)",
+                    border: "1px solid var(--b-1)",
+                    boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+                  }}
+                >
+                  <h4
+                    className="font-display text-base font-semibold mb-3"
+                    style={{ color: "var(--t-1)" }}
+                  >
+                    Project Areas
+                  </h4>
                   <div className="flex flex-wrap gap-2">
-                    {project.areas.map((area) => (
+                    {project.areas.map(area => (
                       <span
                         key={area}
                         className="px-3 py-1 rounded-full text-xs font-label"
-                        style={{ background: "oklch(0.62 0.09 68 / 10%)", color: "var(--acc-ink)", border: "1px solid oklch(0.62 0.09 68 / 20%)", letterSpacing: "0.03em" }}
+                        style={{
+                          background: "oklch(0.62 0.09 68 / 10%)",
+                          color: "var(--acc-ink)",
+                          border: "1px solid oklch(0.62 0.09 68 / 20%)",
+                          letterSpacing: "0.03em",
+                        }}
                       >
                         {area}
                       </span>
@@ -627,7 +980,11 @@ export default function ProjectDetail() {
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   className="w-full rounded-2xl p-4 flex items-center justify-between"
-                  style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
+                  style={{
+                    background: "var(--s-card)",
+                    border: "1px solid var(--b-1)",
+                    boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+                  }}
                   onClick={() => {
                     const num = project.clientContact?.replace(/[^\d+]/g, "");
                     if (num) window.location.href = `tel:${num}`;
@@ -635,41 +992,100 @@ export default function ProjectDetail() {
                   }}
                 >
                   <div>
-                    <p className="text-sm font-semibold text-left" style={{ color: "var(--t-1)" }}>{project.client}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "var(--t-5)" }}>{project.clientContact}</p>
+                    <p
+                      className="text-sm font-semibold text-left"
+                      style={{ color: "var(--t-1)" }}
+                    >
+                      {project.client}
+                    </p>
+                    <p
+                      className="text-xs mt-0.5"
+                      style={{ color: "var(--t-5)" }}
+                    >
+                      {project.clientContact}
+                    </p>
                   </div>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "oklch(0.62 0.09 68 / 12%)" }}>
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center"
+                    style={{ background: "oklch(0.62 0.09 68 / 12%)" }}
+                  >
                     <Phone size={15} style={{ color: "var(--acc)" }} />
                   </div>
                 </motion.button>
 
                 {/* Client Reviews — submitted from the client portal, shown/managed here. */}
-                <div className="rounded-2xl p-4" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
+                <div
+                  className="rounded-2xl p-4"
+                  style={{
+                    background: "var(--s-card)",
+                    border: "1px solid var(--b-1)",
+                    boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+                  }}
+                >
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-display text-base font-semibold" style={{ color: "var(--t-1)" }}>Client Reviews</h4>
+                    <h4
+                      className="font-display text-base font-semibold"
+                      style={{ color: "var(--t-1)" }}
+                    >
+                      Client Reviews
+                    </h4>
                     {reviews.length > 0 && (
                       <div className="flex items-center gap-1.5">
                         <StarRow value={avgRating} size={13} />
-                        <span className="text-xs font-semibold" style={{ color: "var(--acc-ink)" }}>{avgRating.toFixed(1)}</span>
+                        <span
+                          className="text-xs font-semibold"
+                          style={{ color: "var(--acc-ink)" }}
+                        >
+                          {avgRating.toFixed(1)}
+                        </span>
                       </div>
                     )}
                   </div>
                   {reviews.length === 0 ? (
-                    <p className="text-xs" style={{ color: "var(--t-5)" }}>No reviews yet. Clients can leave a review from their portal link.</p>
+                    <p className="text-xs" style={{ color: "var(--t-5)" }}>
+                      No reviews yet. Clients can leave a review from their
+                      portal link.
+                    </p>
                   ) : (
                     <div className="space-y-3">
-                      {reviews.map((r) => (
-                        <div key={r.id} className="flex items-start gap-3 pb-3" style={{ borderBottom: "1px solid var(--b-2)" }}>
+                      {reviews.map(r => (
+                        <div
+                          key={r.id}
+                          className="flex items-start gap-3 pb-3"
+                          style={{ borderBottom: "1px solid var(--b-2)" }}
+                        >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <StarRow value={r.rating} size={12} />
-                              <span className="text-xs font-semibold" style={{ color: "var(--t-2)" }}>{r.reviewer_name || "Client"}</span>
+                              <span
+                                className="text-xs font-semibold"
+                                style={{ color: "var(--t-2)" }}
+                              >
+                                {r.reviewer_name || "Client"}
+                              </span>
                             </div>
-                            {r.comment && <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--t-4)" }}>{r.comment}</p>}
-                            <p className="text-[10px] mt-1" style={{ color: "var(--t-6)" }}>{fmtDueDate(r.created_at)}</p>
+                            {r.comment && (
+                              <p
+                                className="text-xs mt-1 leading-relaxed"
+                                style={{ color: "var(--t-4)" }}
+                              >
+                                {r.comment}
+                              </p>
+                            )}
+                            <p
+                              className="text-[10px] mt-1"
+                              style={{ color: "var(--t-6)" }}
+                            >
+                              {fmtDueDate(r.created_at)}
+                            </p>
                           </div>
                           {canEdit && (
-                            <button onClick={() => handleDeleteReview(r)} title="Delete review" className="shrink-0 w-6 h-6 flex items-center justify-center" style={{ color: "oklch(0.58 0.12 25)" }}>
+                            <button
+                              onClick={() => handleDeleteReview(r)}
+                              title="Delete review"
+                              className="shrink-0 w-6 h-6 flex items-center justify-center"
+                              style={{ color: "oklch(0.58 0.12 25)" }}
+                            >
                               <Trash2 size={12} />
                             </button>
                           )}
@@ -681,22 +1097,55 @@ export default function ProjectDetail() {
 
                 {/* Share client portal — copies the unauthenticated /portal/:token
                     link so staff can WhatsApp / email it to the client. */}
-                <SharePortalButton token={project.clientAccessToken} clientName={project.client} projectId={project.id} canManage={canEdit} />
+                <SharePortalButton
+                  token={project.clientAccessToken}
+                  clientName={project.client}
+                  projectId={project.id}
+                  canManage={canEdit}
+                />
 
                 {/* Project Details card — shown inline up to xl, moves to side rail at xl */}
-                <div className="rounded-2xl p-4 space-y-3 xl:hidden" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
-                  <h4 className="font-display text-base font-semibold" style={{ color: "var(--t-1)" }}>Project Details</h4>
+                <div
+                  className="rounded-2xl p-4 space-y-3 xl:hidden"
+                  style={{
+                    background: "var(--s-card)",
+                    border: "1px solid var(--b-1)",
+                    boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+                  }}
+                >
+                  <h4
+                    className="font-display text-base font-semibold"
+                    style={{ color: "var(--t-1)" }}
+                  >
+                    Project Details
+                  </h4>
                   {[
                     { label: "Client", value: project.client },
-                    { label: "Type", value: `${project.type} · ${project.propertyType}` },
-                    { label: "Size", value: `${project.size.toLocaleString()} sqft` },
+                    {
+                      label: "Type",
+                      value: `${project.type} · ${project.propertyType}`,
+                    },
+                    {
+                      label: "Size",
+                      value: `${project.size.toLocaleString()} sqft`,
+                    },
                     { label: "Start Date", value: project.startDate },
                     { label: "Target Completion", value: project.targetDate },
                     { label: "Priority", value: pc.label, color: pc.color },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center justify-between">
-                      <span className="text-xs" style={{ color: "var(--t-5)" }}>{item.label}</span>
-                      <span className="text-xs font-medium" style={{ color: item.color || "var(--t-2)" }}>{item.value}</span>
+                  ].map(item => (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between"
+                    >
+                      <span className="text-xs" style={{ color: "var(--t-5)" }}>
+                        {item.label}
+                      </span>
+                      <span
+                        className="text-xs font-medium"
+                        style={{ color: item.color || "var(--t-2)" }}
+                      >
+                        {item.value}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -704,15 +1153,27 @@ export default function ProjectDetail() {
             )}
 
             {activeTab === "Lifecycle" && (
-              <LifecycleTab projectId={project.id} clientName={project.client} clientContact={project.clientContact} projectName={project.name} budget={project.budget} canManage={canEdit} />
+              <LifecycleTab
+                projectId={project.id}
+                clientName={project.client}
+                clientContact={project.clientContact}
+                projectName={project.name}
+                budget={project.budget}
+                canManage={canEdit}
+              />
             )}
 
             {activeTab === "Tasks" && (
               <div className="space-y-3">
                 {/* Header: count + Add */}
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-label" style={{ color: "var(--t-5)", letterSpacing: "0.06em" }}>
-                    {totalTasks === 0 ? "NO TASKS YET" : `${doneTasks} of ${totalTasks} DONE`}
+                  <p
+                    className="text-xs font-label"
+                    style={{ color: "var(--t-5)", letterSpacing: "0.06em" }}
+                  >
+                    {totalTasks === 0
+                      ? "NO TASKS YET"
+                      : `${doneTasks} of ${totalTasks} DONE`}
                   </p>
                   {canEdit && (
                     <motion.button
@@ -720,7 +1181,12 @@ export default function ProjectDetail() {
                       onClick={openAddTask}
                       data-testid="add-task"
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-label"
-                      style={{ background: "oklch(0.62 0.09 68 / 12%)", color: "var(--acc-ink)", border: "1px solid oklch(0.62 0.09 68 / 25%)", letterSpacing: "0.04em" }}
+                      style={{
+                        background: "oklch(0.62 0.09 68 / 12%)",
+                        color: "var(--acc-ink)",
+                        border: "1px solid oklch(0.62 0.09 68 / 25%)",
+                        letterSpacing: "0.04em",
+                      }}
                     >
                       <Plus size={13} /> Add Task
                     </motion.button>
@@ -728,16 +1194,39 @@ export default function ProjectDetail() {
                 </div>
 
                 {totalTasks === 0 ? (
-                  <div className="rounded-2xl p-8 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
-                    <CheckSquare size={28} className="mx-auto mb-3" style={{ color: "var(--t-7)" }} />
-                    <p className="text-sm font-semibold mb-1" style={{ color: "var(--t-1)" }}>No tasks yet</p>
-                    <p className="text-xs" style={{ color: "var(--t-5)" }}>{canEdit ? "Add the first task to start tracking work." : "Tasks will appear here once added."}</p>
+                  <div
+                    className="rounded-2xl p-8 text-center"
+                    style={{
+                      background: "var(--s-card)",
+                      border: "1px solid var(--b-1)",
+                    }}
+                  >
+                    <CheckSquare
+                      size={28}
+                      className="mx-auto mb-3"
+                      style={{ color: "var(--t-7)" }}
+                    />
+                    <p
+                      className="text-sm font-semibold mb-1"
+                      style={{ color: "var(--t-1)" }}
+                    >
+                      No tasks yet
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--t-5)" }}>
+                      {canEdit
+                        ? "Add the first task to start tracking work."
+                        : "Tasks will appear here once added."}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-2 xl:space-y-0 xl:grid xl:grid-cols-2 xl:gap-2 xl:items-start">
                     {tasks.map((task, i) => {
-                      const ts = taskStatusConfig[task.status] ?? taskStatusConfig.pending;
-                      const assignee = task.assignee_id ? staffById.get(task.assignee_id) : undefined;
+                      const ts =
+                        taskStatusConfig[task.status] ??
+                        taskStatusConfig.pending;
+                      const assignee = task.assignee_id
+                        ? staffById.get(task.assignee_id)
+                        : undefined;
                       return (
                         <motion.div
                           key={task.id}
@@ -745,43 +1234,107 @@ export default function ProjectDetail() {
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: i * 0.04 }}
                           className="rounded-xl p-3 flex items-start gap-3"
-                          style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}
+                          style={{
+                            background: "var(--s-card)",
+                            border: "1px solid var(--b-1)",
+                          }}
                         >
                           <button
                             onClick={() => canEdit && cycleTaskStatus(task)}
                             disabled={!canEdit}
-                            title={canEdit ? "Click to change status" : undefined}
+                            title={
+                              canEdit ? "Click to change status" : undefined
+                            }
                             className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                            style={{ background: ts.bg, border: `1.5px solid ${ts.color}`, cursor: canEdit ? "pointer" : "default" }}
+                            style={{
+                              background: ts.bg,
+                              border: `1.5px solid ${ts.color}`,
+                              cursor: canEdit ? "pointer" : "default",
+                            }}
                           >
-                            {task.status === "completed" && <span className="text-[8px]" style={{ color: ts.color }}>✓</span>}
-                            {task.status === "in-progress" && <span className="w-1.5 h-1.5 rounded-full" style={{ background: ts.color }} />}
+                            {task.status === "completed" && (
+                              <span
+                                className="text-[8px]"
+                                style={{ color: ts.color }}
+                              >
+                                ✓
+                              </span>
+                            )}
+                            {task.status === "in-progress" && (
+                              <span
+                                className="w-1.5 h-1.5 rounded-full"
+                                style={{ background: ts.color }}
+                              />
+                            )}
                           </button>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm leading-snug" style={{ color: "var(--t-2)", textDecoration: task.status === "completed" ? "line-through" : "none" }}>{task.title}</p>
+                            <p
+                              className="text-sm leading-snug"
+                              style={{
+                                color: "var(--t-2)",
+                                textDecoration:
+                                  task.status === "completed"
+                                    ? "line-through"
+                                    : "none",
+                              }}
+                            >
+                              {task.title}
+                            </p>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              {task.area && <span className="text-[10px]" style={{ color: "var(--t-5)" }}>{task.area}</span>}
-                              {task.due_date && <span className="text-[10px]" style={{ color: "var(--t-6)" }}>· Due {fmtDueDate(task.due_date)}</span>}
+                              {task.area && (
+                                <span
+                                  className="text-[10px]"
+                                  style={{ color: "var(--t-5)" }}
+                                >
+                                  {task.area}
+                                </span>
+                              )}
+                              {task.due_date && (
+                                <span
+                                  className="text-[10px]"
+                                  style={{ color: "var(--t-6)" }}
+                                >
+                                  · Due {fmtDueDate(task.due_date)}
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1.5 shrink-0">
-                            <span className="status-pill" style={{ background: ts.bg, color: ts.color }}>{ts.label}</span>
+                            <span
+                              className="status-pill"
+                              style={{ background: ts.bg, color: ts.color }}
+                            >
+                              {ts.label}
+                            </span>
                             <div className="flex items-center gap-1">
                               {assignee && (
                                 <div
                                   className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold"
                                   title={assignee.name}
-                                  style={{ background: "oklch(0.62 0.09 68 / 12%)", color: "var(--acc-ink)" }}
+                                  style={{
+                                    background: "oklch(0.62 0.09 68 / 12%)",
+                                    color: "var(--acc-ink)",
+                                  }}
                                 >
                                   {assignee.avatar_code}
                                 </div>
                               )}
                               {canEdit && (
                                 <>
-                                  <button onClick={() => openEditTask(task)} title="Edit task" className="w-6 h-6 flex items-center justify-center" style={{ color: "var(--t-5)" }}>
+                                  <button
+                                    onClick={() => openEditTask(task)}
+                                    title="Edit task"
+                                    className="w-6 h-6 flex items-center justify-center"
+                                    style={{ color: "var(--t-5)" }}
+                                  >
                                     <Pencil size={12} />
                                   </button>
-                                  <button onClick={() => handleDeleteTask(task)} title="Delete task" className="w-6 h-6 flex items-center justify-center" style={{ color: "oklch(0.58 0.12 25)" }}>
+                                  <button
+                                    onClick={() => handleDeleteTask(task)}
+                                    title="Delete task"
+                                    className="w-6 h-6 flex items-center justify-center"
+                                    style={{ color: "oklch(0.58 0.12 25)" }}
+                                  >
                                     <Trash2 size={12} />
                                   </button>
                                 </>
@@ -799,20 +1352,45 @@ export default function ProjectDetail() {
             {activeTab === "Quotations" && (
               <div className="space-y-3">
                 {(() => {
-                  const projectQuotes = allQuotations.filter((q) => q.project_id === project.id);
+                  const projectQuotes = allQuotations.filter(
+                    q => q.project_id === project.id
+                  );
                   return (
                     <>
                       {projectQuotes.length === 0 ? (
-                        <div className="rounded-2xl p-8 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
-                          <FileText size={28} className="mx-auto mb-3" style={{ color: "var(--t-7)" }} />
-                          <p className="text-sm font-semibold mb-1" style={{ color: "var(--t-1)" }}>No documents yet</p>
-                          <p className="text-xs" style={{ color: "var(--t-5)" }}>Create a quotation for this project</p>
+                        <div
+                          className="rounded-2xl p-8 text-center"
+                          style={{
+                            background: "var(--s-card)",
+                            border: "1px solid var(--b-1)",
+                          }}
+                        >
+                          <FileText
+                            size={28}
+                            className="mx-auto mb-3"
+                            style={{ color: "var(--t-7)" }}
+                          />
+                          <p
+                            className="text-sm font-semibold mb-1"
+                            style={{ color: "var(--t-1)" }}
+                          >
+                            No documents yet
+                          </p>
+                          <p
+                            className="text-xs"
+                            style={{ color: "var(--t-5)" }}
+                          >
+                            Create a quotation for this project
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-3">
                           {projectQuotes.map((q, i) => {
                             const sc2 = qStatusConfig[q.status];
-                            const { total } = computeTotals(q.items, q.tax_rate);
+                            const { total } = computeTotals(
+                              q.items,
+                              q.tax_rate
+                            );
                             return (
                               <motion.div
                                 key={q.id}
@@ -822,18 +1400,53 @@ export default function ProjectDetail() {
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => navigate(`/quotations/${q.id}`)}
                                 className="rounded-2xl p-4 flex items-center gap-3"
-                                style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
+                                style={{
+                                  background: "var(--s-card)",
+                                  border: "1px solid var(--b-1)",
+                                  boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+                                }}
                               >
-                                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "oklch(0.62 0.09 68 / 12%)" }}>
-                                  <FileText size={17} style={{ color: "var(--acc)" }} />
+                                <div
+                                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                                  style={{
+                                    background: "oklch(0.62 0.09 68 / 12%)",
+                                  }}
+                                >
+                                  <FileText
+                                    size={17}
+                                    style={{ color: "var(--acc)" }}
+                                  />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold truncate" style={{ color: "var(--t-1)" }}>{q.id}</p>
-                                  <p className="text-xs mt-0.5 truncate" style={{ color: "var(--t-5)" }}>{q.doc_type} · {q.issue_date}</p>
+                                  <p
+                                    className="text-sm font-semibold truncate"
+                                    style={{ color: "var(--t-1)" }}
+                                  >
+                                    {q.id}
+                                  </p>
+                                  <p
+                                    className="text-xs mt-0.5 truncate"
+                                    style={{ color: "var(--t-5)" }}
+                                  >
+                                    {q.doc_type} · {q.issue_date}
+                                  </p>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <p className="text-sm font-display font-semibold" style={{ color: "var(--acc)" }}>{formatRM(total)}</p>
-                                  <span className="status-pill" style={{ background: sc2.bg, color: sc2.color }}>{sc2.label}</span>
+                                  <p
+                                    className="text-sm font-display font-semibold"
+                                    style={{ color: "var(--acc)" }}
+                                  >
+                                    {formatRM(total)}
+                                  </p>
+                                  <span
+                                    className="status-pill"
+                                    style={{
+                                      background: sc2.bg,
+                                      color: sc2.color,
+                                    }}
+                                  >
+                                    {sc2.label}
+                                  </span>
                                 </div>
                               </motion.div>
                             );
@@ -844,10 +1457,18 @@ export default function ProjectDetail() {
                         whileTap={{ scale: 0.95 }}
                         onClick={() => navigate("/quotations/new")}
                         className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed"
-                        style={{ borderColor: "oklch(0.62 0.09 68 / 35%)", color: "var(--acc)" }}
+                        style={{
+                          borderColor: "oklch(0.62 0.09 68 / 35%)",
+                          color: "var(--acc)",
+                        }}
                       >
                         <FileText size={14} />
-                        <span className="text-sm font-label" style={{ letterSpacing: "0.04em" }}>New Quotation / Invoice</span>
+                        <span
+                          className="text-sm font-label"
+                          style={{ letterSpacing: "0.04em" }}
+                        >
+                          New Quotation / Invoice
+                        </span>
                       </motion.button>
                     </>
                   );
@@ -881,40 +1502,94 @@ export default function ProjectDetail() {
                       <p className="sz-label mb-1.5">DESCRIPTION (OPTIONAL)</p>
                       <input
                         value={photoCaption}
-                        onChange={(e) => setPhotoCaption(e.target.value)}
+                        onChange={e => setPhotoCaption(e.target.value)}
                         placeholder="e.g. Living room wiring — day 3"
                         className="w-full rounded-xl px-3 py-2.5 text-sm"
-                        style={{ background: "var(--s-2)", border: "1px solid var(--b-1)", color: "var(--t-2)", outline: "none" }}
+                        style={{
+                          background: "var(--s-2)",
+                          border: "1px solid var(--b-1)",
+                          color: "var(--t-2)",
+                          outline: "none",
+                        }}
                       />
                     </div>
                     <div
                       className="rounded-2xl p-6 flex flex-col items-center gap-3 border-2 border-dashed cursor-pointer"
-                      style={{ borderColor: "oklch(0.62 0.09 68 / 30%)", background: "oklch(0.62 0.09 68 / 4%)", opacity: uploadPhoto.isPending ? 0.6 : 1 }}
-                      onClick={() => !uploadPhoto.isPending && photoInputRef.current?.click()}
+                      style={{
+                        borderColor: "oklch(0.62 0.09 68 / 30%)",
+                        background: "oklch(0.62 0.09 68 / 4%)",
+                        opacity: uploadPhoto.isPending ? 0.6 : 1,
+                      }}
+                      onClick={() =>
+                        !uploadPhoto.isPending && photoInputRef.current?.click()
+                      }
                     >
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "oklch(0.62 0.09 68 / 12%)" }}>
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center"
+                        style={{ background: "oklch(0.62 0.09 68 / 12%)" }}
+                      >
                         <Upload size={20} style={{ color: "var(--acc)" }} />
                       </div>
                       <div className="text-center">
-                        <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>{uploadPhoto.isPending ? "Uploading…" : "Upload Photos"}</p>
-                        <p className="text-xs mt-1" style={{ color: "var(--t-5)" }}>Pick one or many · JPG or PNG · the description applies to this batch</p>
+                        <p
+                          className="text-sm font-semibold"
+                          style={{ color: "var(--t-1)" }}
+                        >
+                          {uploadPhoto.isPending
+                            ? "Uploading…"
+                            : "Upload Photos"}
+                        </p>
+                        <p
+                          className="text-xs mt-1"
+                          style={{ color: "var(--t-5)" }}
+                        >
+                          Pick one or many · JPG or PNG · the description
+                          applies to this batch
+                        </p>
                       </div>
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <p className="sz-label mb-3">RECENT UPLOADS ({photos.length})</p>
+                  <p className="sz-label mb-3">
+                    RECENT UPLOADS ({photos.length})
+                  </p>
                   {photos.length === 0 ? (
-                    <div className="rounded-2xl p-8 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
-                      <Upload size={26} className="mx-auto mb-3" style={{ color: "var(--t-7)" }} />
-                      <p className="text-sm font-semibold mb-1" style={{ color: "var(--t-1)" }}>No photos yet</p>
-                      <p className="text-xs" style={{ color: "var(--t-5)" }}>{canEdit ? "Upload the first site photo above." : "Photos will appear here once uploaded."}</p>
+                    <div
+                      className="rounded-2xl p-8 text-center"
+                      style={{
+                        background: "var(--s-card)",
+                        border: "1px solid var(--b-1)",
+                      }}
+                    >
+                      <Upload
+                        size={26}
+                        className="mx-auto mb-3"
+                        style={{ color: "var(--t-7)" }}
+                      />
+                      <p
+                        className="text-sm font-semibold mb-1"
+                        style={{ color: "var(--t-1)" }}
+                      >
+                        No photos yet
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--t-5)" }}>
+                        {canEdit
+                          ? "Upload the first site photo above."
+                          : "Photos will appear here once uploaded."}
+                      </p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
-                      {photos.map((p) => (
-                        <SitePhotoThumb key={p.id} photo={p} canDelete={canEdit} onDelete={() => handleDeletePhoto(p)} onOpen={(url, label) => setLightbox({ url, label })} />
+                      {photos.map(p => (
+                        <SitePhotoThumb
+                          key={p.id}
+                          photo={p}
+                          canDelete={canEdit}
+                          onDelete={() => handleDeletePhoto(p)}
+                          onOpen={(url, label) => setLightbox({ url, label })}
+                        />
                       ))}
                     </div>
                   )}
@@ -923,7 +1598,11 @@ export default function ProjectDetail() {
             )}
 
             {activeTab === "Reports" && (
-              <ReportsTab projectId={project.id} projectName={project.name} canEdit={canEdit} />
+              <ReportsTab
+                projectId={project.id}
+                projectName={project.name}
+                canEdit={canEdit}
+              />
             )}
 
             {/* Team tab */}
@@ -936,53 +1615,88 @@ export default function ProjectDetail() {
                       data-testid="manage-team-btn"
                       onClick={() => setManageTeamOpen(true)}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-label font-semibold"
-                      style={{ background: "var(--acc-bright)", color: "oklch(1 0 0)" }}
+                      style={{
+                        background: "var(--acc-bright)",
+                        color: "oklch(1 0 0)",
+                      }}
                     >
-                      <UserPlus size={14} />Manage Team
+                      <UserPlus size={14} />
+                      Manage Team
                     </button>
                   </div>
                 )}
                 {roster.length === 0 ? (
-                  <div className="rounded-2xl p-6 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
-                    <p className="text-sm" style={{ color: "var(--t-5)" }}>{canEdit ? "No one on this project yet — tap Manage Team to add a Lead Designer, PM and members." : "No team assigned yet."}</p>
+                  <div
+                    className="rounded-2xl p-6 text-center"
+                    style={{
+                      background: "var(--s-card)",
+                      border: "1px solid var(--b-1)",
+                    }}
+                  >
+                    <p className="text-sm" style={{ color: "var(--t-5)" }}>
+                      {canEdit
+                        ? "No one on this project yet — tap Manage Team to add a Lead Designer, PM and members."
+                        : "No team assigned yet."}
+                    </p>
                   </div>
                 ) : (
                   <div className="xl:grid xl:grid-cols-2 xl:gap-3 xl:items-start space-y-3 xl:space-y-0">
-                {roster.map((member, i) => (
-                  <motion.div
-                    key={member.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.07 }}
-                    className="rounded-2xl p-4 flex items-center gap-3"
-                    style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
-                  >
-                    <div
-                      className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-                      style={{
-                        background: "linear-gradient(135deg, oklch(0.62 0.09 68 / 20%), oklch(0.52 0.08 65 / 20%))",
-                        color: "var(--acc-ink)",
-                        border: "1.5px solid oklch(0.62 0.09 68 / 25%)",
-                      }}
-                    >
-                      {member.avatar_code}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>{member.name}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--t-5)" }}>{member.job_title}</p>
-                    </div>
-                    <span
-                      className="text-xs font-label px-2 py-0.5 rounded-full"
-                      style={{
-                        background: member.roleLabel !== "Team" ? "oklch(0.62 0.09 68 / 12%)" : "var(--s-2)",
-                        color: member.roleLabel !== "Team" ? "var(--acc-ink)" : "var(--t-5)",
-                        letterSpacing: "0.04em",
-                      }}
-                    >
-                      {member.roleLabel}
-                    </span>
-                  </motion.div>
-                ))}
+                    {roster.map((member, i) => (
+                      <motion.div
+                        key={member.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.07 }}
+                        className="rounded-2xl p-4 flex items-center gap-3"
+                        style={{
+                          background: "var(--s-card)",
+                          border: "1px solid var(--b-1)",
+                          boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+                        }}
+                      >
+                        <div
+                          className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, oklch(0.62 0.09 68 / 20%), oklch(0.52 0.08 65 / 20%))",
+                            color: "var(--acc-ink)",
+                            border: "1.5px solid oklch(0.62 0.09 68 / 25%)",
+                          }}
+                        >
+                          {member.avatar_code}
+                        </div>
+                        <div className="flex-1">
+                          <p
+                            className="text-sm font-semibold"
+                            style={{ color: "var(--t-1)" }}
+                          >
+                            {member.name}
+                          </p>
+                          <p
+                            className="text-xs mt-0.5"
+                            style={{ color: "var(--t-5)" }}
+                          >
+                            {member.job_title}
+                          </p>
+                        </div>
+                        <span
+                          className="text-xs font-label px-2 py-0.5 rounded-full"
+                          style={{
+                            background:
+                              member.roleLabel !== "Team"
+                                ? "oklch(0.62 0.09 68 / 12%)"
+                                : "var(--s-2)",
+                            color:
+                              member.roleLabel !== "Team"
+                                ? "var(--acc-ink)"
+                                : "var(--t-5)",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          {member.roleLabel}
+                        </span>
+                      </motion.div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -992,33 +1706,74 @@ export default function ProjectDetail() {
           {/* ── SIDE RAIL (right column, xl desktop only) ── */}
           <div className="hidden xl:flex xl:flex-col xl:gap-4">
             {/* Project Details */}
-            <div className="rounded-2xl p-4 space-y-3" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
-              <h4 className="font-display text-base font-semibold" style={{ color: "var(--t-1)" }}>Project Details</h4>
+            <div
+              className="rounded-2xl p-4 space-y-3"
+              style={{
+                background: "var(--s-card)",
+                border: "1px solid var(--b-1)",
+                boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+              }}
+            >
+              <h4
+                className="font-display text-base font-semibold"
+                style={{ color: "var(--t-1)" }}
+              >
+                Project Details
+              </h4>
               {[
                 { label: "Client", value: project.client },
-                { label: "Type", value: `${project.type} · ${project.propertyType}` },
-                { label: "Size", value: `${project.size.toLocaleString()} sqft` },
+                {
+                  label: "Type",
+                  value: `${project.type} · ${project.propertyType}`,
+                },
+                {
+                  label: "Size",
+                  value: `${project.size.toLocaleString()} sqft`,
+                },
                 { label: "Start Date", value: project.startDate },
                 { label: "Target Completion", value: project.targetDate },
                 { label: "Priority", value: pc.label, color: pc.color },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: "var(--t-5)" }}>{item.label}</span>
-                  <span className="text-xs font-medium" style={{ color: item.color || "var(--t-2)" }}>{item.value}</span>
+              ].map(item => (
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between"
+                >
+                  <span className="text-xs" style={{ color: "var(--t-5)" }}>
+                    {item.label}
+                  </span>
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: item.color || "var(--t-2)" }}
+                  >
+                    {item.value}
+                  </span>
                 </div>
               ))}
             </div>
 
             {/* Team members */}
             {roster.length > 0 && (
-              <div className="rounded-2xl p-4 space-y-3" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
-                <h4 className="font-display text-base font-semibold" style={{ color: "var(--t-1)" }}>Team</h4>
-                {roster.map((member) => (
+              <div
+                className="rounded-2xl p-4 space-y-3"
+                style={{
+                  background: "var(--s-card)",
+                  border: "1px solid var(--b-1)",
+                  boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+                }}
+              >
+                <h4
+                  className="font-display text-base font-semibold"
+                  style={{ color: "var(--t-1)" }}
+                >
+                  Team
+                </h4>
+                {roster.map(member => (
                   <div key={member.id} className="flex items-center gap-3">
                     <div
                       className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
                       style={{
-                        background: "linear-gradient(135deg, oklch(0.62 0.09 68 / 20%), oklch(0.52 0.08 65 / 20%))",
+                        background:
+                          "linear-gradient(135deg, oklch(0.62 0.09 68 / 20%), oklch(0.52 0.08 65 / 20%))",
                         color: "var(--acc-ink)",
                         border: "1.5px solid oklch(0.62 0.09 68 / 25%)",
                       }}
@@ -1026,14 +1781,30 @@ export default function ProjectDetail() {
                       {member.avatar_code}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate" style={{ color: "var(--t-1)" }}>{member.name}</p>
-                      <p className="text-[10px] truncate" style={{ color: "var(--t-5)" }}>{member.job_title}</p>
+                      <p
+                        className="text-xs font-semibold truncate"
+                        style={{ color: "var(--t-1)" }}
+                      >
+                        {member.name}
+                      </p>
+                      <p
+                        className="text-[10px] truncate"
+                        style={{ color: "var(--t-5)" }}
+                      >
+                        {member.job_title}
+                      </p>
                     </div>
                     <span
                       className="text-[10px] font-label px-2 py-0.5 rounded-full shrink-0"
                       style={{
-                        background: member.roleLabel !== "Team" ? "oklch(0.62 0.09 68 / 12%)" : "var(--s-2)",
-                        color: member.roleLabel !== "Team" ? "var(--acc-ink)" : "var(--t-5)",
+                        background:
+                          member.roleLabel !== "Team"
+                            ? "oklch(0.62 0.09 68 / 12%)"
+                            : "var(--s-2)",
+                        color:
+                          member.roleLabel !== "Team"
+                            ? "var(--acc-ink)"
+                            : "var(--t-5)",
                         letterSpacing: "0.04em",
                       }}
                     >
@@ -1045,22 +1816,53 @@ export default function ProjectDetail() {
             )}
 
             {/* Quick stats */}
-            <div className="rounded-2xl p-4 space-y-3" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}>
-              <h4 className="font-display text-base font-semibold" style={{ color: "var(--t-1)" }}>Quick Stats</h4>
+            <div
+              className="rounded-2xl p-4 space-y-3"
+              style={{
+                background: "var(--s-card)",
+                border: "1px solid var(--b-1)",
+                boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+              }}
+            >
+              <h4
+                className="font-display text-base font-semibold"
+                style={{ color: "var(--t-1)" }}
+              >
+                Quick Stats
+              </h4>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: "Tasks Done", value: `${project.tasksCompleted}/${project.taskCount}` },
+                  {
+                    label: "Tasks Done",
+                    value: `${project.tasksCompleted}/${project.taskCount}`,
+                  },
                   { label: "Progress", value: `${project.progress}%` },
                   { label: "Photos", value: `${project.photoCount}` },
-                  { label: "Budget", value: `RM ${(project.budget / 1000).toFixed(0)}k` },
-                ].map((stat) => (
+                  {
+                    label: "Budget",
+                    value: `RM ${(project.budget / 1000).toFixed(0)}k`,
+                  },
+                ].map(stat => (
                   <div
                     key={stat.label}
                     className="rounded-xl p-2.5 text-center"
-                    style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}
+                    style={{
+                      background: "var(--s-page)",
+                      border: "1px solid var(--b-2)",
+                    }}
                   >
-                    <p className="text-sm font-display font-semibold" style={{ color: "var(--acc)" }}>{stat.value}</p>
-                    <p className="text-[10px] font-label mt-0.5" style={{ color: "var(--t-5)", letterSpacing: "0.04em" }}>{stat.label.toUpperCase()}</p>
+                    <p
+                      className="text-sm font-display font-semibold"
+                      style={{ color: "var(--acc)" }}
+                    >
+                      {stat.value}
+                    </p>
+                    <p
+                      className="text-[10px] font-label mt-0.5"
+                      style={{ color: "var(--t-5)", letterSpacing: "0.04em" }}
+                    >
+                      {stat.label.toUpperCase()}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -1069,8 +1871,17 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <EditProjectSheet project={project} open={editOpen} onClose={() => setEditOpen(false)} />
-      <ManageTeamSheet project={project} staff={allStaff} open={manageTeamOpen} onClose={() => setManageTeamOpen(false)} />
+      <EditProjectSheet
+        project={project}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+      />
+      <ManageTeamSheet
+        project={project}
+        staff={allStaff}
+        open={manageTeamOpen}
+        onClose={() => setManageTeamOpen(false)}
+      />
       <PhotoLightbox photo={lightbox} onClose={() => setLightbox(null)} />
       <TaskDialog
         projectId={project.id}
@@ -1086,7 +1897,10 @@ export default function ProjectDetail() {
         accept="image/*"
         multiple
         className="hidden"
-        onChange={(e) => { handlePhotosPicked(e.target.files); e.target.value = ""; }}
+        onChange={e => {
+          handlePhotosPicked(e.target.files);
+          e.target.value = "";
+        }}
       />
     </div>
   );
@@ -1099,7 +1913,7 @@ export default function ProjectDetail() {
 function StarRow({ value, size = 14 }: { value: number; size?: number }) {
   return (
     <span className="inline-flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => {
+      {[1, 2, 3, 4, 5].map(i => {
         const filled = value >= i - 0.25;
         return (
           <Star
@@ -1119,54 +1933,83 @@ function StarRow({ value, size = 14 }: { value: number; size?: number }) {
 // SITE PHOTO THUMBNAIL — resolves a signed URL for the private storage object
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SitePhotoThumb({ photo, canDelete, onDelete, onOpen }: { photo: SitePhotoRow; canDelete: boolean; onDelete: () => void; onOpen: (url: string, label: string) => void }) {
+function SitePhotoThumb({
+  photo,
+  canDelete,
+  onDelete,
+  onOpen,
+}: {
+  photo: SitePhotoRow;
+  canDelete: boolean;
+  onDelete: () => void;
+  onOpen: (url: string, label: string) => void;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    if (!photo.storage_path) { setFailed(true); return; }
-    getSitePhotoUrl(photo.storage_path).then((u) => {
+    if (!photo.storage_path) {
+      setFailed(true);
+      return;
+    }
+    getSitePhotoUrl(photo.storage_path).then(u => {
       if (!alive) return;
-      if (u) setUrl(u); else setFailed(true);
+      if (u) setUrl(u);
+      else setFailed(true);
     });
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [photo.storage_path]);
 
   const dateLabel = fmtDueDate(photo.photo_date);
 
   return (
     <div className="space-y-1">
-    <div className="aspect-square rounded-xl overflow-hidden relative" style={{ background: "var(--s-2)" }}>
-      {url && !failed ? (
-        <img
-          src={url}
-          alt={dateLabel}
-          onClick={() => onOpen(url, dateLabel)}
-          className="w-full h-full object-cover cursor-pointer transition-transform hover:scale-[1.03]"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <Upload size={16} style={{ color: "var(--t-7)" }} />
-        </div>
-      )}
-      <div className="absolute inset-x-0 bottom-0 px-1.5 py-1" style={{ background: "linear-gradient(to top, oklch(0.11 0.004 285 / 0.7), transparent)" }}>
-        <span className="text-[9px] text-white font-medium">{dateLabel}</span>
-      </div>
-      {canDelete && (
-        <button
-          onClick={onDelete}
-          title="Delete photo"
-          className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center"
-          style={{ background: "oklch(0.11 0.004 285 / 0.55)" }}
+      <div
+        className="aspect-square rounded-xl overflow-hidden relative"
+        style={{ background: "var(--s-2)" }}
+      >
+        {url && !failed ? (
+          <img
+            src={url}
+            alt={dateLabel}
+            onClick={() => onOpen(url, dateLabel)}
+            className="w-full h-full object-cover cursor-pointer transition-transform hover:scale-[1.03]"
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Upload size={16} style={{ color: "var(--t-7)" }} />
+          </div>
+        )}
+        <div
+          className="absolute inset-x-0 bottom-0 px-1.5 py-1"
+          style={{
+            background:
+              "linear-gradient(to top, oklch(0.11 0.004 285 / 0.7), transparent)",
+          }}
         >
-          <Trash2 size={11} className="text-white" />
-        </button>
-      )}
-    </div>
+          <span className="text-[9px] text-white font-medium">{dateLabel}</span>
+        </div>
+        {canDelete && (
+          <button
+            onClick={onDelete}
+            title="Delete photo"
+            className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center"
+            style={{ background: "oklch(0.11 0.004 285 / 0.55)" }}
+          >
+            <Trash2 size={11} className="text-white" />
+          </button>
+        )}
+      </div>
       {photo.notes && (
-        <p className="text-[10px] leading-snug line-clamp-2" style={{ color: "var(--t-5)" }} title={photo.notes}>
+        <p
+          className="text-[10px] leading-snug line-clamp-2"
+          style={{ color: "var(--t-5)" }}
+          title={photo.notes}
+        >
           {photo.notes}
         </p>
       )}
@@ -1178,7 +2021,13 @@ function SitePhotoThumb({ photo, canDelete, onDelete, onOpen }: { photo: SitePho
 // PHOTO LIGHTBOX — tap a site photo to view it full-size
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PhotoLightbox({ photo, onClose }: { photo: { url: string; label: string } | null; onClose: () => void }) {
+function PhotoLightbox({
+  photo,
+  onClose,
+}: {
+  photo: { url: string; label: string } | null;
+  onClose: () => void;
+}) {
   useEffect(() => {
     if (!photo) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -1196,13 +2045,19 @@ function PhotoLightbox({ photo, onClose }: { photo: { url: string; label: string
           transition={{ duration: 0.18 }}
           onClick={onClose}
           className="fixed inset-0 z-[70] flex items-center justify-center p-4"
-          style={{ background: "oklch(0.08 0.004 285 / 0.88)", backdropFilter: "blur(6px)" }}
+          style={{
+            background: "oklch(0.08 0.004 285 / 0.88)",
+            backdropFilter: "blur(6px)",
+          }}
         >
           <button
             onClick={onClose}
             aria-label="Close"
             className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
-            style={{ background: "oklch(1 0 0 / 14%)", border: "1px solid oklch(1 0 0 / 22%)" }}
+            style={{
+              background: "oklch(1 0 0 / 14%)",
+              border: "1px solid oklch(1 0 0 / 22%)",
+            }}
           >
             <X size={18} className="text-white" />
           </button>
@@ -1214,12 +2069,20 @@ function PhotoLightbox({ photo, onClose }: { photo: { url: string; label: string
             transition={{ duration: 0.18 }}
             src={photo.url}
             alt={photo.label}
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
             className="max-w-full max-h-[86vh] rounded-2xl object-contain"
             style={{ boxShadow: "0 20px 60px oklch(0 0 0 / 0.5)" }}
           />
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full" style={{ background: "oklch(1 0 0 / 14%)", border: "1px solid oklch(1 0 0 / 20%)" }}>
-            <span className="text-xs text-white font-medium">{photo.label}</span>
+          <div
+            className="absolute bottom-5 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full"
+            style={{
+              background: "oklch(1 0 0 / 14%)",
+              border: "1px solid oklch(1 0 0 / 20%)",
+            }}
+          >
+            <span className="text-xs text-white font-medium">
+              {photo.label}
+            </span>
           </div>
         </motion.div>
       )}
@@ -1232,7 +2095,11 @@ function PhotoLightbox({ photo, onClose }: { photo: { url: string; label: string
 // ─────────────────────────────────────────────────────────────────────────────
 
 function TaskDialog({
-  projectId, task, teamMembers, open, onClose,
+  projectId,
+  task,
+  teamMembers,
+  open,
+  onClose,
 }: {
   projectId: string;
   task: ProjectTaskRow | null;
@@ -1262,33 +2129,56 @@ function TaskDialog({
   }, [open, task]);
 
   const inputStyle: React.CSSProperties = {
-    background: "var(--s-page)", border: "1px solid var(--b-1)",
-    color: "var(--t-2)", borderRadius: "12px", padding: "0.7rem 0.9rem",
-    fontSize: "0.875rem", width: "100%", outline: "none",
+    background: "var(--s-page)",
+    border: "1px solid var(--b-1)",
+    color: "var(--t-2)",
+    borderRadius: "12px",
+    padding: "0.7rem 0.9rem",
+    fontSize: "0.875rem",
+    width: "100%",
+    outline: "none",
   };
-  const labelStyle: React.CSSProperties = { color: "var(--t-5)", letterSpacing: "0.06em", fontWeight: 700 };
+  const labelStyle: React.CSSProperties = {
+    color: "var(--t-5)",
+    letterSpacing: "0.06em",
+    fontWeight: 700,
+  };
 
   const handleSubmit = async () => {
-    if (!title.trim()) { toast.error("Task title is required"); return; }
+    if (!title.trim()) {
+      toast.error("Task title is required");
+      return;
+    }
     try {
       if (isEdit && task) {
         await updateTask.mutateAsync({
-          id: task.id, projectId,
-          title: title.trim(), area: area.trim() || null,
-          assigneeId: assigneeId || null, dueDate: dueDate || null, status,
+          id: task.id,
+          projectId,
+          title: title.trim(),
+          area: area.trim() || null,
+          assigneeId: assigneeId || null,
+          dueDate: dueDate || null,
+          status,
         });
         toast.success("Task updated");
       } else {
         await createTask.mutateAsync({
-          projectId, title: title.trim(), area: area.trim() || null,
-          assigneeId: assigneeId || null, dueDate: dueDate || null, status,
-          sortOrder: Date.now() % 100000, createdBy: me?.id ?? null,
+          projectId,
+          title: title.trim(),
+          area: area.trim() || null,
+          assigneeId: assigneeId || null,
+          dueDate: dueDate || null,
+          status,
+          sortOrder: Date.now() % 100000,
+          createdBy: me?.id ?? null,
         });
         toast.success("Task added");
       }
       onClose();
     } catch (err) {
-      toast.error(`Failed to ${isEdit ? "update" : "add"} task: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(
+        `Failed to ${isEdit ? "update" : "add"} task: ${err instanceof Error ? err.message : "unknown error"}`
+      );
     }
   };
 
@@ -1297,83 +2187,221 @@ function TaskDialog({
       {open && (
         <>
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             onClick={() => !pending && onClose()}
             className="fixed inset-0 z-40"
-            style={{ background: "oklch(0.11 0.004 285 / 0.45)", backdropFilter: "blur(4px)" }}
+            style={{
+              background: "oklch(0.11 0.004 285 / 0.45)",
+              backdropFilter: "blur(4px)",
+            }}
           />
           <motion.div
-            initial={{ y: "100%", opacity: 0.5 }} animate={{ y: 0, opacity: 1 }} exit={{ y: "100%", opacity: 0.5 }}
+            initial={{ y: "100%", opacity: 0.5 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0.5 }}
             transition={{ type: "spring", damping: 32, stiffness: 320 }}
             className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[460px] z-50 flex flex-col lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2"
-            style={{ maxHeight: "92vh", background: "var(--s-card)", borderRadius: "24px 24px 0 0", boxShadow: "0 -12px 48px oklch(0 0 0 / 0.18)" }}
+            style={{
+              maxHeight: "92vh",
+              background: "var(--s-card)",
+              borderRadius: "24px 24px 0 0",
+              boxShadow: "0 -12px 48px oklch(0 0 0 / 0.18)",
+            }}
           >
             <div className="flex justify-center pt-2.5 pb-1.5 shrink-0 lg:hidden">
-              <div className="w-10 h-1 rounded-full" style={{ background: "var(--b-strong)" }} />
+              <div
+                className="w-10 h-1 rounded-full"
+                style={{ background: "var(--b-strong)" }}
+              />
             </div>
-            <div className="px-4 pt-3 lg:pt-5 pb-3 flex items-start justify-between shrink-0" style={{ borderBottom: "1px solid var(--b-2)" }}>
+            <div
+              className="px-4 pt-3 lg:pt-5 pb-3 flex items-start justify-between shrink-0"
+              style={{ borderBottom: "1px solid var(--b-2)" }}
+            >
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, var(--acc-strong), var(--acc-2))" }}>
-                  {isEdit ? <Pencil size={16} className="text-white" /> : <Plus size={16} className="text-white" />}
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, var(--acc-strong), var(--acc-2))",
+                  }}
+                >
+                  {isEdit ? (
+                    <Pencil size={16} className="text-white" />
+                  ) : (
+                    <Plus size={16} className="text-white" />
+                  )}
                 </div>
                 <div>
-                  <p className="font-display text-base font-semibold leading-tight" style={{ color: "var(--t-1)" }}>
+                  <p
+                    className="font-display text-base font-semibold leading-tight"
+                    style={{ color: "var(--t-1)" }}
+                  >
                     {isEdit ? "Edit Task" : "New Task"}
                   </p>
-                  <p className="text-[11px]" style={{ color: "var(--t-5)" }}>{isEdit ? "Update this task" : "Add a task to this project"}</p>
+                  <p className="text-[11px]" style={{ color: "var(--t-5)" }}>
+                    {isEdit ? "Update this task" : "Add a task to this project"}
+                  </p>
                 </div>
               </div>
-              <button onClick={onClose} disabled={pending} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "var(--s-2)", opacity: pending ? 0.5 : 1 }}>
+              <button
+                onClick={onClose}
+                disabled={pending}
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ background: "var(--s-2)", opacity: pending ? 0.5 : 1 }}
+              >
                 <X size={14} style={{ color: "var(--acc-ink)" }} />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
               <div>
-                <label className="block text-[10px] font-label mb-1.5" style={labelStyle}>TASK TITLE *</label>
-                <input data-testid="task-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Flooring installation" style={inputStyle} />
+                <label
+                  className="block text-[10px] font-label mb-1.5"
+                  style={labelStyle}
+                >
+                  TASK TITLE *
+                </label>
+                <input
+                  data-testid="task-title"
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="e.g. Flooring installation"
+                  style={inputStyle}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-label mb-1.5" style={labelStyle}>AREA</label>
-                  <input type="text" value={area} onChange={(e) => setArea(e.target.value)} placeholder="e.g. Kitchen" style={inputStyle} />
+                  <label
+                    className="block text-[10px] font-label mb-1.5"
+                    style={labelStyle}
+                  >
+                    AREA
+                  </label>
+                  <input
+                    type="text"
+                    value={area}
+                    onChange={e => setArea(e.target.value)}
+                    placeholder="e.g. Kitchen"
+                    style={inputStyle}
+                  />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-label mb-1.5" style={labelStyle}>DUE DATE</label>
-                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={inputStyle} />
+                  <label
+                    className="block text-[10px] font-label mb-1.5"
+                    style={labelStyle}
+                  >
+                    DUE DATE
+                  </label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
+                    style={inputStyle}
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-label mb-1.5" style={labelStyle}>ASSIGNEE</label>
-                  <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} style={inputStyle}>
+                  <label
+                    className="block text-[10px] font-label mb-1.5"
+                    style={labelStyle}
+                  >
+                    ASSIGNEE
+                  </label>
+                  <select
+                    value={assigneeId}
+                    onChange={e => setAssigneeId(e.target.value)}
+                    style={inputStyle}
+                  >
                     <option value="">Unassigned</option>
-                    {teamMembers.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name} ({s.avatar_code})</option>
+                    {teamMembers.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.avatar_code})
+                      </option>
                     ))}
-                    {task?.assignee_id && !teamMembers.some((m) => m.id === task.assignee_id) && (
-                      <option value={task.assignee_id}>{task.assignee_id} (not on team)</option>
-                    )}
+                    {task?.assignee_id &&
+                      !teamMembers.some(m => m.id === task.assignee_id) && (
+                        <option value={task.assignee_id}>
+                          {task.assignee_id} (not on team)
+                        </option>
+                      )}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-label mb-1.5" style={labelStyle}>STATUS</label>
-                  <select value={status} onChange={(e) => setStatus(e.target.value as ProjectTaskStatus)} style={inputStyle}>
-                    {TASK_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  <label
+                    className="block text-[10px] font-label mb-1.5"
+                    style={labelStyle}
+                  >
+                    STATUS
+                  </label>
+                  <select
+                    value={status}
+                    onChange={e =>
+                      setStatus(e.target.value as ProjectTaskStatus)
+                    }
+                    style={inputStyle}
+                  >
+                    {TASK_STATUS_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
               {teamMembers.length === 0 && (
-                <p className="text-[11px]" style={{ color: "var(--t-5)" }}>Tip: add people on the Team tab → Manage Team, then they'll show up here to assign.</p>
+                <p className="text-[11px]" style={{ color: "var(--t-5)" }}>
+                  Tip: add people on the Team tab → Manage Team, then they'll
+                  show up here to assign.
+                </p>
               )}
             </div>
 
-            <div className="px-4 py-3 flex gap-2 shrink-0" style={{ borderTop: "1px solid var(--b-2)" }}>
-              <button onClick={onClose} disabled={pending} className="flex-1 py-3 rounded-xl text-sm font-label" style={{ background: "var(--s-2)", color: "var(--acc-ink)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: pending ? 0.5 : 1 }}>
+            <div
+              className="px-4 py-3 flex gap-2 shrink-0"
+              style={{ borderTop: "1px solid var(--b-2)" }}
+            >
+              <button
+                onClick={onClose}
+                disabled={pending}
+                className="flex-1 py-3 rounded-xl text-sm font-label"
+                style={{
+                  background: "var(--s-2)",
+                  color: "var(--acc-ink)",
+                  border: "1px solid var(--b-1)",
+                  letterSpacing: "0.04em",
+                  opacity: pending ? 0.5 : 1,
+                }}
+              >
                 Cancel
               </button>
-              <motion.button whileTap={pending ? undefined : { scale: 0.96 }} onClick={handleSubmit} disabled={pending} data-testid="task-submit" className="flex-1 py-3 rounded-xl text-sm font-label font-semibold flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, var(--acc-strong), var(--acc-2))", color: "oklch(1 0 0)", letterSpacing: "0.04em", opacity: pending ? 0.7 : 1 }}>
-                {pending ? <span>{isEdit ? "Saving…" : "Adding…"}</span> : (<><Check size={15} />{isEdit ? "Save Task" : "Add Task"}</>)}
+              <motion.button
+                whileTap={pending ? undefined : { scale: 0.96 }}
+                onClick={handleSubmit}
+                disabled={pending}
+                data-testid="task-submit"
+                className="flex-1 py-3 rounded-xl text-sm font-label font-semibold flex items-center justify-center gap-2"
+                style={{
+                  background:
+                    "linear-gradient(135deg, var(--acc-strong), var(--acc-2))",
+                  color: "oklch(1 0 0)",
+                  letterSpacing: "0.04em",
+                  opacity: pending ? 0.7 : 1,
+                }}
+              >
+                {pending ? (
+                  <span>{isEdit ? "Saving…" : "Adding…"}</span>
+                ) : (
+                  <>
+                    <Check size={15} />
+                    {isEdit ? "Save Task" : "Add Task"}
+                  </>
+                )}
               </motion.button>
             </div>
           </motion.div>
@@ -1404,35 +2432,71 @@ function weekRangeLabel(mondayIso: string): string {
   const mon = new Date(mondayIso + "T00:00:00");
   const sun = new Date(mon);
   sun.setDate(mon.getDate() + 6);
-  const fmt = (x: Date) => x.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const fmt = (x: Date) =>
+    x.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   return `${fmt(mon)} – ${fmt(sun)} ${sun.getFullYear()}`;
 }
 
-function WeekSummary({ initial, canEdit, onSave }: { initial: string; canEdit: boolean; onSave: (s: string) => void }) {
+function WeekSummary({
+  initial,
+  canEdit,
+  onSave,
+}: {
+  initial: string;
+  canEdit: boolean;
+  onSave: (s: string) => void;
+}) {
   const [val, setVal] = useState(initial);
-  useEffect(() => { setVal(initial); }, [initial]);
+  useEffect(() => {
+    setVal(initial);
+  }, [initial]);
   if (!canEdit) {
-    return initial
-      ? <p className="text-xs leading-relaxed" style={{ color: "var(--t-4)" }}>{initial}</p>
-      : <p className="text-xs italic" style={{ color: "var(--t-6)" }}>No summary written for this week.</p>;
+    return initial ? (
+      <p className="text-xs leading-relaxed" style={{ color: "var(--t-4)" }}>
+        {initial}
+      </p>
+    ) : (
+      <p className="text-xs italic" style={{ color: "var(--t-6)" }}>
+        No summary written for this week.
+      </p>
+    );
   }
   return (
     <textarea
       value={val}
-      onChange={(e) => setVal(e.target.value)}
-      onBlur={() => { if (val !== initial) onSave(val); }}
+      onChange={e => setVal(e.target.value)}
+      onBlur={() => {
+        if (val !== initial) onSave(val);
+      }}
       placeholder="Write this week's site summary (progress, issues, next steps)…"
       className="w-full rounded-lg px-2.5 py-2 text-xs leading-relaxed"
-      style={{ background: "var(--s-page)", border: "1px solid var(--b-2)", color: "var(--t-2)", minHeight: 60, resize: "vertical" }}
+      style={{
+        background: "var(--s-page)",
+        border: "1px solid var(--b-2)",
+        color: "var(--t-2)",
+        minHeight: 60,
+        resize: "vertical",
+      }}
     />
   );
 }
 
-function ReportsTab({ projectId, projectName, canEdit }: { projectId: string; projectName: string; canEdit: boolean }) {
+function ReportsTab({
+  projectId,
+  projectName,
+  canEdit,
+}: {
+  projectId: string;
+  projectName: string;
+  canEdit: boolean;
+}) {
   const { data: photos = [] } = useProjectSitePhotos(projectId);
   const { data: reports = {} } = useSiteReports(projectId);
   const setSummary = useSetSiteReportSummary();
-  const [lightbox, setLightbox] = useState<{ url: string; label: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{
+    url: string;
+    label: string;
+  } | null>(null);
 
   // Bucket photos by Monday-of-week; weeks newest first (on-demand — only weeks
   // that actually have photos show up, no empty shells).
@@ -1447,18 +2511,36 @@ function ReportsTab({ projectId, projectName, canEdit }: { projectId: string; pr
   const saveSummary = (weekStart: string, summary: string) => {
     setSummary.mutate(
       { projectId, weekStart, summary },
-      { onSuccess: () => toast.success("Weekly summary saved"), onError: (e) => toast.error(`Couldn't save: ${e instanceof Error ? e.message : "unknown error"}`) },
+      {
+        onSuccess: () => toast.success("Weekly summary saved"),
+        onError: e =>
+          toast.error(
+            `Couldn't save: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
   };
 
   if (photos.length === 0) {
     return (
-      <div className="rounded-2xl p-8 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
-        <FileText size={26} className="mx-auto mb-3" style={{ color: "var(--t-7)" }} />
-        <p className="text-sm font-semibold mb-1" style={{ color: "var(--t-1)" }}>No weekly reports yet</p>
+      <div
+        className="rounded-2xl p-8 text-center"
+        style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}
+      >
+        <FileText
+          size={26}
+          className="mx-auto mb-3"
+          style={{ color: "var(--t-7)" }}
+        />
+        <p
+          className="text-sm font-semibold mb-1"
+          style={{ color: "var(--t-1)" }}
+        >
+          No weekly reports yet
+        </p>
         <p className="text-xs" style={{ color: "var(--t-5)" }}>
-          Weekly site reports build automatically from site photos. Upload photos on the Photos tab
-          and they'll group into weeks here.
+          Weekly site reports build automatically from site photos. Upload
+          photos on the Photos tab and they'll group into weeks here.
         </p>
       </div>
     );
@@ -1467,23 +2549,46 @@ function ReportsTab({ projectId, projectName, canEdit }: { projectId: string; pr
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="sz-label">WEEKLY SITE REPORT · {weeks.length} WEEK{weeks.length > 1 ? "S" : ""}</p>
+        <p className="sz-label">
+          WEEKLY SITE REPORT · {weeks.length} WEEK{weeks.length > 1 ? "S" : ""}
+        </p>
         <button
           type="button"
           onClick={() => window.print()}
           className="text-[10px] font-label px-2.5 py-1 rounded-md inline-flex items-center gap-1"
-          style={{ background: "var(--s-2)", color: "var(--t-4)", border: "1px solid var(--b-1)" }}
+          style={{
+            background: "var(--s-2)",
+            color: "var(--t-4)",
+            border: "1px solid var(--b-1)",
+          }}
           title="Print / save this report as PDF"
         >
-          <Upload size={10} style={{ transform: "rotate(180deg)" }} /> Print / PDF
+          <Upload size={10} style={{ transform: "rotate(180deg)" }} /> Print /
+          PDF
         </button>
       </div>
-      {weeks.map((wk) => {
+      {weeks.map(wk => {
         const wkPhotos = buckets.get(wk)!;
         return (
-          <div key={wk} className="rounded-2xl overflow-hidden" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
-            <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: "var(--s-3)", borderBottom: "1px solid var(--b-1)" }}>
-              <p className="text-xs font-label font-semibold" style={{ color: "var(--acc)", letterSpacing: "0.04em" }}>
+          <div
+            key={wk}
+            className="rounded-2xl overflow-hidden"
+            style={{
+              background: "var(--s-card)",
+              border: "1px solid var(--b-1)",
+            }}
+          >
+            <div
+              className="px-4 py-2.5 flex items-center justify-between"
+              style={{
+                background: "var(--s-3)",
+                borderBottom: "1px solid var(--b-1)",
+              }}
+            >
+              <p
+                className="text-xs font-label font-semibold"
+                style={{ color: "var(--acc)", letterSpacing: "0.04em" }}
+              >
                 {weekRangeLabel(wk)}
               </p>
               <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
@@ -1491,10 +2596,20 @@ function ReportsTab({ projectId, projectName, canEdit }: { projectId: string; pr
               </span>
             </div>
             <div className="p-3 space-y-3">
-              <WeekSummary initial={reports[wk]?.summary ?? ""} canEdit={canEdit} onSave={(s) => saveSummary(wk, s)} />
+              <WeekSummary
+                initial={reports[wk]?.summary ?? ""}
+                canEdit={canEdit}
+                onSave={s => saveSummary(wk, s)}
+              />
               <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
-                {wkPhotos.map((p) => (
-                  <SitePhotoThumb key={p.id} photo={p} canDelete={false} onDelete={() => {}} onOpen={(url, label) => setLightbox({ url, label })} />
+                {wkPhotos.map(p => (
+                  <SitePhotoThumb
+                    key={p.id}
+                    photo={p}
+                    canDelete={false}
+                    onDelete={() => {}}
+                    onOpen={(url, label) => setLightbox({ url, label })}
+                  />
                 ))}
               </div>
             </div>
@@ -1506,7 +2621,21 @@ function ReportsTab({ projectId, projectName, canEdit }: { projectId: string; pr
   );
 }
 
-function LifecycleTab({ projectId, clientName, clientContact, projectName, budget = 0, canManage = false }: { projectId: string; clientName?: string; clientContact?: string; projectName?: string; budget?: number; canManage?: boolean }) {
+function LifecycleTab({
+  projectId,
+  clientName,
+  clientContact,
+  projectName,
+  budget = 0,
+  canManage = false,
+}: {
+  projectId: string;
+  clientName?: string;
+  clientContact?: string;
+  projectName?: string;
+  budget?: number;
+  canManage?: boolean;
+}) {
   const { data: lc, isLoading } = useProjectLifecycle(projectId);
   const { data: project } = useProject(projectId);
   const { data: rosterStaff = [] } = useAllStaff();
@@ -1518,11 +2647,19 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const setVariationOrder = useSetVariationOrder();
   const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
   const hasVO = !!project?.hasVariationOrder;
-  const { data: voColumns = [] } = useProjectColumns(projectId, "variation-order");
+  const { data: voColumns = [] } = useProjectColumns(
+    projectId,
+    "variation-order"
+  );
   const toggleVO = (value: boolean) =>
     setVariationOrder.mutate(
       { projectId, value },
-      { onError: (e) => toast.error(`Couldn't update: ${e instanceof Error ? e.message : "unknown error"}`) },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't update: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
   const setDefectDone = useSetDefectPeriodDone(projectId);
   const updatePayment = useUpdatePayment();
@@ -1548,17 +2685,24 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
     setDefectDone.mutate(
       { done: true, by: me?.avatar_code ?? null },
       {
-        onSuccess: () => toast.success("Defect Period completed — project marked done"),
-        onError: (e) => toast.error(`Couldn't complete: ${e instanceof Error ? e.message : "unknown error"}`),
-      },
+        onSuccess: () =>
+          toast.success("Defect Period completed — project marked done"),
+        onError: e =>
+          toast.error(
+            `Couldn't complete: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
   const reopenDefect = () =>
     setDefectDone.mutate(
       { done: false, by: null },
       {
         onSuccess: () => toast.success("Defect Period reopened"),
-        onError: (e) => toast.error(`Couldn't reopen: ${e instanceof Error ? e.message : "unknown error"}`),
-      },
+        onError: e =>
+          toast.error(
+            `Couldn't reopen: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
 
   // Phase 2 — set a milestone/checkpoint's estimated date. Routes by source:
@@ -1567,7 +2711,12 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const setMilestoneDate = (stageId: string, ddmm: string | null) => {
     setStageDate.mutate(
       { projectId, stageId, date: ddmm },
-      { onError: (e) => toast.error(`Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`) },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
   };
   // Manual per-stage status (7 Nov 2026) — staff set each stage's status; nothing
@@ -1577,30 +2726,49 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       { projectId, stageId, status: next, by: me?.avatar_code ?? null },
       {
         onSuccess: () => toast.success("Stage status updated"),
-        onError: (e) => toast.error(`Couldn't update status: ${e instanceof Error ? e.message : "unknown error"}`),
-      },
+        onError: e =>
+          toast.error(
+            `Couldn't update status: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
   };
   const confirmBulkComplete = (stageIds: string[]) => {
     markStagesComplete.mutate(
       { projectId, stageIds, by: me?.avatar_code ?? null },
       {
-        onSuccess: () => toast.success(`Marked ${stageIds.length} stage${stageIds.length === 1 ? "" : "s"} complete`),
-        onError: (e) => toast.error(`Couldn't update: ${e instanceof Error ? e.message : "unknown error"}`),
-      },
+        onSuccess: () =>
+          toast.success(
+            `Marked ${stageIds.length} stage${stageIds.length === 1 ? "" : "s"} complete`
+          ),
+        onError: e =>
+          toast.error(
+            `Couldn't update: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
     setBulkCompleteOpen(false);
   };
   const setPaymentDate = (id: number, ddmm: string | null) => {
     updatePayment.mutate(
       { id, projectId, dueDate: ddmm ?? "" },
-      { onError: (e) => toast.error(`Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`) },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
   };
   const setSignatureDate = (id: number, ddmm: string | null) => {
     updateSignature.mutate(
       { id, projectId, estimatedDate: ddmm },
-      { onError: (e) => toast.error(`Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`) },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
   };
 
@@ -1610,25 +2778,42 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       { id, projectId, amount },
       {
         onSuccess: () => toast.success("Amount updated"),
-        onError: (e) => toast.error(`Couldn't update amount: ${e instanceof Error ? e.message : "unknown error"}`),
-      },
+        onError: e =>
+          toast.error(
+            `Couldn't update amount: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
     );
   };
 
   // Phase 3 — revert a completed checkpoint, moving the lifecycle back.
-  const revertResultToast = (label: string, r: { toLabel: string | null; from: string | null; to: string | null }) => {
+  const revertResultToast = (
+    label: string,
+    r: { toLabel: string | null; from: string | null; to: string | null }
+  ) => {
     if (r.from && r.to && r.from !== r.to) {
-      toast.info(r.toLabel ? `Project moved back to "${r.toLabel}"` : "Project stage recomputed", {
-        description: `${label} reverted to pending`,
-      });
+      toast.info(
+        r.toLabel
+          ? `Project moved back to "${r.toLabel}"`
+          : "Project stage recomputed",
+        {
+          description: `${label} reverted to pending`,
+        }
+      );
     } else {
       toast.success(`${label} reverted to pending`);
     }
   };
   // Revert now goes through an in-app confirm dialog (not window.confirm).
-  const [revertTarget, setRevertTarget] = useState<{ kind: "payment" | "signature"; id: number; label: string } | null>(null);
-  const doRevertPayment = (p: PaymentRecord) => setRevertTarget({ kind: "payment", id: p.id, label: p.label });
-  const doRevertSignature = (s: DocumentSignRecord) => setRevertTarget({ kind: "signature", id: s.id, label: s.label });
+  const [revertTarget, setRevertTarget] = useState<{
+    kind: "payment" | "signature";
+    id: number;
+    label: string;
+  } | null>(null);
+  const doRevertPayment = (p: PaymentRecord) =>
+    setRevertTarget({ kind: "payment", id: p.id, label: p.label });
+  const doRevertSignature = (s: DocumentSignRecord) =>
+    setRevertTarget({ kind: "signature", id: s.id, label: s.label });
   const reverting = revertPayment.isPending || revertSignature.isPending;
   const confirmRevert = () => {
     if (!revertTarget) return;
@@ -1641,13 +2826,17 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
         // so if a prior stage isn't Completed the project already stops reading
         // "Completed" — no need to clear the stored completion here.
       },
-      onError: (e: unknown) => toast.error(`Revert failed: ${e instanceof Error ? e.message : "unknown error"}`),
+      onError: (e: unknown) =>
+        toast.error(
+          `Revert failed: ${e instanceof Error ? e.message : "unknown error"}`
+        ),
     };
     if (kind === "payment") revertPayment.mutate({ id, projectId }, opts);
     else revertSignature.mutate({ id, projectId }, opts);
     setRevertTarget(null);
   };
-  const [collectTarget, setCollectTarget] = useState<MarkCollectedTarget | null>(null);
+  const [collectTarget, setCollectTarget] =
+    useState<MarkCollectedTarget | null>(null);
   const [signTarget, setSignTarget] = useState<SignDocumentTarget | null>(null);
 
   // Phase 0A — self-heal. A project must never be button-less: if its lifecycle
@@ -1657,13 +2846,20 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const seedLifecycle = useSeedProjectLifecycle();
   const healedRef = useRef(false);
   const needsHeal =
-    Boolean(lc) && canCollect && (lc!.payments.length === 0 || lc!.signatures.length === 0);
+    Boolean(lc) &&
+    canCollect &&
+    (lc!.payments.length === 0 || lc!.signatures.length === 0);
   useEffect(() => {
     if (needsHeal && !healedRef.current && !seedLifecycle.isPending) {
       healedRef.current = true;
       seedLifecycle.mutate(
         { projectId, budget },
-        { onError: (e) => toast.error(`Couldn't initialise lifecycle: ${e instanceof Error ? e.message : "unknown error"}`) },
+        {
+          onError: e =>
+            toast.error(
+              `Couldn't initialise lifecycle: ${e instanceof Error ? e.message : "unknown error"}`
+            ),
+        }
       );
     }
   }, [needsHeal, projectId, budget, seedLifecycle]);
@@ -1673,17 +2869,36 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   // to the normal render (the error was toasted) so we never get stuck here.
   if (isLoading || (needsHeal && !seedLifecycle.isError)) {
     return (
-      <div className="rounded-2xl p-8 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
-        <p className="text-xs" style={{ color: "var(--t-5)" }}>Loading lifecycle…</p>
+      <div
+        className="rounded-2xl p-8 text-center"
+        style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}
+      >
+        <p className="text-xs" style={{ color: "var(--t-5)" }}>
+          Loading lifecycle…
+        </p>
       </div>
     );
   }
   if (!lc) {
     return (
-      <div className="rounded-2xl p-8 text-center" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
-        <Clock size={28} className="mx-auto mb-3" style={{ color: "var(--t-7)" }} />
-        <p className="text-sm font-semibold mb-1" style={{ color: "var(--t-1)" }}>No lifecycle data</p>
-        <p className="text-xs" style={{ color: "var(--t-5)" }}>This project hasn't been bound to the workflow engine yet.</p>
+      <div
+        className="rounded-2xl p-8 text-center"
+        style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}
+      >
+        <Clock
+          size={28}
+          className="mx-auto mb-3"
+          style={{ color: "var(--t-7)" }}
+        />
+        <p
+          className="text-sm font-semibold mb-1"
+          style={{ color: "var(--t-1)" }}
+        >
+          No lifecycle data
+        </p>
+        <p className="text-xs" style={{ color: "var(--t-5)" }}>
+          This project hasn't been bound to the workflow engine yet.
+        </p>
       </div>
     );
   }
@@ -1692,16 +2907,25 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const sig = signatureSummary(lc);
 
   // Group stages by phase for the section headers
-  const phases: StagePhase[] = ["Inquiry", "Design", "Pre-Build", "Build", "Closeout"];
+  const phases: StagePhase[] = [
+    "Inquiry",
+    "Design",
+    "Pre-Build",
+    "Build",
+    "Closeout",
+  ];
 
   // Build a map of paymentGate -> all related payment records (gate 4 has multiples)
-  const paymentsByGate = lc.payments.reduce((acc, p) => {
-    (acc[p.gate] ||= []).push(p);
-    return acc;
-  }, {} as Record<number, typeof lc.payments>);
+  const paymentsByGate = lc.payments.reduce(
+    (acc, p) => {
+      (acc[p.gate] ||= []).push(p);
+      return acc;
+    },
+    {} as Record<number, typeof lc.payments>
+  );
 
   // Build a map of signatureKey -> record
-  const sigByKey = Object.fromEntries(lc.signatures.map((s) => [s.key, s]));
+  const sigByKey = Object.fromEntries(lc.signatures.map(s => [s.key, s]));
 
   // ── Next step (guide, don't block) ──────────────────────────────────────────
   // Stages no longer auto-complete (7 Nov 2026). The "DO THIS NEXT" guidance now
@@ -1710,84 +2934,156 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   // order via its row. `lastStageId` (Defect Period) is handled by its own marker.
   const lastStageId = LIFECYCLE_STAGES[LIFECYCLE_STAGES.length - 1]?.id;
   const currentStage = LIFECYCLE_STAGES.find(
-    (s) => s.order > 1 && s.id !== lastStageId && stageStatus(s, stageStatuses) !== "completed",
+    s =>
+      s.order > 1 &&
+      s.id !== lastStageId &&
+      stageStatus(s, stageStatuses) !== "completed"
   );
   const nextPayments = currentStage?.paymentGate
-    ? (paymentsByGate[currentStage.paymentGate] ?? []).filter((p) => p.status !== "completed" && p.status !== "skipped")
+    ? (paymentsByGate[currentStage.paymentGate] ?? []).filter(
+        p => p.status !== "completed" && p.status !== "skipped"
+      )
     : [];
-  const nextSigRec = currentStage?.signatureKey ? sigByKey[currentStage.signatureKey] : undefined;
-  const nextSignature = nextSigRec && nextSigRec.status !== "completed" && nextSigRec.status !== "skipped" ? nextSigRec : undefined;
+  const nextSigRec = currentStage?.signatureKey
+    ? sigByKey[currentStage.signatureKey]
+    : undefined;
+  const nextSignature =
+    nextSigRec &&
+    nextSigRec.status !== "completed" &&
+    nextSigRec.status !== "skipped"
+      ? nextSigRec
+      : undefined;
   const hasNextAction = nextPayments.length > 0 || !!nextSignature;
   // Work is fully delivered once EVERY stage after New Inquiry (except the final
   // Defect Period) is manually marked Completed — order-independent, matching the
   // out-of-order reality. It's only TRULY complete once the Defect Period (warranty
   // window) is closed — until then the warranty is still active.
   const workDelivered = LIFECYCLE_STAGES.every(
-    (s) => s.order === 1 || s.id === lastStageId || stageStatus(s, stageStatuses) === "completed",
+    s =>
+      s.order === 1 ||
+      s.id === lastStageId ||
+      stageStatus(s, stageStatuses) === "completed"
   );
   // Stages (after New Inquiry, before Defect Period) not yet marked Completed —
   // the closeout "mark all remaining complete" convenience targets exactly these.
   const remainingStages = LIFECYCLE_STAGES.filter(
-    (s) => s.order > 1 && s.id !== lastStageId && stageStatus(s, stageStatuses) !== "completed",
+    s =>
+      s.order > 1 &&
+      s.id !== lastStageId &&
+      stageStatus(s, stageStatuses) !== "completed"
   );
   const projectComplete = workDelivered && defectDone;
   const warrantyActive = workDelivered && !defectDone;
   const warrantyEndDate = stageDates["defect-period"];
   const nextParts: string[] = [
-    ...nextPayments.map((p) => `collect ${p.label} (${formatRM(p.amount)})`),
+    ...nextPayments.map(p => `collect ${p.label} (${formatRM(p.amount)})`),
     ...(nextSignature ? [`sign ${nextSignature.label}`] : []),
   ];
   const openCollect = (p: PaymentRecord) =>
-    setCollectTarget({ id: p.id, projectId, label: p.label, amount: p.amount, gate: p.gate, reference: p.reference, notes: p.notes });
+    setCollectTarget({
+      id: p.id,
+      projectId,
+      label: p.label,
+      amount: p.amount,
+      gate: p.gate,
+      reference: p.reference,
+      notes: p.notes,
+    });
   const openSign = (s: DocumentSignRecord) =>
     setSignTarget({
-      id: s.id, projectId, projectName, signatureKey: s.key, label: s.label, group: s.group,
-      status: s.status, documentRef: s.documentRef, signedDate: s.signedDate, signedBy: s.signedBy,
-      notes: s.notes, defaultSignedBy: clientName,
+      id: s.id,
+      projectId,
+      projectName,
+      signatureKey: s.key,
+      label: s.label,
+      group: s.group,
+      status: s.status,
+      documentRef: s.documentRef,
+      signedDate: s.signedDate,
+      signedBy: s.signedBy,
+      notes: s.notes,
+      defaultSignedBy: clientName,
     });
 
   return (
     <div className="space-y-5">
       {/* Customer context (meeting note #3) — checkpoints belong to this client. */}
       {clientName && (
-        <div className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
+        <div
+          className="rounded-xl px-3 py-2 flex items-center gap-2"
+          style={{
+            background: "var(--s-card)",
+            border: "1px solid var(--b-1)",
+          }}
+        >
           <User size={13} style={{ color: "var(--acc)" }} />
           <p className="text-xs" style={{ color: "var(--t-3)" }}>
             <span style={{ color: "var(--t-5)" }}>Customer:</span> {clientName}
-            {clientContact && <span style={{ color: "var(--t-5)" }}> · {clientContact}</span>}
+            {clientContact && (
+              <span style={{ color: "var(--t-5)" }}> · {clientContact}</span>
+            )}
           </p>
         </div>
       )}
 
       {/* —— Next step banner — the ONE action that advances the project —— */}
       {projectComplete ? (
-        <div className="rounded-xl px-3.5 py-2.5 flex items-center gap-2.5" style={{ background: "oklch(0.55 0.09 145 / 10%)", border: "1px solid oklch(0.55 0.09 145 / 30%)" }}>
+        <div
+          className="rounded-xl px-3.5 py-2.5 flex items-center gap-2.5"
+          style={{
+            background: "oklch(0.55 0.09 145 / 10%)",
+            border: "1px solid oklch(0.55 0.09 145 / 30%)",
+          }}
+        >
           <Check size={15} style={{ color: "oklch(0.45 0.10 145)" }} />
-          <p className="text-xs font-medium" style={{ color: "oklch(0.40 0.10 145)" }}>
+          <p
+            className="text-xs font-medium"
+            style={{ color: "oklch(0.40 0.10 145)" }}
+          >
             Project completed — defect period closed
             {project?.defectPeriodCompletedAt
               ? ` on ${new Date(project.defectPeriodCompletedAt).toLocaleDateString("en-GB")}`
-              : ""}.
+              : ""}
+            .
           </p>
         </div>
       ) : hasNextAction ? (
-        <div className="rounded-xl px-3.5 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5" style={{ background: "oklch(0.62 0.09 68 / 8%)", border: "1px solid oklch(0.62 0.09 68 / 28%)" }}>
+        <div
+          className="rounded-xl px-3.5 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5"
+          style={{
+            background: "oklch(0.62 0.09 68 / 8%)",
+            border: "1px solid oklch(0.62 0.09 68 / 28%)",
+          }}
+        >
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-label" style={{ color: "var(--acc)", letterSpacing: "0.1em" }}>NEXT STEP TO PROCEED</p>
+            <p
+              className="text-[10px] font-label"
+              style={{ color: "var(--acc)", letterSpacing: "0.1em" }}
+            >
+              NEXT STEP TO PROCEED
+            </p>
             <p className="text-xs mt-0.5" style={{ color: "var(--t-2)" }}>
-              To advance past <span className="font-semibold">{currentStage?.label}</span>, {nextParts.join(" and ")}.
-              {(nextPayments.length > 0 && nextSignature) && <span style={{ color: "var(--t-5)" }}> (needs both)</span>}
+              To advance past{" "}
+              <span className="font-semibold">{currentStage?.label}</span>,{" "}
+              {nextParts.join(" and ")}.
+              {nextPayments.length > 0 && nextSignature && (
+                <span style={{ color: "var(--t-5)" }}> (needs both)</span>
+              )}
             </p>
           </div>
           {canManage && (
             <div className="flex items-center gap-2 shrink-0">
-              {nextPayments.map((p) => (
+              {nextPayments.map(p => (
                 <button
                   key={`nx-${p.id}`}
                   type="button"
                   onClick={() => openCollect(p)}
                   className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-[11px] font-label font-bold"
-                  style={{ background: "oklch(0.55 0.09 145)", color: "oklch(1 0 0)", letterSpacing: "0.04em" }}
+                  style={{
+                    background: "oklch(0.55 0.09 145)",
+                    color: "oklch(1 0 0)",
+                    letterSpacing: "0.04em",
+                  }}
                 >
                   <Check size={11} strokeWidth={3} /> COLLECT
                 </button>
@@ -1797,7 +3093,11 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                   type="button"
                   onClick={() => openSign(nextSignature)}
                   className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-[11px] font-label font-bold"
-                  style={{ background: "var(--acc-strong)", color: "oklch(1 0 0)", letterSpacing: "0.04em" }}
+                  style={{
+                    background: "var(--acc-strong)",
+                    color: "oklch(1 0 0)",
+                    letterSpacing: "0.04em",
+                  }}
                 >
                   <Upload size={11} /> SIGN
                 </button>
@@ -1806,11 +3106,21 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
           )}
         </div>
       ) : warrantyActive ? (
-        <div className="rounded-xl px-3.5 py-2.5 flex items-center gap-2.5" style={{ background: "oklch(0.62 0.09 68 / 8%)", border: "1px solid oklch(0.62 0.09 68 / 28%)" }}>
+        <div
+          className="rounded-xl px-3.5 py-2.5 flex items-center gap-2.5"
+          style={{
+            background: "oklch(0.62 0.09 68 / 8%)",
+            border: "1px solid oklch(0.62 0.09 68 / 28%)",
+          }}
+        >
           <Clock size={15} style={{ color: "var(--acc-ink)" }} />
-          <p className="text-xs font-medium" style={{ color: "var(--acc-ink)" }}>
+          <p
+            className="text-xs font-medium"
+            style={{ color: "var(--acc-ink)" }}
+          >
             Work delivered — defect &amp; warranty period active
-            {warrantyEndDate ? ` until ${warrantyEndDate}` : ""}. Mark it done below to close the project.
+            {warrantyEndDate ? ` until ${warrantyEndDate}` : ""}. Mark it done
+            below to close the project.
           </p>
         </div>
       ) : null}
@@ -1836,22 +3146,35 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       </div>
 
       {/* —— Phase timeline —— */}
-      {phases.map((phase) => {
-        const phaseStages = LIFECYCLE_STAGES.filter((s) => s.phase === phase);
+      {phases.map(phase => {
+        const phaseStages = LIFECYCLE_STAGES.filter(s => s.phase === phase);
         const pc = phaseColors[phase];
         return (
           <div key={phase}>
             <div className="flex items-center gap-2 mb-3">
-              <div className="h-0.5 w-6 rounded-full" style={{ background: pc.color, opacity: 0.5 }} />
-              <p className="font-label text-xs" style={{ color: pc.color, letterSpacing: "0.12em" }}>
+              <div
+                className="h-0.5 w-6 rounded-full"
+                style={{ background: pc.color, opacity: 0.5 }}
+              />
+              <p
+                className="font-label text-xs"
+                style={{ color: pc.color, letterSpacing: "0.12em" }}
+              >
                 {phase.toUpperCase()}
               </p>
-              <div className="flex-1 h-px" style={{ background: "var(--b-2)" }} />
+              <div
+                className="flex-1 h-px"
+                style={{ background: "var(--b-2)" }}
+              />
             </div>
 
             <div
               className="rounded-2xl overflow-hidden"
-              style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
+              style={{
+                background: "var(--s-card)",
+                border: "1px solid var(--b-1)",
+                boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+              }}
             >
               {phaseStages.map((stage, i) => {
                 // Defect Period's status is the stored completion marker — but ONLY
@@ -1867,26 +3190,38 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                     : stageStatus(stage, stageStatuses);
                 // New Inquiry is always Completed (no selector); Defect Period uses its
                 // own Done/Revert controls; every other stage gets the manual selector.
-                const manualStatusStage = stage.order > 1 && stage.id !== "defect-period";
+                const manualStatusStage =
+                  stage.order > 1 && stage.id !== "defect-period";
                 const isLast = i === phaseStages.length - 1;
-                const payments = stage.paymentGate ? paymentsByGate[stage.paymentGate] : undefined;
-                const signature = stage.signatureKey ? sigByKey[stage.signatureKey] : undefined;
+                const payments = stage.paymentGate
+                  ? paymentsByGate[stage.paymentGate]
+                  : undefined;
+                const signature = stage.signatureKey
+                  ? sigByKey[stage.signatureKey]
+                  : undefined;
 
                 return (
                   <div
                     key={stage.id}
                     className="px-3 py-3 flex gap-3"
-                    style={{ borderBottom: isLast ? "none" : "1px solid var(--s-2)" }}
+                    style={{
+                      borderBottom: isLast ? "none" : "1px solid var(--s-2)",
+                    }}
                   >
                     {/* Rail + dot */}
-                    <div className="flex flex-col items-center shrink-0" style={{ width: 22 }}>
+                    <div
+                      className="flex flex-col items-center shrink-0"
+                      style={{ width: 22 }}
+                    >
                       <StageDot status={status} type={stage.type} />
                       {!isLast && (
                         <div
                           className="flex-1 w-0.5 mt-1"
                           style={{
                             background:
-                              status === "completed" ? "oklch(0.55 0.09 145 / 35%)" : "var(--b-2)",
+                              status === "completed"
+                                ? "oklch(0.55 0.09 145 / 35%)"
+                                : "var(--b-2)",
                             minHeight: 18,
                           }}
                         />
@@ -1905,23 +3240,44 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                                   status === "completed"
                                     ? "var(--t-3)"
                                     : status === "in-progress"
-                                    ? "var(--t-1)"
-                                    : "var(--t-5)",
+                                      ? "var(--t-1)"
+                                      : "var(--t-5)",
                               }}
                             >
                               {stage.label}
                             </p>
-                            {stage.paymentGate && <GateBadge gate={stage.paymentGate} kind="payment" />}
-                            {stage.type === "contract-sign" && <GateBadge kind="contract" />}
-                            {stage.type === "drawing-sign" && <GateBadge kind="drawing" />}
-                            {status === "in-progress" && (payments || signature) && (
-                              <span className="text-[9px] font-label px-1.5 py-0.5 rounded-full" style={{ background: "var(--acc-bright)", color: "oklch(1 0 0)", letterSpacing: "0.04em", fontWeight: 700 }}>
-                                DO THIS NEXT
-                              </span>
+                            {stage.paymentGate && (
+                              <GateBadge
+                                gate={stage.paymentGate}
+                                kind="payment"
+                              />
                             )}
+                            {stage.type === "contract-sign" && (
+                              <GateBadge kind="contract" />
+                            )}
+                            {stage.type === "drawing-sign" && (
+                              <GateBadge kind="drawing" />
+                            )}
+                            {status === "in-progress" &&
+                              (payments || signature) && (
+                                <span
+                                  className="text-[9px] font-label px-1.5 py-0.5 rounded-full"
+                                  style={{
+                                    background: "var(--acc-bright)",
+                                    color: "oklch(1 0 0)",
+                                    letterSpacing: "0.04em",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  DO THIS NEXT
+                                </span>
+                              )}
                           </div>
                           {stage.description && (
-                            <p className="text-[10px] mt-0.5 leading-snug" style={{ color: "var(--t-5)" }}>
+                            <p
+                              className="text-[10px] mt-0.5 leading-snug"
+                              style={{ color: "var(--t-5)" }}
+                            >
                               {stage.description}
                             </p>
                           )}
@@ -1934,7 +3290,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                               <StageDateControl
                                 value={stageDates[stage.id]}
                                 canEdit={canManage}
-                                onSet={(d) => setMilestoneDate(stage.id, d)}
+                                onSet={d => setMilestoneDate(stage.id, d)}
                                 saving={setStageDate.isPending}
                                 pickLabel="Pick Date"
                                 setPrefix="Warranty ends"
@@ -1946,7 +3302,12 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                                     onClick={reopenDefect}
                                     disabled={setDefectDone.isPending}
                                     className="text-[10px] font-label px-2 py-1 rounded-md inline-flex items-center gap-1 shrink-0"
-                                    style={{ background: "transparent", color: "var(--t-3)", border: "1px solid var(--b-strong)", cursor: "pointer" }}
+                                    style={{
+                                      background: "transparent",
+                                      color: "var(--t-3)",
+                                      border: "1px solid var(--b-strong)",
+                                      cursor: "pointer",
+                                    }}
                                   >
                                     <Undo2 size={10} /> Revert
                                   </button>
@@ -1956,7 +3317,12 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                                     onClick={markDefectDone}
                                     disabled={setDefectDone.isPending}
                                     className="text-[10px] font-label font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shrink-0"
-                                    style={{ background: "oklch(0.55 0.09 145)", color: "oklch(1 0 0)", letterSpacing: "0.03em", cursor: "pointer" }}
+                                    style={{
+                                      background: "oklch(0.55 0.09 145)",
+                                      color: "oklch(1 0 0)",
+                                      letterSpacing: "0.03em",
+                                      cursor: "pointer",
+                                    }}
                                   >
                                     <Check size={11} strokeWidth={3} /> Done
                                   </button>
@@ -1965,32 +3331,43 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                           ) : (
                             /* Estimated date for the other milestone stages (Phase 2).
                                Payment/signature stages carry their date on the row below. */
-                            !payments && !signature && (
+                            !payments &&
+                            !signature && (
                               <div className="mt-1">
                                 <StageDateControl
                                   value={stageDates[stage.id]}
                                   canEdit={canCollect}
-                                  onSet={(d) => setMilestoneDate(stage.id, d)}
+                                  onSet={d => setMilestoneDate(stage.id, d)}
                                   saving={setStageDate.isPending}
                                 />
                               </div>
                             )
                           )}
-                          {stage.id === "defect-period" && workDelivered && defectDone && project?.defectPeriodCompletedAt && (
-                            <p className="text-[10px] mt-1" style={{ color: "var(--t-5)" }}>
-                              Closed {new Date(project.defectPeriodCompletedAt).toLocaleDateString("en-GB")}
-                              {project.defectPeriodCompletedBy && staffByAvatar[project.defectPeriodCompletedBy]
-                                ? ` · by ${staffByAvatar[project.defectPeriodCompletedBy]}`
-                                : ""}
-                            </p>
-                          )}
+                          {stage.id === "defect-period" &&
+                            workDelivered &&
+                            defectDone &&
+                            project?.defectPeriodCompletedAt && (
+                              <p
+                                className="text-[10px] mt-1"
+                                style={{ color: "var(--t-5)" }}
+                              >
+                                Closed{" "}
+                                {new Date(
+                                  project.defectPeriodCompletedAt
+                                ).toLocaleDateString("en-GB")}
+                                {project.defectPeriodCompletedBy &&
+                                staffByAvatar[project.defectPeriodCompletedBy]
+                                  ? ` · by ${staffByAvatar[project.defectPeriodCompletedBy]}`
+                                  : ""}
+                              </p>
+                            )}
                         </div>
                         <StageStatusControl
                           status={status}
                           canEdit={canCollect}
                           interactive={manualStatusStage}
                           saving={setStageStatus.isPending}
-                          onChange={(next) => changeStageStatus(stage.id, next)}
+                          onChange={next => changeStageStatus(stage.id, next)}
                         />
                       </div>
 
@@ -2004,8 +3381,8 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                               projectId={projectId}
                               canCollect={canCollect}
                               staffById={staffById}
-                              onSetDate={(d) => setPaymentDate(p.id, d)}
-                              onSetAmount={(amt) => setPaymentAmount(p.id, amt)}
+                              onSetDate={d => setPaymentDate(p.id, d)}
+                              onSetAmount={amt => setPaymentAmount(p.id, amt)}
                               onRevert={() => doRevertPayment(p)}
                               reverting={revertPayment.isPending}
                               onCollect={() =>
@@ -2043,7 +3420,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                           signature={signature}
                           canSign={canSign}
                           staffById={staffById}
-                          onSetDate={(d) => setSignatureDate(signature.id, d)}
+                          onSetDate={d => setSignatureDate(signature.id, d)}
                           onRevert={() => doRevertSignature(signature)}
                           reverting={revertSignature.isPending}
                           onSign={() =>
@@ -2178,12 +3555,21 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       {/* —— Variation Order (VO) — client adds items mid-renovation (~60–70% of
           projects). Gated by a yes/no; when yes, reuse ColumnGrid with a per-VO
           client sign-off. Sits near Closeout. */}
-      <div className="rounded-2xl p-3.5 space-y-3" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
+      <div
+        className="rounded-2xl p-3.5 space-y-3"
+        style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}
+      >
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>Variation Order</p>
+            <p
+              className="text-sm font-semibold"
+              style={{ color: "var(--t-1)" }}
+            >
+              Variation Order
+            </p>
             <p className="text-xs mt-0.5" style={{ color: "var(--t-5)" }}>
-              Does this project have a Variation Order? (Client-requested changes mid-build.)
+              Does this project have a Variation Order? (Client-requested
+              changes mid-build.)
             </p>
           </div>
           {canCollect && (
@@ -2193,7 +3579,12 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                 onClick={() => toggleVO(true)}
                 disabled={setVariationOrder.isPending}
                 className="text-[11px] font-label px-3 py-1.5 rounded-lg"
-                style={{ background: hasVO ? "var(--acc)" : "var(--s-2)", color: hasVO ? "oklch(1 0 0)" : "var(--t-3)", border: hasVO ? "none" : "1px solid var(--b-strong)", cursor: "pointer" }}
+                style={{
+                  background: hasVO ? "var(--acc)" : "var(--s-2)",
+                  color: hasVO ? "oklch(1 0 0)" : "var(--t-3)",
+                  border: hasVO ? "none" : "1px solid var(--b-strong)",
+                  cursor: "pointer",
+                }}
               >
                 Yes
               </button>
@@ -2202,7 +3593,12 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                 onClick={() => toggleVO(false)}
                 disabled={setVariationOrder.isPending}
                 className="text-[11px] font-label px-3 py-1.5 rounded-lg"
-                style={{ background: !hasVO ? "var(--acc)" : "var(--s-2)", color: !hasVO ? "oklch(1 0 0)" : "var(--t-3)", border: !hasVO ? "none" : "1px solid var(--b-strong)", cursor: "pointer" }}
+                style={{
+                  background: !hasVO ? "var(--acc)" : "var(--s-2)",
+                  color: !hasVO ? "oklch(1 0 0)" : "var(--t-3)",
+                  border: !hasVO ? "none" : "1px solid var(--b-strong)",
+                  cursor: "pointer",
+                }}
               >
                 No
               </button>
@@ -2225,10 +3621,17 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
             emptyHint="No variation orders yet."
           />
         ) : (
-          <p className="text-[11px]" style={{ color: voColumns.length > 0 ? "var(--acc-ink)" : "var(--t-6)" }}>
+          <p
+            className="text-[11px]"
+            style={{
+              color: voColumns.length > 0 ? "var(--acc-ink)" : "var(--t-6)",
+            }}
+          >
             {voColumns.length > 0
               ? `${voColumns.length} variation order${voColumns.length === 1 ? "" : "s"} hidden — tap "Yes" to show ${voColumns.length === 1 ? "it" : "them"} again.`
-              : canCollect ? 'Tap "Yes" to start logging variation orders.' : "No variation orders on this project."}
+              : canCollect
+                ? 'Tap "Yes" to start logging variation orders.'
+                : "No variation orders on this project."}
           </p>
         )}
       </div>
@@ -2243,19 +3646,34 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
             onClick={() => setBulkCompleteOpen(true)}
             disabled={markStagesComplete.isPending}
             className="text-[11px] font-label inline-flex items-center gap-1.5 px-3 py-2 rounded-lg"
-            style={{ background: "oklch(0.55 0.09 145 / 10%)", color: "oklch(0.38 0.09 145)", border: "1px solid oklch(0.55 0.09 145 / 28%)", cursor: "pointer", letterSpacing: "0.03em" }}
+            style={{
+              background: "oklch(0.55 0.09 145 / 10%)",
+              color: "oklch(0.38 0.09 145)",
+              border: "1px solid oklch(0.55 0.09 145 / 28%)",
+              cursor: "pointer",
+              letterSpacing: "0.03em",
+            }}
           >
-            <CheckSquare size={12} /> Mark all {remainingStages.length} remaining stages complete
+            <CheckSquare size={12} /> Mark all {remainingStages.length}{" "}
+            remaining stages complete
           </button>
-          <span className="text-[10px] text-center" style={{ color: "var(--t-6)" }}>
-            Unlocks the Defect Period · you can still change any stage afterwards
+          <span
+            className="text-[10px] text-center"
+            style={{ color: "var(--t-6)" }}
+          >
+            Unlocks the Defect Period · you can still change any stage
+            afterwards
           </span>
         </div>
       )}
 
       {/* —— Footer note —— */}
-      <p className="text-[10px] text-center font-label" style={{ color: "var(--t-6)", letterSpacing: "0.06em" }}>
-        SPAZEHAUS · DESIGN & RENOVATION WORKFLOW · 5 PAYMENT GATES · 6 DOCUMENT SIGNATURES
+      <p
+        className="text-[10px] text-center font-label"
+        style={{ color: "var(--t-6)", letterSpacing: "0.06em" }}
+      >
+        SPAZEHAUS · DESIGN & RENOVATION WORKFLOW · 5 PAYMENT GATES · 6 DOCUMENT
+        SIGNATURES
       </p>
 
       {/* Mark-collected sheet */}
@@ -2276,16 +3694,23 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       <AlertDialog open={bulkCompleteOpen} onOpenChange={setBulkCompleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mark all {remainingStages.length} remaining stages complete?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Mark all {remainingStages.length} remaining stages complete?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This sets every stage that isn’t Completed yet to <strong>Completed</strong>, which unlocks
-              the Defect Period. It doesn’t record any payments or signatures — you can still change any
-              individual stage afterwards.
+              This sets every stage that isn’t Completed yet to{" "}
+              <strong>Completed</strong>, which unlocks the Defect Period. It
+              doesn’t record any payments or signatures — you can still change
+              any individual stage afterwards.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => confirmBulkComplete(remainingStages.map((s) => s.id))}>
+            <AlertDialogAction
+              onClick={() =>
+                confirmBulkComplete(remainingStages.map(s => s.id))
+              }
+            >
               Mark all complete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -2293,14 +3718,24 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
       </AlertDialog>
 
       {/* In-app revert confirm (replaces window.confirm) */}
-      <AlertDialog open={revertTarget !== null} onOpenChange={(o) => { if (!o) setRevertTarget(null); }}>
+      <AlertDialog
+        open={revertTarget !== null}
+        onOpenChange={o => {
+          if (!o) setRevertTarget(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Revert “{revertTarget?.label}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              This sets the checkpoint back to {revertTarget?.kind === "payment" ? "pending" : "unsigned"} and clears its{" "}
-              {revertTarget?.kind === "payment" ? "collected date and reference" : "signed date and document"}. It may move the
-              project back to an earlier stage. The amount is kept.
+              This sets the checkpoint back to{" "}
+              {revertTarget?.kind === "payment" ? "pending" : "unsigned"} and
+              clears its{" "}
+              {revertTarget?.kind === "payment"
+                ? "collected date and reference"
+                : "signed date and document"}
+              . It may move the project back to an earlier stage. The amount is
+              kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2308,7 +3743,10 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
             <AlertDialogAction
               onClick={confirmRevert}
               disabled={reverting}
-              style={{ background: "oklch(0.55 0.15 25)", color: "oklch(1 0 0)" }}
+              style={{
+                background: "oklch(0.55 0.15 25)",
+                color: "oklch(1 0 0)",
+              }}
             >
               Revert
             </AlertDialogAction>
@@ -2337,17 +3775,30 @@ function SummaryCard({
   return (
     <div
       className="rounded-2xl p-3"
-      style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
+      style={{
+        background: "var(--s-card)",
+        border: "1px solid var(--b-1)",
+        boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+      }}
     >
       <div className="flex items-center gap-2 mb-1.5">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: tintBg }}>
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{ background: tintBg }}
+        >
           <Icon size={14} style={{ color: tint }} />
         </div>
-        <p className="text-[10px] font-label" style={{ color: "var(--t-5)", letterSpacing: "0.06em" }}>
+        <p
+          className="text-[10px] font-label"
+          style={{ color: "var(--t-5)", letterSpacing: "0.06em" }}
+        >
           {label.toUpperCase()}
         </p>
       </div>
-      <p className="font-display text-xl font-semibold leading-none" style={{ color: "var(--t-1)" }}>
+      <p
+        className="font-display text-xl font-semibold leading-none"
+        style={{ color: "var(--t-1)" }}
+      >
         {primary}
       </p>
       <p className="text-[10px] mt-1" style={{ color: "var(--t-5)" }}>
@@ -2357,7 +3808,13 @@ function SummaryCard({
   );
 }
 
-function StageDot({ status, type }: { status: CheckpointStatus; type: string }) {
+function StageDot({
+  status,
+  type,
+}: {
+  status: CheckpointStatus;
+  type: string;
+}) {
   const isPay = type === "payment";
   const isSign = type === "contract-sign" || type === "drawing-sign";
 
@@ -2378,7 +3835,11 @@ function StageDot({ status, type }: { status: CheckpointStatus; type: string }) 
         transition={{ repeat: Infinity, duration: 1.6 }}
         className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
         style={{
-          background: isPay ? "var(--acc-strong)" : isSign ? "oklch(0.55 0.09 240)" : "var(--acc-strong)",
+          background: isPay
+            ? "var(--acc-strong)"
+            : isSign
+              ? "oklch(0.55 0.09 240)"
+              : "var(--acc-strong)",
         }}
       >
         {isPay ? (
@@ -2405,7 +3866,10 @@ function StageDot({ status, type }: { status: CheckpointStatus; type: string }) 
       ) : isSign ? (
         <PenSquare size={9} style={{ color: "var(--t-6)" }} />
       ) : (
-        <div className="w-1 h-1 rounded-full" style={{ background: "var(--t-7)" }} />
+        <div
+          className="w-1 h-1 rounded-full"
+          style={{ background: "var(--t-7)" }}
+        />
       )}
     </div>
   );
@@ -2419,14 +3883,31 @@ function GateBadge({
   kind: "payment" | "contract" | "drawing";
 }) {
   const config = {
-    payment:  { label: gate ? `PAY ${["①", "②", "③", "④", "⑤"][gate - 1]}` : "PAY", color: "var(--acc-ink)",  bg: "oklch(0.62 0.09 68 / 12%)" },
-    contract: { label: "CONTRACT",  color: "oklch(0.50 0.10 25)",  bg: "oklch(0.60 0.10 25 / 12%)" },
-    drawing:  { label: "SIGN OFF",  color: "oklch(0.38 0.09 240)", bg: "oklch(0.55 0.09 240 / 12%)" },
+    payment: {
+      label: gate ? `PAY ${["①", "②", "③", "④", "⑤"][gate - 1]}` : "PAY",
+      color: "var(--acc-ink)",
+      bg: "oklch(0.62 0.09 68 / 12%)",
+    },
+    contract: {
+      label: "CONTRACT",
+      color: "oklch(0.50 0.10 25)",
+      bg: "oklch(0.60 0.10 25 / 12%)",
+    },
+    drawing: {
+      label: "SIGN OFF",
+      color: "oklch(0.38 0.09 240)",
+      bg: "oklch(0.55 0.09 240 / 12%)",
+    },
   }[kind];
   return (
     <span
       className="text-[9px] font-label px-1.5 py-0.5 rounded-md"
-      style={{ background: config.bg, color: config.color, letterSpacing: "0.06em", fontWeight: 700 }}
+      style={{
+        background: config.bg,
+        color: config.color,
+        letterSpacing: "0.06em",
+        fontWeight: 700,
+      }}
     >
       {config.label}
     </span>
@@ -2435,11 +3916,24 @@ function GateBadge({
 
 /** Overflow "⋯" menu for a completed checkpoint row — tucks Edit/Revert away so
  *  they aren't both always on screen (6-Nov follow-up). */
-function CheckpointActionsMenu({ onEdit, onRevert, disabled }: { onEdit?: () => void; onRevert?: () => void; disabled?: boolean }) {
+function CheckpointActionsMenu({
+  onEdit,
+  onRevert,
+  disabled,
+}: {
+  onEdit?: () => void;
+  onRevert?: () => void;
+  disabled?: boolean;
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" title="More actions" className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ color: "var(--t-5)" }}>
+        <button
+          type="button"
+          title="More actions"
+          className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+          style={{ color: "var(--t-5)" }}
+        >
           <MoreHorizontal size={14} />
         </button>
       </DropdownMenuTrigger>
@@ -2450,7 +3944,12 @@ function CheckpointActionsMenu({ onEdit, onRevert, disabled }: { onEdit?: () => 
           </DropdownMenuItem>
         )}
         {onRevert && (
-          <DropdownMenuItem onSelect={() => onRevert()} disabled={disabled} className="gap-2 text-xs" style={{ color: "oklch(0.52 0.16 25)" }}>
+          <DropdownMenuItem
+            onSelect={() => onRevert()}
+            disabled={disabled}
+            className="gap-2 text-xs"
+            style={{ color: "oklch(0.52 0.16 25)" }}
+          >
             <Undo2 size={12} /> Revert
           </DropdownMenuItem>
         )}
@@ -2494,91 +3993,126 @@ function PaymentRow({
   });
   return (
     <div className="space-y-1">
-    <div
-      className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
-      style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        {payment.status === "completed" ? (
-          <Check size={11} style={{ color: sc.color }} />
-        ) : payment.status === "in-progress" ? (
-          <Clock size={11} style={{ color: sc.color }} />
-        ) : payment.status === "overdue" ? (
-          <AlertCircle size={11} style={{ color: sc.color }} />
-        ) : (
-          <Coins size={11} style={{ color: "var(--t-6)" }} />
-        )}
-        <div className="min-w-0">
-          <p className="text-[11px] font-medium truncate" style={{ color: "var(--t-2)" }}>
-            {payment.label}
-          </p>
-          <p className="text-[9px]" style={{ color: "var(--t-5)" }}>
-            {payment.status === "completed"
-              ? `Collected ${payment.collectedDate} · ${payment.reference || "—"}`
-              : payment.notes || "Pending collection"}
-          </p>
-          {audit && (
-            <p className="text-[9px] truncate" style={{ color: "var(--t-6)" }} title={audit}>{audit}</p>
+      <div
+        className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
+        style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {payment.status === "completed" ? (
+            <Check size={11} style={{ color: sc.color }} />
+          ) : payment.status === "in-progress" ? (
+            <Clock size={11} style={{ color: sc.color }} />
+          ) : payment.status === "overdue" ? (
+            <AlertCircle size={11} style={{ color: sc.color }} />
+          ) : (
+            <Coins size={11} style={{ color: "var(--t-6)" }} />
+          )}
+          <div className="min-w-0">
+            <p
+              className="text-[11px] font-medium truncate"
+              style={{ color: "var(--t-2)" }}
+            >
+              {payment.label}
+            </p>
+            <p className="text-[9px]" style={{ color: "var(--t-5)" }}>
+              {payment.status === "completed"
+                ? `Collected ${payment.collectedDate} · ${payment.reference || "—"}`
+                : payment.notes || "Pending collection"}
+            </p>
+            {audit && (
+              <p
+                className="text-[9px] truncate"
+                style={{ color: "var(--t-6)" }}
+                title={audit}
+              >
+                {audit}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isOpen && onSetDate && (
+            <StageDateControl
+              value={payment.dueDate}
+              canEdit={canCollect}
+              onSet={onSetDate}
+            />
+          )}
+          {editingAmount && isOpen && canCollect && onSetAmount ? (
+            <input
+              type="number"
+              autoFocus
+              defaultValue={payment.amount}
+              onBlur={e => {
+                const v = Number(e.currentTarget.value);
+                if (Number.isFinite(v) && v >= 0 && v !== payment.amount)
+                  onSetAmount(v);
+                setEditingAmount(false);
+              }}
+              onKeyDown={e => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") setEditingAmount(false);
+              }}
+              className="w-24 text-[11px] rounded-md px-1.5 py-0.5 text-right"
+              style={{
+                background: "var(--s-2)",
+                border: "1px solid var(--b-strong)",
+                color: "var(--t-1)",
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() =>
+                isOpen && canCollect && onSetAmount && setEditingAmount(true)
+              }
+              disabled={!isOpen || !canCollect || !onSetAmount}
+              className="text-[11px] font-display font-semibold inline-flex items-center gap-1"
+              style={{
+                color: sc.color,
+                cursor:
+                  isOpen && canCollect && onSetAmount ? "pointer" : "default",
+              }}
+              title={
+                isOpen && canCollect && onSetAmount ? "Edit amount" : undefined
+              }
+            >
+              {formatRM(payment.amount)}
+              {isOpen && canCollect && onSetAmount && (
+                <Pencil size={9} style={{ color: "var(--t-5)" }} />
+              )}
+            </button>
+          )}
+          {isCompleted && canCollect && (onEdit || onRevert) && (
+            <CheckpointActionsMenu
+              onEdit={onEdit}
+              onRevert={onRevert}
+              disabled={reverting}
+            />
+          )}
+          {isOpen && canCollect && (
+            <motion.button
+              whileTap={{ scale: 0.94 }}
+              onClick={onCollect}
+              title="Record this payment"
+              className="px-2 py-0.5 rounded-md flex items-center gap-1"
+              style={{
+                background: "oklch(0.55 0.09 145 / 12%)",
+                color: "oklch(0.38 0.09 145)",
+                border: "1px solid oklch(0.55 0.09 145 / 25%)",
+              }}
+            >
+              <Check size={9} strokeWidth={3} />
+              <span
+                className="text-[9px] font-label"
+                style={{ letterSpacing: "0.04em", fontWeight: 700 }}
+              >
+                COLLECT
+              </span>
+            </motion.button>
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {isOpen && onSetDate && (
-          <StageDateControl value={payment.dueDate} canEdit={canCollect} onSet={onSetDate} />
-        )}
-        {editingAmount && isOpen && canCollect && onSetAmount ? (
-          <input
-            type="number"
-            autoFocus
-            defaultValue={payment.amount}
-            onBlur={(e) => {
-              const v = Number(e.currentTarget.value);
-              if (Number.isFinite(v) && v >= 0 && v !== payment.amount) onSetAmount(v);
-              setEditingAmount(false);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              if (e.key === "Escape") setEditingAmount(false);
-            }}
-            className="w-24 text-[11px] rounded-md px-1.5 py-0.5 text-right"
-            style={{ background: "var(--s-2)", border: "1px solid var(--b-strong)", color: "var(--t-1)" }}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => isOpen && canCollect && onSetAmount && setEditingAmount(true)}
-            disabled={!isOpen || !canCollect || !onSetAmount}
-            className="text-[11px] font-display font-semibold inline-flex items-center gap-1"
-            style={{ color: sc.color, cursor: isOpen && canCollect && onSetAmount ? "pointer" : "default" }}
-            title={isOpen && canCollect && onSetAmount ? "Edit amount" : undefined}
-          >
-            {formatRM(payment.amount)}
-            {isOpen && canCollect && onSetAmount && <Pencil size={9} style={{ color: "var(--t-5)" }} />}
-          </button>
-        )}
-        {isCompleted && canCollect && (onEdit || onRevert) && (
-          <CheckpointActionsMenu onEdit={onEdit} onRevert={onRevert} disabled={reverting} />
-        )}
-        {isOpen && canCollect && (
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={onCollect}
-            title="Record this payment"
-            className="px-2 py-0.5 rounded-md flex items-center gap-1"
-            style={{
-              background: "oklch(0.55 0.09 145 / 12%)",
-              color: "oklch(0.38 0.09 145)",
-              border: "1px solid oklch(0.55 0.09 145 / 25%)",
-            }}
-          >
-            <Check size={9} strokeWidth={3} />
-            <span className="text-[9px] font-label" style={{ letterSpacing: "0.04em", fontWeight: 700 }}>
-              COLLECT
-            </span>
-          </motion.button>
-        )}
-      </div>
-    </div>
     </div>
   );
 }
@@ -2601,7 +4135,8 @@ function SignatureRow({
   staffById?: Record<string, string>;
 }) {
   const sc = checkpointStatusConfig[signature.status];
-  const isOpen = signature.status !== "completed" && signature.status !== "skipped";
+  const isOpen =
+    signature.status !== "completed" && signature.status !== "skipped";
   const isCompleted = signature.status === "completed";
   const audit = checkpointAuditLine({
     createdBy: signature.createdBy,
@@ -2617,7 +4152,9 @@ function SignatureRow({
   const isPdf = (signature.documentRef || "").toLowerCase().endsWith(".pdf");
   useEffect(() => {
     if (!docUrl) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDocUrl(null); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDocUrl(null);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [docUrl]);
@@ -2644,97 +4181,146 @@ function SignatureRow({
 
   return (
     <div className="mt-2 space-y-1">
-    {docUrl && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "oklch(0 0 0 / 0.75)", backdropFilter: "blur(2px)" }} onClick={() => setDocUrl(null)}>
-        <div className="relative rounded-xl overflow-hidden shadow-2xl" style={{ background: "#fff", maxWidth: "92vw", maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
-          <button type="button" onClick={() => setDocUrl(null)} aria-label="Close" className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "oklch(0 0 0 / 0.6)" }}>
-            <X size={18} className="text-white" />
-          </button>
-          {isPdf ? (
-            <iframe title={signature.label} src={docUrl} style={{ width: "90vw", height: "85vh", border: 0 }} />
+      {docUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{
+            background: "oklch(0 0 0 / 0.75)",
+            backdropFilter: "blur(2px)",
+          }}
+          onClick={() => setDocUrl(null)}
+        >
+          <div
+            className="relative rounded-xl overflow-hidden shadow-2xl"
+            style={{ background: "#fff", maxWidth: "92vw", maxHeight: "90vh" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setDocUrl(null)}
+              aria-label="Close"
+              className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ background: "oklch(0 0 0 / 0.6)" }}
+            >
+              <X size={18} className="text-white" />
+            </button>
+            {isPdf ? (
+              <iframe
+                title={signature.label}
+                src={docUrl}
+                style={{ width: "90vw", height: "85vh", border: 0 }}
+              />
+            ) : (
+              <img
+                src={docUrl}
+                alt={signature.label}
+                style={{
+                  display: "block",
+                  maxWidth: "92vw",
+                  maxHeight: "90vh",
+                  objectFit: "contain",
+                }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+      <div
+        className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
+        style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {signature.status === "completed" ? (
+            <Check size={11} style={{ color: sc.color }} />
+          ) : signature.status === "in-progress" ? (
+            <Clock size={11} style={{ color: sc.color }} />
           ) : (
-            <img src={docUrl} alt={signature.label} style={{ display: "block", maxWidth: "92vw", maxHeight: "90vh", objectFit: "contain" }} />
+            <PenSquare size={11} style={{ color: "var(--t-6)" }} />
+          )}
+          <div className="min-w-0">
+            <p
+              className="text-[11px] font-medium truncate"
+              style={{ color: "var(--t-2)" }}
+            >
+              {signature.label}
+            </p>
+            <p className="text-[9px]" style={{ color: "var(--t-5)" }}>
+              {signature.status === "completed"
+                ? `Signed ${signature.signedDate} · ${signature.signedBy}`
+                : signature.notes || "Awaiting client signature"}
+            </p>
+            {audit && (
+              <p
+                className="text-[9px] truncate"
+                style={{ color: "var(--t-6)" }}
+                title={audit}
+              >
+                {audit}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isOpen && onSetDate && (
+            <StageDateControl
+              value={signature.estimatedDate}
+              canEdit={canSign}
+              onSet={onSetDate}
+            />
+          )}
+          {isCompleted && canSign && onRevert && (
+            <CheckpointActionsMenu onRevert={onRevert} disabled={reverting} />
+          )}
+          {(hasStoredDoc || hasLegacyDoc) && (
+            <button
+              onClick={handleViewPdf}
+              disabled={viewLoading}
+              className="text-[9px] font-label px-2 py-1 rounded-md flex items-center gap-1"
+              style={{
+                background: "oklch(0.62 0.09 68 / 10%)",
+                color: "var(--acc-ink)",
+                letterSpacing: "0.04em",
+                opacity: viewLoading ? 0.6 : 1,
+              }}
+            >
+              {viewLoading ? "…" : hasStoredDoc ? "VIEW" : "REF"}
+            </button>
+          )}
+          {isOpen && canSign && (
+            <motion.button
+              whileTap={{ scale: 0.94 }}
+              onClick={e => {
+                e.stopPropagation();
+                onSign();
+              }}
+              title="Record this signature"
+              className="px-2 py-0.5 rounded-md flex items-center gap-1"
+              style={{
+                background:
+                  signature.group === "contract"
+                    ? "oklch(0.60 0.10 25 / 12%)"
+                    : "oklch(0.55 0.09 240 / 12%)",
+                color:
+                  signature.group === "contract"
+                    ? "oklch(0.50 0.10 25)"
+                    : "oklch(0.38 0.09 240)",
+                border:
+                  signature.group === "contract"
+                    ? "1px solid oklch(0.50 0.10 25 / 35%)"
+                    : "1px solid oklch(0.38 0.09 240 / 35%)",
+              }}
+            >
+              <Upload size={9} />
+              <span
+                className="text-[9px] font-label"
+                style={{ letterSpacing: "0.04em", fontWeight: 700 }}
+              >
+                SIGN
+              </span>
+            </motion.button>
           )}
         </div>
       </div>
-    )}
-    <div
-      className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
-      style={{ background: "var(--s-page)", border: "1px solid var(--b-2)" }}
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        {signature.status === "completed" ? (
-          <Check size={11} style={{ color: sc.color }} />
-        ) : signature.status === "in-progress" ? (
-          <Clock size={11} style={{ color: sc.color }} />
-        ) : (
-          <PenSquare size={11} style={{ color: "var(--t-6)" }} />
-        )}
-        <div className="min-w-0">
-          <p className="text-[11px] font-medium truncate" style={{ color: "var(--t-2)" }}>
-            {signature.label}
-          </p>
-          <p className="text-[9px]" style={{ color: "var(--t-5)" }}>
-            {signature.status === "completed"
-              ? `Signed ${signature.signedDate} · ${signature.signedBy}`
-              : signature.notes || "Awaiting client signature"}
-          </p>
-          {audit && (
-            <p className="text-[9px] truncate" style={{ color: "var(--t-6)" }} title={audit}>{audit}</p>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        {isOpen && onSetDate && (
-          <StageDateControl value={signature.estimatedDate} canEdit={canSign} onSet={onSetDate} />
-        )}
-        {isCompleted && canSign && onRevert && (
-          <CheckpointActionsMenu onRevert={onRevert} disabled={reverting} />
-        )}
-        {(hasStoredDoc || hasLegacyDoc) && (
-          <button
-            onClick={handleViewPdf}
-            disabled={viewLoading}
-            className="text-[9px] font-label px-2 py-1 rounded-md flex items-center gap-1"
-            style={{
-              background: "oklch(0.62 0.09 68 / 10%)",
-              color: "var(--acc-ink)",
-              letterSpacing: "0.04em",
-              opacity: viewLoading ? 0.6 : 1,
-            }}
-          >
-            {viewLoading ? "…" : hasStoredDoc ? "VIEW" : "REF"}
-          </button>
-        )}
-        {isOpen && canSign && (
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSign();
-            }}
-            title="Record this signature"
-            className="px-2 py-0.5 rounded-md flex items-center gap-1"
-            style={{
-              background: signature.group === "contract"
-                ? "oklch(0.60 0.10 25 / 12%)"
-                : "oklch(0.55 0.09 240 / 12%)",
-              color: signature.group === "contract"
-                ? "oklch(0.50 0.10 25)"
-                : "oklch(0.38 0.09 240)",
-              border: signature.group === "contract"
-                ? "1px solid oklch(0.50 0.10 25 / 35%)"
-                : "1px solid oklch(0.38 0.09 240 / 35%)",
-            }}
-          >
-            <Upload size={9} />
-            <span className="text-[9px] font-label" style={{ letterSpacing: "0.04em", fontWeight: 700 }}>
-              SIGN
-            </span>
-          </motion.button>
-        )}
-      </div>
-    </div>
     </div>
   );
 }
@@ -2743,7 +4329,17 @@ function SignatureRow({
 // Copies the read-only /portal/:token URL to the clipboard so staff can
 // WhatsApp / email it to the client. Falls back to a toast that shows the
 // URL when clipboard API isn't available (e.g. older browsers, http://).
-function SharePortalButton({ token, clientName, projectId, canManage }: { token: string; clientName: string; projectId: string; canManage: boolean }) {
+function SharePortalButton({
+  token,
+  clientName,
+  projectId,
+  canManage,
+}: {
+  token: string;
+  clientName: string;
+  projectId: string;
+  canManage: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const regenerate = useRegenerateClientToken();
   const url = `${window.location.origin}/portal/${token}`;
@@ -2764,63 +4360,83 @@ function SharePortalButton({ token, clientName, projectId, canManage }: { token:
   };
 
   const handleRegenerate = async () => {
-    if (!window.confirm("Generate a new portal link? The current link will stop working immediately.")) return;
+    if (
+      !window.confirm(
+        "Generate a new portal link? The current link will stop working immediately."
+      )
+    )
+      return;
     try {
       await regenerate.mutateAsync(projectId);
       toast.success("Portal link regenerated — the old link no longer works");
     } catch (err) {
-      toast.error(`Couldn't regenerate: ${err instanceof Error ? err.message : "unknown error"}`);
+      toast.error(
+        `Couldn't regenerate: ${err instanceof Error ? err.message : "unknown error"}`
+      );
     }
   };
 
   return (
     <div className="space-y-1.5">
-    <motion.button
-      whileTap={{ scale: 0.97 }}
-      onClick={handleCopy}
-      className="w-full rounded-2xl p-4 flex items-center justify-between"
-      style={{
-        background: copied
-          ? "linear-gradient(135deg, oklch(0.55 0.09 145 / 8%), oklch(1 0 0))"
-          : "linear-gradient(135deg, oklch(0.62 0.09 68 / 6%), oklch(1 0 0))",
-        border: copied
-          ? "1px solid oklch(0.55 0.09 145 / 30%)"
-          : "1px solid oklch(0.62 0.09 68 / 25%)",
-        boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
-      }}
-    >
-      <div className="text-left min-w-0 flex-1 pr-3">
-        <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>
-          Share client portal
-        </p>
-        <p className="text-[11px] mt-0.5 truncate" style={{ color: "var(--t-5)" }}>
-          {copied ? "Link copied to clipboard" : "Read-only progress view — no login needed"}
-        </p>
-      </div>
-      <div
-        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+      <motion.button
+        whileTap={{ scale: 0.97 }}
+        onClick={handleCopy}
+        className="w-full rounded-2xl p-4 flex items-center justify-between"
         style={{
-          background: copied ? "oklch(0.55 0.09 145 / 12%)" : "oklch(0.62 0.09 68 / 12%)",
+          background: copied
+            ? "linear-gradient(135deg, oklch(0.55 0.09 145 / 8%), oklch(1 0 0))"
+            : "linear-gradient(135deg, oklch(0.62 0.09 68 / 6%), oklch(1 0 0))",
+          border: copied
+            ? "1px solid oklch(0.55 0.09 145 / 30%)"
+            : "1px solid oklch(0.62 0.09 68 / 25%)",
+          boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
         }}
       >
-        {copied ? (
-          <Check size={15} style={{ color: "oklch(0.38 0.09 145)" }} />
-        ) : (
-          <Share2 size={15} style={{ color: "var(--acc)" }} />
-        )}
-      </div>
-    </motion.button>
+        <div className="text-left min-w-0 flex-1 pr-3">
+          <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>
+            Share client portal
+          </p>
+          <p
+            className="text-[11px] mt-0.5 truncate"
+            style={{ color: "var(--t-5)" }}
+          >
+            {copied
+              ? "Link copied to clipboard"
+              : "Read-only progress view — no login needed"}
+          </p>
+        </div>
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+          style={{
+            background: copied
+              ? "oklch(0.55 0.09 145 / 12%)"
+              : "oklch(0.62 0.09 68 / 12%)",
+          }}
+        >
+          {copied ? (
+            <Check size={15} style={{ color: "oklch(0.38 0.09 145)" }} />
+          ) : (
+            <Share2 size={15} style={{ color: "var(--acc)" }} />
+          )}
+        </div>
+      </motion.button>
 
-    {canManage && (
-      <button
-        onClick={handleRegenerate}
-        disabled={regenerate.isPending}
-        className="text-[11px] font-label px-1"
-        style={{ color: "var(--t-5)", letterSpacing: "0.02em", opacity: regenerate.isPending ? 0.5 : 1 }}
-      >
-        {regenerate.isPending ? "Regenerating…" : "Regenerate link (if leaked)"}
-      </button>
-    )}
+      {canManage && (
+        <button
+          onClick={handleRegenerate}
+          disabled={regenerate.isPending}
+          className="text-[11px] font-label px-1"
+          style={{
+            color: "var(--t-5)",
+            letterSpacing: "0.02em",
+            opacity: regenerate.isPending ? 0.5 : 1,
+          }}
+        >
+          {regenerate.isPending
+            ? "Regenerating…"
+            : "Regenerate link (if leaked)"}
+        </button>
+      )}
     </div>
   );
 }
