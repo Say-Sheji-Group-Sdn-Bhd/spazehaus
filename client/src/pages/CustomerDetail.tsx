@@ -141,8 +141,8 @@ export default function CustomerDetail() {
                 {initials || "—"}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-display text-base font-semibold" style={{ color: "var(--t-1)" }}>{customer.name}</p>
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <h1 className="font-display text-2xl font-semibold leading-tight" style={{ color: "var(--t-1)" }}>{customer.name}</h1>
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                   <span className="text-[10px] font-label px-1.5 py-0.5 rounded-md" style={{ background: cc.bg, color: cc.color, letterSpacing: "0.04em", fontWeight: 700 }}>
                     {customer.category.toUpperCase()}
                   </span>
