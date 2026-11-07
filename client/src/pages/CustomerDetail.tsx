@@ -108,6 +108,12 @@ export default function CustomerDetail() {
   const telHref = customer.contact ? `tel:${customer.contact.replace(/\s+/g, "")}` : undefined;
   const mailHref = customer.email ? `mailto:${customer.email}` : undefined;
 
+  // Convert flow is a full page inside the app shell (sidebar stays), matching
+  // the New Project wizard — not a floating overlay.
+  if (convertTarget) {
+    return <ConvertInquiryDialog inquiry={convertTarget} onClose={() => setConvertTarget(null)} />;
+  }
+
   return (
     <div className="mobile-container" style={{ background: "var(--s-page)" }}>
       <AppHeader title={customer.name} subtitle={customer.id} bgImage={HERO_BG} showBack compact />
@@ -211,10 +217,6 @@ export default function CustomerDetail() {
           </div>
         )}
       </div>
-
-      {convertTarget && (
-        <ConvertInquiryDialog inquiry={convertTarget} open={!!convertTarget} onClose={() => setConvertTarget(null)} />
-      )}
     </div>
   );
 }
