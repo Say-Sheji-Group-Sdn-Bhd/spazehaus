@@ -734,18 +734,27 @@ export type Database = {
           estimated_date: string | null
           project_id: string
           stage_id: string
+          status: string | null
+          status_set_at: string | null
+          status_set_by: string | null
           updated_at: string
         }
         Insert: {
           estimated_date?: string | null
           project_id: string
           stage_id: string
+          status?: string | null
+          status_set_at?: string | null
+          status_set_by?: string | null
           updated_at?: string
         }
         Update: {
           estimated_date?: string | null
           project_id?: string
           stage_id?: string
+          status?: string | null
+          status_set_at?: string | null
+          status_set_by?: string | null
           updated_at?: string
         }
         Relationships: [

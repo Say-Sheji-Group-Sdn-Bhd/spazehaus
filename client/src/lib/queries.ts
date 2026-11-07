@@ -49,7 +49,7 @@ import type {
   WaClickRow,
 } from "@/lib/dbTypes";
 import type { TablesUpdate, TablesInsert } from "@/lib/database.types";
-import type { PaymentGate, SignatureKey } from "@/lib/lifecycleData";
+import type { PaymentGate, SignatureKey, ManualStageStatus } from "@/lib/lifecycleData";
 import type { LineItem } from "@/lib/quotationData";
 
 // ─── DATE HELPERS ───────────────────────────────────────────────────────────
@@ -295,6 +295,7 @@ export const qk = {
   project: (id: string) => ["projects", id] as const,
   projectLifecycle: (id: string) => ["projects", id, "lifecycle"] as const,
   projectStageDates: (id: string) => ["projects", id, "stage_dates"] as const,
+  projectStageStatuses: (id: string) => ["projects", id, "stage_statuses"] as const,
   siteReports: (id: string) => ["projects", id, "site_reports"] as const,
   projectTasks: (id: string) => ["project_tasks", id] as const,
   projectReviews: (id: string) => ["project_reviews", id] as const,
@@ -1055,6 +1056,69 @@ export function useSetStageDate() {
   });
 }
 
+// ─── MANUAL PER-STAGE STATUS (supervisor review, 7 Nov 2026) ─────────────────
+// Stages no longer auto-complete from a payment/signature. Every stage after
+// "New Inquiry" carries a manual status staff set: Completed · Pending · Refer ·
+// Not-yet. Stored on project_stage_dates.status (nullable → "pending"); a DB
+// trigger mirrors projects.current_stage_id to the earliest non-completed stage.
+
+/** Map of stage_id → the staff-set manual status for a project. Stages with no
+ *  stored status are omitted (callers default them to "pending"). */
+export function useProjectStageStatuses(projectId: string | undefined) {
+  return useQuery({
+    queryKey: qk.projectStageStatuses(projectId ?? ""),
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<Record<string, ManualStageStatus>> => {
+      const { data, error } = await supabase
+        .from("project_stage_dates")
+        .select("stage_id, status")
+        .eq("project_id", projectId ?? "");
+      if (error) throw error;
+      const out: Record<string, ManualStageStatus> = {};
+      for (const r of data ?? []) {
+        if (r.status) out[r.stage_id] = r.status as ManualStageStatus;
+      }
+      return out;
+    },
+  });
+}
+
+export type SetStageStatusArgs = {
+  projectId: string;
+  stageId: string;
+  status: ManualStageStatus;
+  by?: string | null;          // staff.avatar_code (audit)
+};
+
+/** Upsert one stage's manual status (+ audit). OPS-tier only (RLS). The DB
+ *  trigger re-mirrors current_stage_id, so invalidate the project + lifecycle too. */
+export function useSetStageStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: SetStageStatusArgs): Promise<void> => {
+      const { error } = await supabase
+        .from("project_stage_dates")
+        .upsert(
+          {
+            project_id: args.projectId,
+            stage_id: args.stageId,
+            status: args.status,
+            status_set_by: args.by ?? null,
+            status_set_at: new Date().toISOString(),
+          },
+          { onConflict: "project_id,stage_id" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.projectStageStatuses(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projectLifecycle(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
 // ─── CROSS-PROJECT: OPEN PAYMENTS + SIGNATURES ──────────────────────────────
 
 export type OpenPaymentRow = PaymentRecord & {
@@ -1439,8 +1503,8 @@ export function useRevertPayment() {
         .update({ status: "pending", collected_date: null, reference: null, collected_by: null })
         .eq("id", args.id);
       if (error) throw error;
-      const { error: rErr } = await supabase.rpc("recompute_project_stage", { p_project_id: args.projectId });
-      if (rErr) throw rErr;
+      // Manual-status model (7 Nov 2026): un-collecting does NOT move the stage —
+      // stage status is staff-driven. No recompute; staff reopen the stage manually.
       const after = await fetchProjectStage(args.projectId);
       return { from: before.id, to: after.id, fromLabel: before.label, toLabel: after.label };
     },
@@ -1459,8 +1523,8 @@ export function useRevertSignature() {
         .update({ status: "pending", signed_date: null, signed_by: null, document_ref: null, recorded_by: null })
         .eq("id", args.id);
       if (error) throw error;
-      const { error: rErr } = await supabase.rpc("recompute_project_stage", { p_project_id: args.projectId });
-      if (rErr) throw rErr;
+      // Manual-status model (7 Nov 2026): un-signing does NOT move the stage —
+      // stage status is staff-driven. No recompute; staff reopen the stage manually.
       const after = await fetchProjectStage(args.projectId);
       return { from: before.id, to: after.id, fromLabel: before.label, toLabel: after.label };
     },

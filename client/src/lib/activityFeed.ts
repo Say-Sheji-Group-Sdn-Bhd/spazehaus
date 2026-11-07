@@ -63,7 +63,9 @@ export function summarizeAudit(entry: AuditEntry): string {
       return `New project ${after.name ?? entry.row_id}`;
     }
     if (action === "UPDATE" && before.current_stage_id !== after.current_stage_id) {
-      return `Stage advanced ${before.current_stage_id ?? "—"} → ${after.current_stage_id ?? "—"}`;
+      // Manual-status model (7 Nov 2026): the stage mirrors the earliest unfinished
+      // stage, so it can move either direction — keep the wording neutral.
+      return `Stage moved ${before.current_stage_id ?? "—"} → ${after.current_stage_id ?? "—"}`;
     }
     if (action === "UPDATE" && before.status !== after.status) {
       return `Project ${after.name ?? entry.row_id} status: ${after.status}`;

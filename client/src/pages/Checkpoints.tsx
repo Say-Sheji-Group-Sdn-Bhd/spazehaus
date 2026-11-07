@@ -60,7 +60,9 @@ export default function Checkpoints() {
       ...p,
       bucket: bucketDate(p.dueDate),
       daysFromToday: days,
-      effectiveStatus: effectivePaymentStatus({ status: p.status, dueDate: p.dueDate } as Parameters<typeof effectivePaymentStatus>[0]),
+      // Payments only ever carry the 5 checkpoint statuses (never the manual
+      // stage-only "refer"/"not-yet"), so narrow back to the payment status type.
+      effectiveStatus: effectivePaymentStatus({ status: p.status, dueDate: p.dueDate } as Parameters<typeof effectivePaymentStatus>[0]) as OpenPaymentRow["status"],
     };
   });
 

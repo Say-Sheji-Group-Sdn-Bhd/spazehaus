@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useLocation } from "wouter";
-import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, MoreHorizontal, Undo2 } from "lucide-react";
+import { Upload, UserPlus, User, CheckSquare, MapPin, Maximize2, Phone, FileText, Receipt, Coins, PenSquare, Check, Clock, AlertCircle, Share2, Plus, Pencil, Trash2, Star, X, ImagePlus, CalendarClock, MoreHorizontal, Undo2, ChevronDown } from "lucide-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
@@ -30,8 +30,10 @@ import {
   stageStatus,
   phaseColors,
   checkpointStatusConfig,
+  MANUAL_STAGE_STATUSES,
   type StagePhase,
   type CheckpointStatus,
+  type ManualStageStatus,
 } from "@/lib/lifecycleData";
 import {
   useProject,
@@ -42,6 +44,8 @@ import {
   useSeedProjectLifecycle,
   useProjectStageDates,
   useSetStageDate,
+  useProjectStageStatuses,
+  useSetStageStatus,
   useUpdatePayment,
   useUpdateSignature,
   useRevertPayment,
@@ -147,6 +151,71 @@ function StageDateControl({
       <CalendarClock size={9} />
       {value ? `${setPrefix} ${value}` : pickLabel}
     </button>
+  );
+}
+
+/**
+ * Manual per-stage status control (supervisor review, 7 Nov 2026).
+ * Every stage after "New Inquiry" carries a staff-set status; this replaces the
+ * passive status pill on the right of the row. A dropdown (not a 4-wide segmented
+ * control) keeps it legible on a 375px phone and matches the app's ⋯ menu pattern:
+ * the trigger shows the current status as a colored pill + chevron; the menu lists
+ * the four options with a color dot and a check on the current one.
+ *
+ * Read-only / New-Inquiry rows fall back to the static pill.
+ */
+function StageStatusControl({
+  status, canEdit, onChange, saving, interactive = true,
+}: {
+  status: CheckpointStatus;
+  canEdit: boolean;
+  onChange?: (next: ManualStageStatus) => void;
+  saving?: boolean;
+  interactive?: boolean;
+}) {
+  const cfg = checkpointStatusConfig[status];
+  const pill = (
+    <span
+      className="text-[9px] font-label px-2 py-1 rounded-full shrink-0 inline-flex items-center gap-1"
+      style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, letterSpacing: "0.04em" }}
+    >
+      {cfg.label}
+      {interactive && canEdit && <ChevronDown size={10} style={{ opacity: 0.7 }} />}
+    </span>
+  );
+
+  if (!interactive || !canEdit || !onChange) return pill;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild disabled={saving}>
+        <button
+          type="button"
+          aria-label={`Set stage status — currently ${cfg.label}`}
+          className="shrink-0 rounded-full"
+          style={{ cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
+        >
+          {pill}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[9rem]">
+        {MANUAL_STAGE_STATUSES.map((s) => {
+          const c = checkpointStatusConfig[s];
+          const active = s === status;
+          return (
+            <DropdownMenuItem
+              key={s}
+              onSelect={() => { if (!active) onChange(s); }}
+              className="gap-2 text-xs"
+            >
+              <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} />
+              <span className="flex-1" style={{ color: "var(--t-2)" }}>{c.label}</span>
+              {active && <Check size={13} style={{ color: c.color }} />}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1420,7 +1489,9 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const { data: project } = useProject(projectId);
   const { data: rosterStaff = [] } = useAllStaff();
   const { data: stageDates = {} } = useProjectStageDates(projectId);
+  const { data: stageStatuses = {} } = useProjectStageStatuses(projectId);
   const setStageDate = useSetStageDate();
+  const setStageStatus = useSetStageStatus();
   const setDefectDone = useSetDefectPeriodDone(projectId);
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
@@ -1465,6 +1536,17 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
     setStageDate.mutate(
       { projectId, stageId, date: ddmm },
       { onError: (e) => toast.error(`Couldn't set date: ${e instanceof Error ? e.message : "unknown error"}`) },
+    );
+  };
+  // Manual per-stage status (7 Nov 2026) — staff set each stage's status; nothing
+  // auto-completes. The DB trigger re-mirrors current_stage_id from the statuses.
+  const changeStageStatus = (stageId: string, next: ManualStageStatus) => {
+    setStageStatus.mutate(
+      { projectId, stageId, status: next, by: me?.avatar_code ?? null },
+      {
+        onSuccess: () => toast.success("Stage status updated"),
+        onError: (e) => toast.error(`Couldn't update status: ${e instanceof Error ? e.message : "unknown error"}`),
+      },
     );
   };
   const setPaymentDate = (id: number, ddmm: string | null) => {
@@ -1580,21 +1662,27 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const sigByKey = Object.fromEntries(lc.signatures.map((s) => [s.key, s]));
 
   // ── Next step (guide, don't block) ──────────────────────────────────────────
-  // The project only advances when the CURRENT stage's checkpoint(s) are done.
-  // Compute that one action set, so we can show a "Next step" banner and mark
-  // which checkpoint is live vs. an out-of-order one.
-  const currentStage = LIFECYCLE_STAGES.find((s) => stageStatus(s, lc.currentStageId) === "in-progress");
+  // Stages no longer auto-complete (7 Nov 2026). The "DO THIS NEXT" guidance now
+  // points at the FIRST stage (after New Inquiry) staff haven't marked Completed —
+  // a hint, not a gate: staff can still act on any stage's payment/signature out of
+  // order via its row. `lastStageId` (Defect Period) is handled by its own marker.
+  const lastStageId = LIFECYCLE_STAGES[LIFECYCLE_STAGES.length - 1]?.id;
+  const currentStage = LIFECYCLE_STAGES.find(
+    (s) => s.order > 1 && s.id !== lastStageId && stageStatus(s, stageStatuses) !== "completed",
+  );
   const nextPayments = currentStage?.paymentGate
     ? (paymentsByGate[currentStage.paymentGate] ?? []).filter((p) => p.status !== "completed" && p.status !== "skipped")
     : [];
   const nextSigRec = currentStage?.signatureKey ? sigByKey[currentStage.signatureKey] : undefined;
   const nextSignature = nextSigRec && nextSigRec.status !== "completed" && nextSigRec.status !== "skipped" ? nextSigRec : undefined;
   const hasNextAction = nextPayments.length > 0 || !!nextSignature;
-  const lastStageId = LIFECYCLE_STAGES[LIFECYCLE_STAGES.length - 1]?.id;
-  // Work is fully delivered once the project reaches the final stage with no
-  // payment/signature left. It's only TRULY complete once the Defect Period
-  // (warranty window) is closed — until then the warranty is still active.
-  const workDelivered = lc.currentStageId === lastStageId && !hasNextAction;
+  // Work is fully delivered once EVERY stage after New Inquiry (except the final
+  // Defect Period) is manually marked Completed — order-independent, matching the
+  // out-of-order reality. It's only TRULY complete once the Defect Period (warranty
+  // window) is closed — until then the warranty is still active.
+  const workDelivered = LIFECYCLE_STAGES.every(
+    (s) => s.order === 1 || s.id === lastStageId || stageStatus(s, stageStatuses) === "completed",
+  );
   const projectComplete = workDelivered && defectDone;
   const warrantyActive = workDelivered && !defectDone;
   const warrantyEndDate = stageDates["defect-period"];
@@ -1721,14 +1809,18 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
               {phaseStages.map((stage, i) => {
                 // Defect Period's status is the stored completion marker — but ONLY
                 // once the project has actually reached the final stage (workDelivered).
-                // Before that it stays positional (pending), so the Done button can't
-                // appear on a project that's still mid-lifecycle.
+                // Before that it stays "pending", so the Done button can't appear on a
+                // project that's still mid-lifecycle. Every other stage (after New
+                // Inquiry) shows its MANUAL status, which staff set via the selector.
                 const status =
                   stage.id === "defect-period" && workDelivered
                     ? defectDone
                       ? "completed"
                       : "in-progress"
-                    : stageStatus(stage, lc.currentStageId);
+                    : stageStatus(stage, stageStatuses);
+                // New Inquiry is always Completed (no selector); Defect Period uses its
+                // own Done/Revert controls; every other stage gets the manual selector.
+                const manualStatusStage = stage.order > 1 && stage.id !== "defect-period";
                 const isLast = i === phaseStages.length - 1;
                 const payments = stage.paymentGate ? paymentsByGate[stage.paymentGate] : undefined;
                 const signature = stage.signatureKey ? sigByKey[stage.signatureKey] : undefined;
@@ -1846,17 +1938,13 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                             </p>
                           )}
                         </div>
-                        <span
-                          className="text-[9px] font-label px-2 py-0.5 rounded-full shrink-0"
-                          style={{
-                            background: checkpointStatusConfig[status].bg,
-                            color: checkpointStatusConfig[status].color,
-                            border: `1px solid ${checkpointStatusConfig[status].border}`,
-                            letterSpacing: "0.04em",
-                          }}
-                        >
-                          {checkpointStatusConfig[status].label}
-                        </span>
+                        <StageStatusControl
+                          status={status}
+                          canEdit={canCollect}
+                          interactive={manualStatusStage}
+                          saving={setStageStatus.isPending}
+                          onChange={(next) => changeStageStatus(stage.id, next)}
+                        />
                       </div>
 
                       {/* Payment detail (one or more rows for gate 4) */}
