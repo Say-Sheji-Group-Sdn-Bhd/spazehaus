@@ -1861,58 +1861,8 @@ export type CreateInquiryArgs = {
   notes?: string | null;
 };
 
-/** Create a brand-new customer/inquiry. Insert is allowed for any authenticated
- *  user (`inquiries_insert_any_authenticated` RLS policy). The `INQ###` id isn't
- *  DB-generated — compute the next one from the current max and retry on a
- *  unique-violation (concurrent-create race), mirroring `useCreateProject`. */
-export function useCreateInquiry() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (args: CreateInquiryArgs): Promise<InquiryRow> => {
-      const { data: existing, error: listErr } = await supabase.from("inquiries").select("id");
-      if (listErr) throw listErr;
-      const maxNum = (existing ?? []).reduce((max, r) => {
-        const m = /^INQ(\d+)$/.exec(r.id);
-        return m ? Math.max(max, parseInt(m[1], 10)) : max;
-      }, 0);
-
-      const today = new Date().toISOString().slice(0, 10);
-      const base: Omit<TablesInsert<"inquiries">, "id"> = {
-        inquiry_date: today,
-        client_name: args.clientName,
-        contact: args.contact ?? null,
-        email: args.email ?? null,
-        category: args.category,
-        tier: args.tier,
-        source: args.source ?? "Direct",
-        property_type: args.propertyType,
-        location: args.location,
-        estimated_size: args.estimatedSize ?? null,
-        estimated_budget: args.estimatedBudget ?? null,
-        stage: args.stage ?? "new-inquiry",
-        assigned_to_id: args.assignedToId ?? null,
-        notes: args.notes ?? null,
-        contact_log: [],
-        last_updated: today,
-      };
-
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const id = `INQ${String(maxNum + 1 + attempt).padStart(3, "0")}`;
-        const { data, error } = await supabase
-          .from("inquiries")
-          .insert({ ...base, id })
-          .select()
-          .single();
-        if (!error) return data as InquiryRow;
-        if (error.code !== "23505") throw error; // 23505 = unique_violation → next id
-      }
-      throw new Error("Could not allocate a unique customer id after several attempts. Please retry.");
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.inquiries });
-    },
-  });
-}
+// (useCreateInquiry removed in Phase 5 — CreateCustomer now uses useCreateCustomer,
+//  which creates the customer + its first opportunity together.)
 
 // ─── CUSTOMERS (Phase 5 — one customer holds many opportunities/projects) ────
 // A customer is the canonical client record; each inquiry is ONE opportunity
@@ -2137,7 +2087,7 @@ export function useCreateCustomer() {
 export function useUpdateCustomer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { id: string; name?: string; contact?: string | null; email?: string | null; address?: string | null }): Promise<void> => {
+    mutationFn: async (args: { id: string; name?: string; contact?: string | null; email?: string | null; address?: string | null }): Promise<string[]> => {
       const payload: TablesUpdate<"customers"> = {};
       if (args.name !== undefined) payload.name = args.name;
       if (args.contact !== undefined) payload.contact = args.contact;
@@ -2155,11 +2105,37 @@ export function useUpdateCustomer() {
         const { error: sErr } = await supabase.from("inquiries").update(sync).eq("customer_id", args.id);
         if (sErr) throw sErr;
       }
+
+      // ...and onto any already-CONVERTED projects (they keep a denormalized copy
+      // of the client identity from convert time), so the edit propagates everywhere.
+      const projSync: TablesUpdate<"projects"> = {};
+      if (args.name !== undefined) projSync.client_name = args.name;
+      if (args.contact !== undefined) projSync.client_contact = args.contact;
+      if (args.email !== undefined) projSync.client_email = args.email;
+      let projectIds: string[] = [];
+      if (Object.keys(projSync).length > 0) {
+        const { data: awarded, error: aErr } = await supabase
+          .from("inquiries")
+          .select("awarded_project_id")
+          .eq("customer_id", args.id)
+          .not("awarded_project_id", "is", null);
+        if (aErr) throw aErr;
+        projectIds = ((awarded ?? []) as { awarded_project_id: string | null }[])
+          .map((r) => r.awarded_project_id)
+          .filter((v): v is string => Boolean(v));
+        if (projectIds.length > 0) {
+          const { error: pErr } = await supabase.from("projects").update(projSync).in("id", projectIds);
+          if (pErr) throw pErr;
+        }
+      }
+      return projectIds;
     },
-    onSuccess: (_v, args) => {
+    onSuccess: (projectIds, args) => {
       qc.invalidateQueries({ queryKey: qk.customer(args.id) });
       qc.invalidateQueries({ queryKey: qk.customers });
       qc.invalidateQueries({ queryKey: qk.inquiries });
+      qc.invalidateQueries({ queryKey: qk.projects });
+      for (const pid of projectIds ?? []) qc.invalidateQueries({ queryKey: qk.project(pid) });
     },
   });
 }
