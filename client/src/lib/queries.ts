@@ -27,6 +27,7 @@ import type {
   CandidateRow,
   AnnouncementRow,
   SitePhotoRow,
+  ProjectColumnRow,
   SalesTargetRow,
   CalendarEventRow,
   CalendarEventStaffRow,
@@ -296,6 +297,7 @@ export const qk = {
   projectLifecycle: (id: string) => ["projects", id, "lifecycle"] as const,
   projectStageDates: (id: string) => ["projects", id, "stage_dates"] as const,
   projectStageStatuses: (id: string) => ["projects", id, "stage_statuses"] as const,
+  projectColumns: (id: string, section: string) => ["projects", id, "columns", section] as const,
   siteReports: (id: string) => ["projects", id, "site_reports"] as const,
   projectTasks: (id: string) => ["project_tasks", id] as const,
   projectReviews: (id: string) => ["project_reviews", id] as const,
@@ -1147,6 +1149,135 @@ export function useMarkStagesComplete() {
       qc.invalidateQueries({ queryKey: qk.projects });
     },
   });
+}
+
+// ─── REUSABLE "ADD-COLUMN" UPLOADER (Phase 2 — 7 Nov 2026) ──────────────────
+// User-named columns per project section (drawings / site-inspection /
+// progressive-payment / variation-order), each with a date, an optional
+// full-resolution file, and (progressive-payment) an amount. Files live in the
+// private `project-documents` bucket at `${projectId}/${section}/${id}/${ts}.ext`
+// — the first path segment is the project id, which the storage RLS checks.
+
+export type ProjectColumn = ProjectColumnRow;
+
+/** All columns for a project's section, ordered. */
+export function useProjectColumns(projectId: string | undefined, section: string) {
+  return useQuery({
+    queryKey: qk.projectColumns(projectId ?? "", section),
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<ProjectColumn[]> => {
+      const { data, error } = await supabase
+        .from("project_columns")
+        .select("*")
+        .eq("project_id", projectId ?? "")
+        .eq("section", section)
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ProjectColumn[];
+    },
+  });
+}
+
+const invalidateColumns = (qc: ReturnType<typeof useQueryClient>, projectId: string, section: string) =>
+  qc.invalidateQueries({ queryKey: qk.projectColumns(projectId, section) });
+
+/** Add a blank column at the end (staff fill in the label next). */
+export function useAddColumn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; section: string; by?: string | null; afterSort?: number }): Promise<void> => {
+      const { error } = await supabase.from("project_columns").insert({
+        project_id: args.projectId,
+        section: args.section,
+        label: "",
+        sort_order: (args.afterSort ?? 0) + 1,
+        created_by: args.by ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Patch a column's label / date / amount (status-free metadata). */
+export function useUpdateColumn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: number; projectId: string; section: string;
+      label?: string; colDate?: string | null; amount?: number | null;
+    }): Promise<void> => {
+      const payload: TablesUpdate<"project_columns"> = {};
+      if (args.label !== undefined) payload.label = args.label;
+      if (args.colDate !== undefined) payload.col_date = args.colDate ? ddmmyyyyToIso(args.colDate) : null;
+      if (args.amount !== undefined) payload.amount = args.amount;
+      const { error } = await supabase.from("project_columns").update(payload).eq("id", args.id);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Upload (or replace) a column's file — stored at full resolution, no compression. */
+export function useUploadColumnFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: number; projectId: string; section: string; file: File; prevPath?: string | null }): Promise<void> => {
+      const ext = args.file.name.split(".").pop()?.toLowerCase() ?? "bin";
+      const path = `${args.projectId}/${args.section}/${args.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("project-documents")
+        .upload(path, args.file, { cacheControl: "3600", upsert: false, contentType: args.file.type || "application/octet-stream" });
+      if (upErr) throw upErr;
+      const { error: dbErr } = await supabase
+        .from("project_columns")
+        .update({ file_path: path, file_name: args.file.name, file_size: args.file.size })
+        .eq("id", args.id);
+      if (dbErr) throw dbErr;
+      // Best-effort cleanup of the previous file (ignore failure).
+      if (args.prevPath) await supabase.storage.from("project-documents").remove([args.prevPath]);
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Remove a column's file (clears the row + deletes the storage object). */
+export function useRemoveColumnFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: number; projectId: string; section: string; path: string }): Promise<void> => {
+      const { error } = await supabase
+        .from("project_columns")
+        .update({ file_path: null, file_name: null, file_size: null })
+        .eq("id", args.id);
+      if (error) throw error;
+      await supabase.storage.from("project-documents").remove([args.path]);
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Delete a column entirely (and its file, if any). */
+export function useDeleteColumn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: number; projectId: string; section: string; path?: string | null }): Promise<void> => {
+      const { error } = await supabase.from("project_columns").delete().eq("id", args.id);
+      if (error) throw error;
+      if (args.path) await supabase.storage.from("project-documents").remove([args.path]);
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Mint a short-lived signed URL for viewing/downloading a column's file. */
+export async function getColumnFileUrl(storagePath: string, expiresInSec = 3600): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from("project-documents")
+    .createSignedUrl(storagePath, expiresInSec);
+  if (error || !data) return null;
+  return data.signedUrl;
 }
 
 // ─── CROSS-PROJECT: OPEN PAYMENTS + SIGNATURES ──────────────────────────────

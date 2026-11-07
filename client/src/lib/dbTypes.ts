@@ -55,6 +55,7 @@ export type LeaveRequestRow = Tables<"leave_requests">;
 export type CandidateRow = Tables<"candidates">;
 export type AnnouncementRow = Tables<"announcements">;
 export type SitePhotoRow = Tables<"site_photos">;
+export type ProjectColumnRow = Tables<"project_columns">;
 export type SalesTargetRow = Tables<"sales_targets">;
 export type AuditLogRow = Tables<"audit_log">;
 export type CalendarEventRow = Tables<"calendar_events">;

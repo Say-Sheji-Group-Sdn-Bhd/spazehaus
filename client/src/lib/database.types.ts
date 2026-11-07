@@ -729,6 +729,62 @@ export type Database = {
           },
         ]
       }
+      project_columns: {
+        Row: {
+          amount: number | null
+          col_date: string | null
+          created_at: string
+          created_by: string | null
+          file_name: string | null
+          file_path: string | null
+          file_size: number | null
+          id: number
+          label: string
+          project_id: string
+          section: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          col_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: never
+          label?: string
+          project_id: string
+          section: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          col_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: never
+          label?: string
+          project_id?: string
+          section?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_columns_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_stage_dates: {
         Row: {
           estimated_date: string | null

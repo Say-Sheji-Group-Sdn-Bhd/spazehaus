@@ -80,12 +80,13 @@ import type { ProjectTaskRow, ProjectReviewRow, SitePhotoRow, StaffRow } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import EditProjectSheet from "@/components/EditProjectSheet";
 import ManageTeamSheet from "@/components/ManageTeamSheet";
+import ColumnGrid from "@/components/ColumnGrid";
 import { toast } from "sonner";
 
 const CARD_BG1 = "/hero/card1.jpg";
 const CARD_BG2 = "/hero/card2.jpg";
 
-const tabs = ["Overview", "Lifecycle", "Tasks", "Quotations", "Photos", "Reports", "Team"];
+const tabs = ["Overview", "Lifecycle", "Tasks", "Quotations", "Drawings", "Photos", "Reports", "Team"];
 
 const TASK_STATUS_OPTIONS: { value: ProjectTaskStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -849,6 +850,23 @@ export default function ProjectDetail() {
                     </>
                   );
                 })()}
+              </div>
+            )}
+
+            {activeTab === "Drawings" && (
+              <div className="space-y-4">
+                <ColumnGrid
+                  projectId={project.id}
+                  section="drawings"
+                  title="Drawings"
+                  description="Add a column per trade (wet works, plumbing, M&E, electrical, carpentry, wall-painting, furniture). Name each, set a date, and attach the full-resolution PDF."
+                  canManage={canEdit}
+                  maxColumns={10}
+                  labelPlaceholder="Trade (e.g. Plumbing, M&E)"
+                  addLabel="Add drawing"
+                  accept="application/pdf,image/*"
+                  emptyHint="No drawing columns yet."
+                />
               </div>
             )}
 
