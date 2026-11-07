@@ -10,7 +10,7 @@
  * flow to 2–3 columns on wider screens.
  */
 import { useRef, useState } from "react";
-import { Plus, Trash2, Upload, FileText, ExternalLink, X, Loader2, CalendarClock, Coins } from "lucide-react";
+import { Plus, Trash2, Upload, FileText, ExternalLink, X, Loader2, CalendarClock, Coins, PenSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -46,6 +46,7 @@ export default function ColumnGrid({
   maxColumns = 10,
   minColumns = 0,
   withAmount = false,
+  withSignoff = false,
   labelPlaceholder = "Name this column",
   addLabel = "Add column",
   accept,
@@ -59,6 +60,7 @@ export default function ColumnGrid({
   maxColumns?: number;
   minColumns?: number;
   withAmount?: boolean;
+  withSignoff?: boolean;
   labelPlaceholder?: string;
   addLabel?: string;
   accept?: string;
@@ -123,8 +125,9 @@ export default function ColumnGrid({
               projectId={projectId}
               section={section}
               canManage={canManage}
-              canDelete={canManage && columns.length > minColumns}
+              canDelete={canManage && columns.length !== minColumns}
               withAmount={withAmount}
+              withSignoff={withSignoff}
               labelPlaceholder={labelPlaceholder}
               accept={accept}
             />
@@ -143,7 +146,7 @@ export default function ColumnGrid({
 }
 
 function ColumnCard({
-  col, projectId, section, canManage, canDelete, withAmount, labelPlaceholder, accept,
+  col, projectId, section, canManage, canDelete, withAmount, withSignoff, labelPlaceholder, accept,
 }: {
   col: ProjectColumn;
   projectId: string;
@@ -151,6 +154,7 @@ function ColumnCard({
   canManage: boolean;
   canDelete: boolean;
   withAmount: boolean;
+  withSignoff: boolean;
   labelPlaceholder: string;
   accept?: string;
 }) {
@@ -175,6 +179,13 @@ function ColumnCard({
     const n = v === "" ? null : Number(v);
     if (n !== null && Number.isNaN(n)) return;
     updateColumn.mutate({ ...common, amount: n }, { onError: (e) => toast.error(`Couldn't save amount: ${e instanceof Error ? e.message : "error"}`) });
+  };
+  const saveSignedBy = (v: string) => {
+    if (v === (col.signed_by ?? "")) return;
+    updateColumn.mutate({ ...common, signedBy: v }, { onError: (e) => toast.error(`Couldn't save: ${e instanceof Error ? e.message : "error"}`) });
+  };
+  const saveSignedDate = (v: string) => {
+    updateColumn.mutate({ ...common, signedDate: inputDateToDDMM(v) }, { onError: (e) => toast.error(`Couldn't save: ${e instanceof Error ? e.message : "error"}`) });
   };
   const onPickFile = (fileList: FileList | null) => {
     const file = fileList?.[0];
@@ -307,6 +318,32 @@ function ColumnCard({
         </button>
       ) : (
         <p className="text-[10px] italic" style={{ color: "var(--t-6)" }}>No file</p>
+      )}
+
+      {/* Client sign-off (Variation Order): who signed + when, before work proceeds. */}
+      {withSignoff && (
+        <div className="rounded-md px-2 py-2 flex flex-col gap-1.5" style={{ background: "var(--s-2)", border: "1px solid var(--b-1)" }}>
+          <span className="flex items-center gap-1 text-[10px] font-label" style={{ color: "var(--t-5)", letterSpacing: "0.04em" }}>
+            <PenSquare size={11} /> CLIENT SIGN-OFF
+          </span>
+          <input
+            type="text"
+            defaultValue={col.signed_by ?? ""}
+            disabled={!canManage}
+            placeholder="Signed by (client)"
+            onBlur={(e) => saveSignedBy(e.target.value.trim())}
+            className="text-[11px] rounded-md px-1.5 py-1"
+            style={{ background: "var(--s-card)", border: "1px solid var(--b-strong)", color: "var(--t-1)" }}
+          />
+          <input
+            type="date"
+            defaultValue={col.signed_date ?? ""}
+            disabled={!canManage}
+            onChange={(e) => saveSignedDate(e.target.value)}
+            className="text-[11px] rounded-md px-1.5 py-1"
+            style={{ background: "var(--s-card)", border: "1px solid var(--b-strong)", color: "var(--t-2)" }}
+          />
+        </div>
       )}
     </div>
   );

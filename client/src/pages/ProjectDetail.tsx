@@ -47,6 +47,7 @@ import {
   useProjectStageStatuses,
   useSetStageStatus,
   useMarkStagesComplete,
+  useSetVariationOrder,
   useUpdatePayment,
   useUpdateSignature,
   useRevertPayment,
@@ -1512,7 +1513,14 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const setStageDate = useSetStageDate();
   const setStageStatus = useSetStageStatus();
   const markStagesComplete = useMarkStagesComplete();
+  const setVariationOrder = useSetVariationOrder();
   const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
+  const hasVO = !!project?.hasVariationOrder;
+  const toggleVO = (value: boolean) =>
+    setVariationOrder.mutate(
+      { projectId, value },
+      { onError: (e) => toast.error(`Couldn't update: ${e instanceof Error ? e.message : "unknown error"}`) },
+    );
   const setDefectDone = useSetDefectPeriodDone(projectId);
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
@@ -2101,6 +2109,61 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
           </div>
         );
       })}
+
+      {/* —— Variation Order (VO) — client adds items mid-renovation (~60–70% of
+          projects). Gated by a yes/no; when yes, reuse ColumnGrid with a per-VO
+          client sign-off. Sits near Closeout. */}
+      <div className="rounded-2xl p-3.5 space-y-3" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>Variation Order</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--t-5)" }}>
+              Does this project have a Variation Order? (Client-requested changes mid-build.)
+            </p>
+          </div>
+          {canCollect && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => toggleVO(true)}
+                disabled={setVariationOrder.isPending}
+                className="text-[11px] font-label px-3 py-1.5 rounded-lg"
+                style={{ background: hasVO ? "var(--acc)" : "var(--s-2)", color: hasVO ? "oklch(1 0 0)" : "var(--t-3)", border: hasVO ? "none" : "1px solid var(--b-strong)", cursor: "pointer" }}
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleVO(false)}
+                disabled={setVariationOrder.isPending}
+                className="text-[11px] font-label px-3 py-1.5 rounded-lg"
+                style={{ background: !hasVO ? "var(--acc)" : "var(--s-2)", color: !hasVO ? "oklch(1 0 0)" : "var(--t-3)", border: !hasVO ? "none" : "1px solid var(--b-strong)", cursor: "pointer" }}
+              >
+                No
+              </button>
+            </div>
+          )}
+        </div>
+        {hasVO ? (
+          <ColumnGrid
+            projectId={projectId}
+            section="variation-order"
+            title="Variation Orders"
+            description="One column per VO: describe the change, set the date, attach the VO quotation/invoice, and record the client's sign-off before work proceeds."
+            canManage={canCollect}
+            maxColumns={10}
+            withSignoff
+            labelPlaceholder="Describe the VO (e.g. 2 extra plug points)"
+            addLabel="Add VO"
+            accept="application/pdf,image/*"
+            emptyHint="No variation orders yet."
+          />
+        ) : (
+          <p className="text-[11px]" style={{ color: "var(--t-6)" }}>
+            {canCollect ? 'Tap "Yes" to start logging variation orders.' : "No variation orders on this project."}
+          </p>
+        )}
+      </div>
 
       {/* —— Closeout convenience: mark every remaining stage complete at once ——
           Staff set each stage manually; near closeout that can be ~27 clicks before

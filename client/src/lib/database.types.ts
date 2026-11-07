@@ -742,6 +742,8 @@ export type Database = {
           label: string
           project_id: string
           section: string
+          signed_by: string | null
+          signed_date: string | null
           sort_order: number
           updated_at: string
         }
@@ -757,6 +759,8 @@ export type Database = {
           label?: string
           project_id: string
           section: string
+          signed_by?: string | null
+          signed_date?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -772,6 +776,8 @@ export type Database = {
           label?: string
           project_id?: string
           section?: string
+          signed_by?: string | null
+          signed_date?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -903,6 +909,7 @@ export type Database = {
           defect_period_completed_by: string | null
           description: string | null
           designer_id: string | null
+          has_variation_order: boolean
           id: string
           image_path: string | null
           lifecycle_started_at: string | null
@@ -941,6 +948,7 @@ export type Database = {
           defect_period_completed_by?: string | null
           description?: string | null
           designer_id?: string | null
+          has_variation_order?: boolean
           id: string
           image_path?: string | null
           lifecycle_started_at?: string | null
@@ -979,6 +987,7 @@ export type Database = {
           defect_period_completed_by?: string | null
           description?: string | null
           designer_id?: string | null
+          has_variation_order?: boolean
           id?: string
           image_path?: string | null
           lifecycle_started_at?: string | null

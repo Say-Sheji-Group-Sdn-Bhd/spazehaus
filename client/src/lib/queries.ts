@@ -106,6 +106,7 @@ export type Project = {
   lifecycleStartedAt: string | null;
   defectPeriodCompletedAt: string | null;  // set → warranty window closed, project truly done
   defectPeriodCompletedBy: string | null;  // staff avatar_code who closed it (audit)
+  hasVariationOrder: boolean;  // yes/no gate for the Variation Order section
   clientAccessToken: string;   // UUID for the read-only /portal/:token route
 };
 
@@ -219,6 +220,7 @@ function mapProject(row: ProjectWithStaffJoin): Project {
     lifecycleStartedAt: row.lifecycle_started_at,
     defectPeriodCompletedAt: row.defect_period_completed_at,
     defectPeriodCompletedBy: row.defect_period_completed_by,
+    hasVariationOrder: row.has_variation_order ?? false,
     clientAccessToken: row.client_access_token,
   };
 }
@@ -1207,11 +1209,14 @@ export function useUpdateColumn() {
     mutationFn: async (args: {
       id: number; projectId: string; section: string;
       label?: string; colDate?: string | null; amount?: number | null;
+      signedBy?: string | null; signedDate?: string | null;
     }): Promise<void> => {
       const payload: TablesUpdate<"project_columns"> = {};
       if (args.label !== undefined) payload.label = args.label;
       if (args.colDate !== undefined) payload.col_date = args.colDate ? ddmmyyyyToIso(args.colDate) : null;
       if (args.amount !== undefined) payload.amount = args.amount;
+      if (args.signedBy !== undefined) payload.signed_by = args.signedBy || null;
+      if (args.signedDate !== undefined) payload.signed_date = args.signedDate ? ddmmyyyyToIso(args.signedDate) : null;
       const { error } = await supabase.from("project_columns").update(payload).eq("id", args.id);
       if (error) throw error;
     },
@@ -1268,6 +1273,24 @@ export function useDeleteColumn() {
       if (args.path) await supabase.storage.from("project-documents").remove([args.path]);
     },
     onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
+/** Toggle the project's "has a Variation Order?" yes/no gate. */
+export function useSetVariationOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; value: boolean }): Promise<void> => {
+      const { error } = await supabase
+        .from("projects")
+        .update({ has_variation_order: args.value })
+        .eq("id", args.projectId);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
   });
 }
 
