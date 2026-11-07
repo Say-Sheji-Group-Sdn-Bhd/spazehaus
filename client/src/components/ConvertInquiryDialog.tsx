@@ -13,9 +13,9 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { X, Sparkles, Calendar, Coins, AlertCircle, Check } from "lucide-react";
+import { X, Sparkles, Calendar, Coins, AlertCircle, Check, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
-import { useAllStaff, useConvertInquiry, type Inquiry } from "@/lib/queries";
+import { useAllStaff, useConvertInquiry, useUpdateProject, useSetStageStatus, type Inquiry } from "@/lib/queries";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatRM } from "@/lib/quotationData";
 import { useIsDesktop } from "@/hooks/useMobile";
@@ -33,6 +33,7 @@ type FormState = {
   priority: Priority;
   serviceType: "Design" | "Renovation"; // drives the SD/SR project code
   areas: string;           // comma-separated
+  showroomDone: boolean;   // start-choice: is the showroom meet-up already done?
 };
 
 // —— date helpers ——
@@ -71,16 +72,23 @@ export default function ConvertInquiryDialog({
   const designStaff = useMemo(() => allStaff.filter((s) => s.dept === "Design"), [allStaff]);
   const opsStaff = useMemo(() => allStaff.filter((s) => s.dept === "Operations"), [allStaff]);
 
-  // Meeting note #6: the staff member converting the inquiry becomes its Lead
-  // Designer by default (same as from-scratch create). Still editable here, and
-  // the converter is added to the picker even if they aren't in the Design dept.
+  // Lead Designer picker lists EVERY registered staff member (supervisor review —
+  // "list all registered designers to choose from"), with Design-dept staff first
+  // and the converter surfaced as "(you)". The converting staff still leads by
+  // default (meeting note #6).
   const designerOptions = useMemo(() => {
-    const opts = designStaff.map((s) => ({ value: s.id, label: s.name }));
-    if (me && !designStaff.some((s) => s.id === me.id)) {
-      opts.unshift({ value: me.id, label: `${me.name} (you)` });
-    }
+    const seen = new Set<string>();
+    const opts: { value: string; label: string }[] = [];
+    const push = (s: { id: string; name: string }, label?: string) => {
+      if (seen.has(s.id)) return;
+      seen.add(s.id);
+      opts.push({ value: s.id, label: label ?? s.name });
+    };
+    if (me) push(me, `${me.name} (you)`);
+    for (const s of designStaff) push(s);
+    for (const s of allStaff) push(s);
     return opts;
-  }, [designStaff, me]);
+  }, [designStaff, allStaff, me]);
 
   const defaultDesigner = me ?? designStaff[1] ?? designStaff[0]; // converter leads by default
   const defaultPM = opsStaff[0];
@@ -98,7 +106,12 @@ export default function ConvertInquiryDialog({
     priority: "medium",
     serviceType: "Design",
     areas: "",
+    showroomDone: false,
   }));
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const coverRef = useRef<HTMLInputElement>(null);
+  const updateProject = useUpdateProject();
+  const setStageStatus = useSetStageStatus();
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -118,8 +131,10 @@ export default function ConvertInquiryDialog({
   if (!form.projectName.trim()) errors.push("Project name is required.");
   if (!form.designerStaffId) errors.push("Assign a designer.");
   if (!form.pmStaffId) errors.push("Assign a project manager.");
-  if (budgetNum <= 0) errors.push("Budget must be greater than 0.");
-  if (depositNum < 0 || depositNum > budgetNum) errors.push("Deposit must be ≥ 0 and ≤ budget.");
+  // Budget may be ZERO (design-only clients who find their own contractor); the
+  // proposal deposit still applies, so the deposit is NOT capped by the budget.
+  if (budgetNum < 0) errors.push("Budget can't be negative.");
+  if (depositNum < 0) errors.push("Deposit must be ≥ 0.");
   if (form.startDate >= form.targetDate) errors.push("Target date must be after start date.");
   const isValid = errors.length === 0;
 
@@ -150,6 +165,18 @@ export default function ConvertInquiryDialog({
         serviceType: form.serviceType,
         assignedToAvatar: inquiry.assignedTo,
       });
+
+      // Optional cover image for the new project (reuses the project cover upload).
+      if (coverFile) {
+        try { await updateProject.mutateAsync({ id: newId, imageFile: coverFile }); }
+        catch { toast.error("Project created, but the cover image didn't upload"); }
+      }
+      // Start-choice: if the showroom meet-up already happened, mark that stage done
+      // (manual-status model — staff drive everything else from here).
+      if (form.showroomDone) {
+        try { await setStageStatus.mutateAsync({ projectId: newId, stageId: "showroom-meet", status: "completed", by: me?.avatar_code ?? null }); }
+        catch { /* non-fatal */ }
+      }
 
       toast.success(`Converted to ${newId}`, {
         description: `${form.projectName} is live in /projects · ${formatRM(budgetNum)} secured`,
@@ -344,6 +371,36 @@ export default function ConvertInquiryDialog({
                 />
               </FieldGroup>
 
+              {/* Cover image (optional) */}
+              <FieldGroup label="COVER IMAGE (optional)">
+                <input ref={coverRef} type="file" accept="image/*" className="hidden"
+                  onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)} />
+                <button type="button" onClick={() => coverRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-label"
+                  style={{ background: "transparent", color: "var(--acc-ink)", border: "1px dashed var(--b-strong)", cursor: "pointer" }}>
+                  <ImagePlus size={14} /> {coverFile ? coverFile.name : "Add a cover image"}
+                </button>
+              </FieldGroup>
+
+              {/* Start-choice — has the showroom meet-up already happened? */}
+              <FieldGroup label="STARTING POINT">
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { done: false, label: "Start at New Inquiry" },
+                    { done: true, label: "Showroom meet-up done" },
+                  ].map((opt) => {
+                    const active = form.showroomDone === opt.done;
+                    return (
+                      <button key={opt.label} type="button" onClick={() => setForm({ ...form, showroomDone: opt.done })}
+                        className="rounded-xl px-3 py-2.5 text-xs font-label"
+                        style={{ background: active ? "var(--acc)" : "var(--s-2)", color: active ? "oklch(1 0 0)" : "var(--t-3)", border: active ? "none" : "1px solid var(--b-strong)", cursor: "pointer" }}>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FieldGroup>
+
               {/* Preview card */}
               <div
                 className="rounded-2xl p-3"
@@ -356,7 +413,7 @@ export default function ConvertInquiryDialog({
                   WHAT HAPPENS ON CONVERT
                 </p>
                 <Bullet text="A new project is created at status “Assigned”." />
-                <Bullet text="Lifecycle starts at stage 4 — Design Proposal Signed." />
+                <Bullet text={form.showroomDone ? "Lifecycle starts with Showroom Meet-up marked done; staff set the rest." : "Lifecycle starts at New Inquiry; staff set each stage's status."} />
                 <Bullet text={`Gate ① Proposal Deposit (${formatRM(depositNum)}) marked collected today.`} />
                 <Bullet text={`Inquiry ${inquiry.id} flips to “Awarded” and links to the new project.`} />
               </div>

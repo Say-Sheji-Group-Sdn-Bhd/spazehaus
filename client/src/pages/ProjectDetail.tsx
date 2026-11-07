@@ -48,6 +48,7 @@ import {
   useSetStageStatus,
   useMarkStagesComplete,
   useSetVariationOrder,
+  useProjectColumns,
   useUpdatePayment,
   useUpdateSignature,
   useRevertPayment,
@@ -1516,6 +1517,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
   const setVariationOrder = useSetVariationOrder();
   const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
   const hasVO = !!project?.hasVariationOrder;
+  const { data: voColumns = [] } = useProjectColumns(projectId, "variation-order");
   const toggleVO = (value: boolean) =>
     setVariationOrder.mutate(
       { projectId, value },
@@ -2101,6 +2103,64 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                           />
                         </div>
                       )}
+
+                      {/* Design Proposal versioning — Version 1 → Revision 1 → … */}
+                      {stage.id === "design-proposal" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="design-proposal"
+                            title="Design Proposal versions"
+                            description="Track each version the client sees — Version 1, then Revision 1, Revision 2… Set the date and attach each version's file."
+                            canManage={canCollect}
+                            maxColumns={10}
+                            labelPlaceholder="Version (e.g. V1, Revision 1)"
+                            addLabel="Add version"
+                            accept="application/pdf,image/*"
+                            emptyHint="No versions yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Work Schedule — signed PDF, by BOTH the PM and the owner.
+                          One column per signatory captures each sign-off. */}
+                      {stage.id === "work-schedule" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="work-schedule"
+                            title="Work Schedule sign-off"
+                            description="Upload the work-schedule PDF, signed by BOTH the Project Manager and the owner. Add a column per signatory with their sign-off and the signed copy."
+                            canManage={canCollect}
+                            withSignoff
+                            maxColumns={4}
+                            labelPlaceholder="Signatory (PM / Owner)"
+                            addLabel="Add sign-off"
+                            accept="application/pdf,image/*"
+                            emptyHint="No work-schedule sign-offs yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Contractor Briefing — sign-off sheet confirming contractors
+                          attended and understood scope + timeline. */}
+                      {stage.id === "contractor-brief" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="contractor-brief"
+                            title="Contractor Briefing sign-off"
+                            description="Attach the signed briefing sheet (with its date) confirming all contractors attended and understood the scope + timeline — so this isn't marked done before they were actually briefed."
+                            canManage={canCollect}
+                            withSignoff
+                            maxColumns={6}
+                            labelPlaceholder="Briefing / trade"
+                            addLabel="Add sign-off"
+                            accept="application/pdf,image/*"
+                            emptyHint="No briefing sign-offs yet."
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -2159,8 +2219,10 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
             emptyHint="No variation orders yet."
           />
         ) : (
-          <p className="text-[11px]" style={{ color: "var(--t-6)" }}>
-            {canCollect ? 'Tap "Yes" to start logging variation orders.' : "No variation orders on this project."}
+          <p className="text-[11px]" style={{ color: voColumns.length > 0 ? "var(--acc-ink)" : "var(--t-6)" }}>
+            {voColumns.length > 0
+              ? `${voColumns.length} variation order${voColumns.length === 1 ? "" : "s"} hidden — tap "Yes" to show ${voColumns.length === 1 ? "it" : "them"} again.`
+              : canCollect ? 'Tap "Yes" to start logging variation orders.' : "No variation orders on this project."}
           </p>
         )}
       </div>
