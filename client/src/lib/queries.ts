@@ -1191,11 +1191,12 @@ const invalidateColumns = (qc: ReturnType<typeof useQueryClient>, projectId: str
 export function useAddColumn() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { projectId: string; section: string; by?: string | null; afterSort?: number }): Promise<void> => {
+    mutationFn: async (args: { projectId: string; section: string; by?: string | null; afterSort?: number; colDate?: string | null }): Promise<void> => {
       const { error } = await supabase.from("project_columns").insert({
         project_id: args.projectId,
         section: args.section,
         label: "",
+        col_date: args.colDate ?? null, // optional default (e.g. today) for date-it-happened sections
         sort_order: (args.afterSort ?? 0) + 1,
         created_by: args.by ?? null,
       });

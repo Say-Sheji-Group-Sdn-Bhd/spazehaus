@@ -9,7 +9,7 @@
  * Works on desktop (office) and mobile (on-site): cards stack 1-up on phones and
  * flow to 2–3 columns on wider screens.
  */
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Plus, Trash2, Upload, FileText, ExternalLink, X, Loader2, CalendarClock, Coins, PenSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +47,7 @@ export default function ColumnGrid({
   minColumns = 0,
   withAmount = false,
   withSignoff = false,
+  defaultDateToday = false,
   labelPlaceholder = "Name this column",
   addLabel = "Add column",
   accept,
@@ -61,6 +62,7 @@ export default function ColumnGrid({
   minColumns?: number;
   withAmount?: boolean;
   withSignoff?: boolean;
+  defaultDateToday?: boolean;
   labelPlaceholder?: string;
   addLabel?: string;
   accept?: string;
@@ -73,8 +75,11 @@ export default function ColumnGrid({
   const atMax = columns.length >= maxColumns;
   const handleAdd = () => {
     const lastSort = columns.length ? Math.max(...columns.map((c) => c.sort_order)) : 0;
+    // "date-it-happened" sections pre-fill today (still editable); progressive-payment
+    // leaves it blank since that date is an estimated FUTURE instalment date.
+    const colDate = defaultDateToday ? new Date().toISOString().slice(0, 10) : null;
     addColumn.mutate(
-      { projectId, section, by: me?.avatar_code ?? null, afterSort: lastSort },
+      { projectId, section, by: me?.avatar_code ?? null, afterSort: lastSort, colDate },
       { onError: (e) => toast.error(`Couldn't add: ${e instanceof Error ? e.message : "error"}`) },
     );
   };
@@ -165,6 +170,14 @@ function ColumnCard({
   const fileRef = useRef<HTMLInputElement>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [opening, setOpening] = useState(false);
+  const [docUrl, setDocUrl] = useState<string | null>(null);
+  const isPdf = (col.file_name || col.file_path || "").toLowerCase().endsWith(".pdf");
+  useEffect(() => {
+    if (!docUrl) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDocUrl(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [docUrl]);
 
   const common = { id: col.id, projectId, section };
 
@@ -204,13 +217,29 @@ function ColumnCard({
     setOpening(true);
     const url = await getColumnFileUrl(col.file_path);
     setOpening(false);
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    if (url) setDocUrl(url); // in-app whitebox viewer (PDFs + images)
     else toast.error("Couldn't open file");
   };
 
   const busy = uploadFile.isPending || updateColumn.isPending;
 
   return (
+    <>
+    {/* In-app whitebox file viewer — PDFs (iframe) + images (img). ✕ / Esc / click-outside. */}
+    {docUrl && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "oklch(0 0 0 / 0.75)", backdropFilter: "blur(2px)" }} onClick={() => setDocUrl(null)}>
+        <div className="relative rounded-xl overflow-hidden shadow-2xl" style={{ background: "#fff", maxWidth: "92vw", maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
+          <button type="button" onClick={() => setDocUrl(null)} aria-label="Close" className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "oklch(0 0 0 / 0.6)" }}>
+            <X size={18} className="text-white" />
+          </button>
+          {isPdf ? (
+            <iframe title={col.file_name ?? col.label ?? "Document"} src={docUrl} style={{ width: "90vw", height: "85vh", border: 0 }} />
+          ) : (
+            <img src={docUrl} alt={col.file_name ?? col.label ?? "Image"} style={{ display: "block", maxWidth: "92vw", maxHeight: "90vh", objectFit: "contain" }} />
+          )}
+        </div>
+      </div>
+    )}
     <div className="rounded-xl p-3 flex flex-col gap-2.5" style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}>
       {/* Label (staff-named) + delete */}
       <div className="flex items-center gap-1.5">
@@ -346,5 +375,6 @@ function ColumnCard({
         </div>
       )}
     </div>
+    </>
   );
 }

@@ -860,6 +860,7 @@ export default function ProjectDetail() {
                 <ColumnGrid
                   projectId={project.id}
                   section="drawings"
+                  defaultDateToday
                   title="Drawings"
                   description="Add a column per trade (wet works, plumbing, M&E, electrical, carpentry, wall-painting, furniture). Name each, set a date, and attach the full-resolution PDF."
                   canManage={canEdit}
@@ -2071,6 +2072,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                           <ColumnGrid
                             projectId={projectId}
                             section="site-inspection"
+                            defaultDateToday
                             title="Site Inspections"
                             description="Add a column per inspection (pre-renovation, wet-works, carpentry delivery, plumbing, installs…). A date is enough; attach a photo or report if you have one."
                             canManage={canCollect}
@@ -2110,6 +2112,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                           <ColumnGrid
                             projectId={projectId}
                             section="design-proposal"
+                            defaultDateToday
                             title="Design Proposal versions"
                             description="Track each version the client sees — Version 1, then Revision 1, Revision 2… Set the date and attach each version's file."
                             canManage={canCollect}
@@ -2129,6 +2132,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                           <ColumnGrid
                             projectId={projectId}
                             section="work-schedule"
+                            defaultDateToday
                             title="Work Schedule sign-off"
                             description="Upload the work-schedule PDF, signed by BOTH the Project Manager and the owner. Add a column per signatory with their sign-off and the signed copy."
                             canManage={canCollect}
@@ -2149,6 +2153,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
                           <ColumnGrid
                             projectId={projectId}
                             section="contractor-brief"
+                            defaultDateToday
                             title="Contractor Briefing sign-off"
                             description="Attach the signed briefing sheet (with its date) confirming all contractors attended and understood the scope + timeline — so this isn't marked done before they were actually briefed."
                             canManage={canCollect}
@@ -2208,6 +2213,7 @@ function LifecycleTab({ projectId, clientName, clientContact, projectName, budge
           <ColumnGrid
             projectId={projectId}
             section="variation-order"
+            defaultDateToday
             title="Variation Orders"
             description="One column per VO: describe the change, set the date, attach the VO quotation/invoice, and record the client's sign-off before work proceeds."
             canManage={canCollect}
