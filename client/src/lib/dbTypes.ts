@@ -49,6 +49,7 @@ export type ProjectRow = Tables<"projects">;
 export type PaymentRecordRow = Tables<"payment_records">;
 export type SignatureRecordRow = Tables<"signature_records">;
 export type InquiryRow = Tables<"inquiries">;
+export type CustomerRow = Tables<"customers">;
 export type QuotationRow = Tables<"quotations">;
 export type QuotationItemRow = Tables<"quotation_items">;
 export type LeaveRequestRow = Tables<"leave_requests">;

@@ -28,6 +28,7 @@ import type {
   AnnouncementRow,
   SitePhotoRow,
   ProjectColumnRow,
+  CustomerRow,
   SalesTargetRow,
   CalendarEventRow,
   CalendarEventStaffRow,
@@ -307,6 +308,8 @@ export const qk = {
   openSignatures: ["signatures", "open"] as const,
   inquiries: ["inquiries"] as const,
   inquiry: (id: string) => ["inquiries", id] as const,
+  customers: ["customers"] as const,
+  customer: (id: string) => ["customers", id] as const,
   quotations: ["quotations"] as const,
   quotation: (id: string) => ["quotations", id] as const,
   leaveRequests: ["leave_requests"] as const,
@@ -1906,6 +1909,256 @@ export function useCreateInquiry() {
       throw new Error("Could not allocate a unique customer id after several attempts. Please retry.");
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.inquiries });
+    },
+  });
+}
+
+// ─── CUSTOMERS (Phase 5 — one customer holds many opportunities/projects) ────
+// A customer is the canonical client record; each inquiry is ONE opportunity
+// (its own New Inquiry → Showroom Meet → Awarded pipeline) under the customer.
+// "Add New Project" = a new inquiry under the customer.
+
+export type Customer = CustomerRow;
+export type CustomerWithOpportunities = { customer: Customer; opportunities: Inquiry[] };
+
+/** All customers, each with their opportunities (inquiries), newest-updated first. */
+export function useCustomers() {
+  return useQuery({
+    queryKey: qk.customers,
+    queryFn: async (): Promise<CustomerWithOpportunities[]> => {
+      const [custRes, inqRes, staffRes] = await Promise.all([
+        supabase.from("customers").select("*").order("created_at", { ascending: true }),
+        supabase.from("inquiries").select("*").order("last_updated", { ascending: false }),
+        supabase.from("staff").select("*"),
+      ]);
+      if (custRes.error) throw custRes.error;
+      if (inqRes.error) throw inqRes.error;
+      if (staffRes.error) throw staffRes.error;
+      const staffById = new Map(((staffRes.data ?? []) as StaffRow[]).map((s) => [s.id, s]));
+      const byCustomer = new Map<string, Inquiry[]>();
+      for (const row of (inqRes.data ?? []) as InquiryRow[]) {
+        const inq = mapInquiry(row, staffById);
+        if (!row.customer_id) continue;
+        (byCustomer.get(row.customer_id) ?? byCustomer.set(row.customer_id, []).get(row.customer_id)!).push(inq);
+      }
+      return ((custRes.data ?? []) as CustomerRow[]).map((c) => ({
+        customer: c,
+        opportunities: byCustomer.get(c.id) ?? [],
+      }));
+    },
+  });
+}
+
+/** One customer + its opportunities (inquiries). */
+export function useCustomer(id: string | undefined) {
+  return useQuery({
+    queryKey: qk.customer(id ?? ""),
+    enabled: Boolean(id),
+    queryFn: async (): Promise<CustomerWithOpportunities | null> => {
+      const safeId = id ?? "";
+      const [custRes, inqRes, staffRes] = await Promise.all([
+        supabase.from("customers").select("*").eq("id", safeId).maybeSingle(),
+        supabase.from("inquiries").select("*").eq("customer_id", safeId).order("last_updated", { ascending: false }),
+        supabase.from("staff").select("*"),
+      ]);
+      if (custRes.error) throw custRes.error;
+      if (inqRes.error) throw inqRes.error;
+      if (staffRes.error) throw staffRes.error;
+      if (!custRes.data) return null;
+      const staffById = new Map(((staffRes.data ?? []) as StaffRow[]).map((s) => [s.id, s]));
+      return {
+        customer: custRes.data as CustomerRow,
+        opportunities: ((inqRes.data ?? []) as InquiryRow[]).map((r) => mapInquiry(r, staffById)),
+      };
+    },
+  });
+}
+
+/** Look up the customer that owns an inquiry (for redirecting old inquiry-id links). */
+export async function findCustomerIdForInquiry(inquiryId: string): Promise<string | null> {
+  const { data, error } = await supabase.from("inquiries").select("customer_id").eq("id", inquiryId).maybeSingle();
+  if (error || !data) return null;
+  return data.customer_id ?? null;
+}
+
+const nextSeqId = async (table: "customers" | "inquiries", prefix: string): Promise<number> => {
+  const { data, error } = await supabase.from(table).select("id");
+  if (error) throw error;
+  const re = new RegExp(`^${prefix}(\\d+)$`);
+  return (data ?? []).reduce((max, r: { id: string }) => {
+    const m = re.exec(r.id);
+    return m ? Math.max(max, parseInt(m[1], 10)) : max;
+  }, 0);
+};
+
+/** Insert a new opportunity (inquiry) under an existing customer, seeding the
+ *  opportunity-level fields from the customer's identity. Returns the inquiry id. */
+export function useAddProjectToCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      customerId: string; source?: string; propertyType?: string; location?: string;
+      estimatedBudget?: number | null; assignedToId?: string | null; by?: string | null;
+    }): Promise<string> => {
+      const { data: cust, error: cErr } = await supabase.from("customers").select("*").eq("id", args.customerId).single();
+      if (cErr) throw cErr;
+      const c = cust as CustomerRow;
+      const today = new Date().toISOString().slice(0, 10);
+      const maxNum = await nextSeqId("inquiries", "INQ");
+      const base: Omit<TablesInsert<"inquiries">, "id"> = {
+        customer_id: c.id,
+        inquiry_date: today,
+        client_name: c.name,
+        contact: c.contact,
+        email: c.email,
+        category: c.category,
+        tier: c.tier,
+        source: args.source ?? "Repeat",
+        property_type: args.propertyType ?? "",
+        location: args.location ?? "",
+        estimated_budget: args.estimatedBudget ?? null,
+        stage: "new-inquiry",
+        assigned_to_id: args.assignedToId ?? null,
+        contact_log: [],
+        last_updated: today,
+      };
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const id = `INQ${String(maxNum + 1 + attempt).padStart(3, "0")}`;
+        const { data, error } = await supabase.from("inquiries").insert({ ...base, id }).select("id").single();
+        if (!error) return (data as { id: string }).id;
+        if (error.code !== "23505") throw error;
+      }
+      throw new Error("Could not allocate a unique opportunity id. Please retry.");
+    },
+    onSuccess: (_id, args) => {
+      qc.invalidateQueries({ queryKey: qk.customer(args.customerId) });
+      qc.invalidateQueries({ queryKey: qk.customers });
+      qc.invalidateQueries({ queryKey: qk.inquiries });
+    },
+  });
+}
+
+/** Manually set an opportunity's pipeline stage (new-inquiry ↔ showroom-meet). */
+export function useSetInquiryStage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { inquiryId: string; customerId?: string; stage: InquiryStage }): Promise<void> => {
+      const { error } = await supabase
+        .from("inquiries")
+        .update({ stage: args.stage, last_updated: new Date().toISOString().slice(0, 10) })
+        .eq("id", args.inquiryId);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      if (args.customerId) qc.invalidateQueries({ queryKey: qk.customer(args.customerId) });
+      qc.invalidateQueries({ queryKey: qk.customers });
+      qc.invalidateQueries({ queryKey: qk.inquiries });
+      qc.invalidateQueries({ queryKey: qk.inquiry(args.inquiryId) });
+    },
+  });
+}
+
+/** Edit an opportunity's lead source (Direct → Repeat → Referral). */
+export function useSetInquirySource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { inquiryId: string; customerId?: string; source: string }): Promise<void> => {
+      const { error } = await supabase.from("inquiries").update({ source: args.source }).eq("id", args.inquiryId);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      if (args.customerId) qc.invalidateQueries({ queryKey: qk.customer(args.customerId) });
+      qc.invalidateQueries({ queryKey: qk.customers });
+      qc.invalidateQueries({ queryKey: qk.inquiries });
+      qc.invalidateQueries({ queryKey: qk.inquiry(args.inquiryId) });
+    },
+  });
+}
+
+/** Create a new customer AND its first opportunity (inquiry) in one step. */
+export function useCreateCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: CreateInquiryArgs & { address?: string | null; by?: string | null }): Promise<{ customerId: string; inquiryId: string }> => {
+      const today = new Date().toISOString().slice(0, 10);
+      const custMax = await nextSeqId("customers", "CUS");
+      let customerId = "";
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const id = `CUS${String(custMax + 1 + attempt).padStart(3, "0")}`;
+        const { error } = await supabase.from("customers").insert({
+          id, name: args.clientName, contact: args.contact ?? null, email: args.email ?? null,
+          address: args.address ?? null, category: args.category, tier: args.tier,
+          source: args.source ?? "Direct", created_by: args.by ?? null,
+        });
+        if (!error) { customerId = id; break; }
+        if (error.code !== "23505") throw error;
+      }
+      if (!customerId) throw new Error("Could not allocate a unique customer id. Please retry.");
+
+      const inqMax = await nextSeqId("inquiries", "INQ");
+      const base: Omit<TablesInsert<"inquiries">, "id"> = {
+        customer_id: customerId,
+        inquiry_date: today,
+        client_name: args.clientName,
+        contact: args.contact ?? null,
+        email: args.email ?? null,
+        category: args.category,
+        tier: args.tier,
+        source: args.source ?? "Direct",
+        property_type: args.propertyType,
+        location: args.location,
+        estimated_size: args.estimatedSize ?? null,
+        estimated_budget: args.estimatedBudget ?? null,
+        stage: args.stage ?? "new-inquiry",
+        assigned_to_id: args.assignedToId ?? null,
+        notes: args.notes ?? null,
+        contact_log: [],
+        last_updated: today,
+      };
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const id = `INQ${String(inqMax + 1 + attempt).padStart(3, "0")}`;
+        const { error } = await supabase.from("inquiries").insert({ ...base, id });
+        if (!error) return { customerId, inquiryId: id };
+        if (error.code !== "23505") throw error;
+      }
+      throw new Error("Could not allocate a unique opportunity id. Please retry.");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.customers });
+      qc.invalidateQueries({ queryKey: qk.inquiries });
+    },
+  });
+}
+
+/** Edit a customer's identity (name / contact / email / address). Syncs the
+ *  denormalized client_name/contact/email onto this customer's inquiries so the
+ *  many existing inq.client reads stay correct. Ops-tier (RLS). */
+export function useUpdateCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; name?: string; contact?: string | null; email?: string | null; address?: string | null }): Promise<void> => {
+      const payload: TablesUpdate<"customers"> = {};
+      if (args.name !== undefined) payload.name = args.name;
+      if (args.contact !== undefined) payload.contact = args.contact;
+      if (args.email !== undefined) payload.email = args.email;
+      if (args.address !== undefined) payload.address = args.address;
+      const { error } = await supabase.from("customers").update(payload).eq("id", args.id);
+      if (error) throw error;
+
+      // Keep the denormalized inquiry identity fields in sync.
+      const sync: TablesUpdate<"inquiries"> = {};
+      if (args.name !== undefined) sync.client_name = args.name;
+      if (args.contact !== undefined) sync.contact = args.contact;
+      if (args.email !== undefined) sync.email = args.email;
+      if (Object.keys(sync).length > 0) {
+        const { error: sErr } = await supabase.from("inquiries").update(sync).eq("customer_id", args.id);
+        if (sErr) throw sErr;
+      }
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.customer(args.id) });
+      qc.invalidateQueries({ queryKey: qk.customers });
       qc.invalidateQueries({ queryKey: qk.inquiries });
     },
   });

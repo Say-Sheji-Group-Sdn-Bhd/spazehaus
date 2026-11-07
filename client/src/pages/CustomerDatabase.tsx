@@ -19,7 +19,7 @@ import {
   tierConfig,
 } from "@/lib/customerData";
 import type { InquiryStage, CustomerCategory } from "@/lib/dbTypes";
-import { useInquiries, computeCustomerSummary } from "@/lib/queries";
+import { useInquiries, useCustomers, computeCustomerSummary } from "@/lib/queries";
 import { formatRM } from "@/lib/quotationData";
 
 const HERO_BG = "/hero/cool.jpg";
@@ -33,6 +33,7 @@ export default function CustomerDatabase() {
   const [search, setSearch] = useState("");
 
   const { data: inquiries = [] } = useInquiries();
+  const { data: customers = [] } = useCustomers();
   const summary = computeCustomerSummary(inquiries);
   const catCounts = inquiries.reduce(
     (acc, i) => {
@@ -50,24 +51,34 @@ export default function CustomerDatabase() {
   ];
   const funnelMax = Math.max(...funnel.map((f) => f.value), 1);
 
-  const filtered = inquiries
-    .filter((i) => {
-      if (filter === "Active") return i.stage === "new-inquiry" || i.stage === "showroom-meet";
-      if (filter === "Awarded") return i.stage === "awarded";
-      if (filter === "Rejected") return i.stage === "rejected";
+  // One card per CUSTOMER (Phase 5). Roll up a display stage from the customer's
+  // opportunities and keep the funnel/KPIs above on the aggregate inquiry set.
+  const customerRows = customers.map(({ customer, opportunities }) => {
+    const stage: InquiryStage =
+      opportunities.some((o) => o.stage === "showroom-meet") ? "showroom-meet"
+      : opportunities.some((o) => o.stage === "new-inquiry") ? "new-inquiry"
+      : opportunities.some((o) => o.stage === "awarded") ? "awarded"
+      : opportunities.length > 0 ? "rejected" : "new-inquiry";
+    const lastUpdated = opportunities[0]?.lastUpdated ?? customer.created_at.slice(0, 10);
+    return { customer, opportunities, stage, lastUpdated };
+  });
+  const filtered = customerRows
+    .filter((r) => {
+      if (filter === "Active") return r.opportunities.some((o) => o.stage === "new-inquiry" || o.stage === "showroom-meet");
+      if (filter === "Awarded") return r.opportunities.some((o) => o.stage === "awarded");
+      if (filter === "Rejected") return r.opportunities.length > 0 && r.opportunities.every((o) => o.stage === "rejected");
       return true;
     })
-    .filter((i) => {
+    .filter((r) => {
       if (!search) return true;
       const q = search.toLowerCase();
       return (
-        i.client.toLowerCase().includes(q) ||
-        i.location.toLowerCase().includes(q) ||
-        i.id.toLowerCase().includes(q) ||
-        i.category.toLowerCase().includes(q)
+        r.customer.name.toLowerCase().includes(q) ||
+        r.customer.id.toLowerCase().includes(q) ||
+        r.customer.category.toLowerCase().includes(q) ||
+        r.opportunities.some((o) => o.location.toLowerCase().includes(q))
       );
     })
-    // Sort: most recently updated first
     .sort((a, b) => b.lastUpdated.localeCompare(a.lastUpdated));
   const pg = usePagination(filtered, 9, `${filter}|${search}`);
 
@@ -269,51 +280,49 @@ export default function CustomerDatabase() {
           </div>
         ) : (
           <div className="space-y-2.5 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-3 lg:items-start">
-            {pg.pageItems.map((inq, i) => {
-              const sc = stageConfig[inq.stage];
-              const cc = categoryConfig[inq.category];
-              const tc = tierConfig[inq.tier];
-              const initials = inq.client
+            {pg.pageItems.map((row, i) => {
+              const { customer, opportunities, stage } = row;
+              const sc = stageConfig[stage];
+              const cc = categoryConfig[customer.category];
+              const tc = tierConfig[customer.tier];
+              const initials = customer.name
                 .split(/[\s.&-]+/)
                 .filter(Boolean)
                 .slice(0, 2)
                 .map((s) => s[0]?.toUpperCase() || "")
                 .join("");
+              const awardedCount = opportunities.filter((o) => o.stage === "awarded").length;
 
               return (
                 <motion.button
-                  key={inq.id}
+                  key={customer.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => navigate(`/customers/${inq.id}`)}
+                  onClick={() => navigate(`/customers/${customer.id}`)}
                   data-testid="customer-card"
-                  data-inquiry-id={inq.id}
+                  data-customer-id={customer.id}
                   className="w-full rounded-2xl p-4 flex items-start gap-3 text-left"
                   style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
                 >
                   <div
                     className="w-11 h-11 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                    style={{
-                      background: cc.bg,
-                      color: cc.color,
-                      border: `1.5px solid ${cc.color}30`,
-                    }}
+                    style={{ background: cc.bg, color: cc.color, border: `1.5px solid ${cc.color}30` }}
                   >
                     {initials || "—"}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="text-sm font-semibold truncate" style={{ color: "var(--t-1)" }}>
-                        {inq.client}
+                        {customer.name}
                       </p>
-                      {inq.tier !== "Standard" && (
+                      {customer.tier !== "Standard" && (
                         <span
                           className="text-[9px] font-label px-1.5 py-0.5 rounded-md"
                           style={{ background: tc.bg, color: tc.color, letterSpacing: "0.06em", fontWeight: 700 }}
                         >
-                          {inq.tier.toUpperCase()}
+                          {customer.tier.toUpperCase()}
                         </span>
                       )}
                     </div>
@@ -322,30 +331,20 @@ export default function CustomerDatabase() {
                         className="text-[10px] font-label px-1.5 py-0.5 rounded-md"
                         style={{ background: cc.bg, color: cc.color, letterSpacing: "0.04em", fontWeight: 600 }}
                       >
-                        {inq.category}
+                        {customer.category}
                       </span>
                       <span className="text-[11px]" style={{ color: "var(--t-5)" }}>
-                        · {inq.propertyType} · {inq.location.split(",")[0]}
+                        · {opportunities.length} project{opportunities.length === 1 ? "" : "s"}
+                        {awardedCount > 0 ? ` · ${awardedCount} awarded` : ""}
                       </span>
                     </div>
                     <div className="flex items-center justify-between mt-2">
                       <span
                         className="text-[10px] font-label px-2 py-0.5 rounded-full"
-                        style={{
-                          background: sc.bg,
-                          color: sc.color,
-                          border: `1px solid ${sc.border}`,
-                          letterSpacing: "0.04em",
-                          fontWeight: 700,
-                        }}
+                        style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, letterSpacing: "0.04em", fontWeight: 700 }}
                       >
                         {sc.label.toUpperCase()}
                       </span>
-                      {inq.estimatedBudget && (
-                        <span className="text-xs font-display font-semibold" style={{ color: sc.color }}>
-                          {formatRM(inq.estimatedBudget)}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <ChevronRight size={14} className="shrink-0 mt-1" style={{ color: "var(--t-6)" }} />

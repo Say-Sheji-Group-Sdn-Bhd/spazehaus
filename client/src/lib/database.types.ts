@@ -318,6 +318,48 @@ export type Database = {
         }
         Relationships: []
       }
+      customers: {
+        Row: {
+          address: string | null
+          category: Database["public"]["Enums"]["customer_category"]
+          contact: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          name: string
+          source: string | null
+          tier: Database["public"]["Enums"]["customer_tier"]
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          category?: Database["public"]["Enums"]["customer_category"]
+          contact?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id: string
+          name: string
+          source?: string | null
+          tier?: Database["public"]["Enums"]["customer_tier"]
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          category?: Database["public"]["Enums"]["customer_category"]
+          contact?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          source?: string | null
+          tier?: Database["public"]["Enums"]["customer_tier"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       inquiries: {
         Row: {
           assigned_to_id: string | null
@@ -328,6 +370,7 @@ export type Database = {
           contact: string | null
           contact_log: Json
           created_at: string
+          customer_id: string | null
           email: string | null
           estimated_budget: number | null
           estimated_size: number | null
@@ -353,6 +396,7 @@ export type Database = {
           contact?: string | null
           contact_log?: Json
           created_at?: string
+          customer_id?: string | null
           email?: string | null
           estimated_budget?: number | null
           estimated_size?: number | null
@@ -378,6 +422,7 @@ export type Database = {
           contact?: string | null
           contact_log?: Json
           created_at?: string
+          customer_id?: string | null
           email?: string | null
           estimated_budget?: number | null
           estimated_size?: number | null
