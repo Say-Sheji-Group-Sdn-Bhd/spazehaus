@@ -20,3 +20,12 @@
 
 [functions.client-portal-photo]
 verify_jwt = false
+
+# `google-calendar-sync` is invoked by the pg_cron safety-net, which can't send a
+# valid Supabase JWT reliably (the injected service-role value differs from any
+# dashboard key under the new API-key system, and legacy keys retire early 2027).
+# So the gateway check is disabled and the function authenticates every request
+# itself: the pg_cron shared secret (x-cron-secret == CALENDAR_SYNC_CRON_SECRET),
+# the legacy service-role bearer, or a validated staff JWT — else 401.
+[functions.google-calendar-sync]
+verify_jwt = false

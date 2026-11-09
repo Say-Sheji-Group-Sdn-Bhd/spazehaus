@@ -11,13 +11,18 @@
  *   google/sync.ts): same reconcile model, but it mints its own access token from
  *   the stored refresh token instead of a GIS popup.
  *
- * AUTH (verify_jwt stays true — Supabase's gateway requires a valid JWT bearer):
- *   • Bearer == SUPABASE_SERVICE_ROLE_KEY  → server/cron mode. May sync explicit
- *     userIds, or ALL connected users when none are given (the pg_cron safety net).
- *   • Otherwise the bearer is treated as a signed-in staff member's JWT. Any
- *     authenticated staff may trigger a sync for any affected user (the app fires
- *     it for creator + every assignee of an event they just changed). With no
- *     userIds in the body it defaults to syncing just the caller.
+ * AUTH (deployed with --no-verify-jwt; the function does ALL auth itself):
+ *   • x-cron-secret header == CALENDAR_SYNC_CRON_SECRET → server/cron mode. This
+ *     is how the pg_cron safety-net authenticates: a dedicated shared secret we
+ *     control, independent of Supabase's managed keys (the new sb_* keys and the
+ *     legacy service-role JWT, which differs from the function's injected value
+ *     and retires early 2027). Syncs explicit userIds, or ALL connected users
+ *     when none are given.
+ *   • Bearer == SUPABASE_SERVICE_ROLE_KEY → server/cron mode too (back-compat).
+ *   • Otherwise the bearer is treated as a signed-in staff member's JWT, validated
+ *     via GoTrue (getUser). Any authenticated staff may trigger a sync for any
+ *     affected user (the app fires it for creator + every assignee of an event
+ *     they just changed). With no userIds in the body it defaults to the caller.
  *
  * DATA MODEL BRIDGE (important):
  *   google_oauth_tokens.user_id and calendar_google_links.user_id are AUTH user
@@ -26,7 +31,8 @@
  *   first resolve their staff id, then gather events by that staff id.
  *
  * Secrets (Supabase → Edge Functions → Secrets): GOOGLE_CLIENT_ID,
- * GOOGLE_CLIENT_SECRET. SUPABASE_URL / _SERVICE_ROLE_KEY / _ANON_KEY are injected.
+ * GOOGLE_CLIENT_SECRET, CALENDAR_SYNC_CRON_SECRET (the pg_cron shared secret).
+ * SUPABASE_URL / _SERVICE_ROLE_KEY / _ANON_KEY are injected.
  */
 // @ts-expect-error — Deno runtime; esm.sh resolves at deploy, not for the local checker.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.105.4";
@@ -35,7 +41,7 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
+  "Access-Control-Allow-Headers": "authorization, content-type, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -370,12 +376,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: "Server misconfigured: missing SUPABASE_* or GOOGLE_CLIENT_ID/SECRET" }, 500);
   }
 
+  // ── Auth (the function gates itself; deployed with --no-verify-jwt) ─────────
+  // Server/cron mode is entered by EITHER the dedicated cron shared secret (the
+  // pg_cron safety-net) OR the legacy service-role bearer (back-compat). Anything
+  // else is treated as a staff JWT and validated below.
+  const cronSecret = Deno.env.get("CALENDAR_SYNC_CRON_SECRET");
+  const cronHeader = req.headers.get("x-cron-secret");
+  const isCron = Boolean(cronSecret && cronHeader && cronHeader === cronSecret);
+
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!bearer) return json({ error: "Not authenticated" }, 401);
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const isServer = bearer === serviceKey;
+  const isServer = isCron || (bearer !== null && bearer === serviceKey);
 
   // Parse body: { userId?, userIds?: string[] }
   const body = await req.json().catch(() => ({}));
@@ -384,7 +397,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   else if (typeof body?.userId === "string") targets = [body.userId];
 
   if (!isServer) {
-    // Caller is a signed-in staff member — verify their JWT identifies a user.
+    // Caller must be a signed-in staff member — verify their JWT identifies a user.
+    if (!bearer) return json({ error: "Not authenticated" }, 401);
     const userClient = createClient(url, anon, { global: { headers: { Authorization: authHeader } } });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) return json({ error: "Not authenticated" }, 401);
