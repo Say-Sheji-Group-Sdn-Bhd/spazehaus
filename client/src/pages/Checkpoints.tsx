@@ -5,10 +5,10 @@
  *
  * Source SOP: 2026 Annual Meeting PDF — "Important Checkpoint" pillar.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import { Coins, PenSquare, AlertCircle, Clock, ChevronRight, FileText, Receipt, CalendarDays, Check, Upload } from "lucide-react";
+import { Coins, PenSquare, AlertCircle, Clock, ChevronRight, ChevronLeft, FileText, Receipt, CalendarDays, Check, Upload, Inbox } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import MarkCollectedSheet, { type MarkCollectedTarget } from "@/components/MarkCollectedSheet";
 import SignDocumentSheet, { type SignDocumentTarget } from "@/components/SignDocumentSheet";
@@ -35,8 +35,22 @@ import { formatRM } from "@/lib/quotationData";
 
 const HERO_BG = "/hero/portfolio.jpg";
 
+// Every section (each payment bucket, each signature group) paginates independently
+// at this page size so a project with ~100 open items stays scannable.
+const PAGE_SIZE = 6;
+
 type FilterTab = "All" | "Payments" | "Documents";
 const filterTabs: FilterTab[] = ["All", "Payments", "Documents"];
+
+// Per-section empty-state copy — shown centered inside a section that has 0 items so
+// the layout stays stable instead of the section vanishing.
+const bucketEmptyLabel: Record<DueBucket, string> = {
+  overdue: "No overdue payments",
+  "this-week": "No payments due this week",
+  "this-month": "No payments due this month",
+  later: "No payments scheduled later",
+  "no-date": "No undated payments",
+};
 
 type EnrichedPayment = OpenPaymentRow & { bucket: DueBucket; daysFromToday: number | null; effectiveStatus: OpenPaymentRow["status"] };
 
@@ -66,11 +80,10 @@ export default function Checkpoints() {
     };
   });
 
-  // Group payments by bucket — overdue first
+  // Group payments by bucket — overdue first. ALL buckets always render (even empty
+  // ones), so the section layout is stable; an empty bucket shows its own empty state.
   const buckets: DueBucket[] = ["overdue", "this-week", "this-month", "later", "no-date"];
-  const paymentsByBucket = buckets
-    .map((b) => ({ bucket: b, rows: payments.filter((r) => r.bucket === b) }))
-    .filter((g) => g.rows.length > 0);
+  const paymentsByBucket = buckets.map((b) => ({ bucket: b, rows: payments.filter((r) => r.bucket === b) }));
 
   // Group signatures by contract / drawing
   const contracts = openSignatures.filter((s) => s.group === "contract");
@@ -149,52 +162,29 @@ export default function Checkpoints() {
           <div className="space-y-4 lg:space-y-6">
             <SectionHeader icon={Coins} title="PAYMENT COLLECTION" subtitle="5-gate SOP across all projects" />
 
-            {paymentsByBucket.length === 0 ? (
-              <EmptyCard icon={Coins} title="All payments collected" subtitle="No open invoices across any project" />
-            ) : (
-              <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-3 lg:items-start">
-                {paymentsByBucket.map((group) => {
-                  const tone = bucketTone[group.bucket];
-                  return (
-                    <div key={group.bucket}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="h-0.5 w-5 rounded-full" style={{ background: tone.color, opacity: 0.6 }} />
-                        <p className="font-label text-[10px]" style={{ color: tone.color, letterSpacing: "0.12em" }}>
-                          {bucketLabel[group.bucket]} ({group.rows.length})
-                        </p>
-                        <div className="flex-1 h-px" style={{ background: "var(--b-2)" }} />
-                      </div>
-                      <div
-                        className="rounded-2xl overflow-hidden"
-                        style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
-                      >
-                        {group.rows.map((row, i) => (
-                          <PaymentItem
-                            key={`${row.projectId}-${row.gate}-${i}`}
-                            row={row}
-                            isLast={i === group.rows.length - 1}
-                            canCollect={canCollect}
-                            onClick={() => navigate(`/projects/${row.projectId}?tab=Lifecycle`)}
-                            onCollect={() =>
-                              setCollectTarget({
-                                id: row.id,
-                                projectId: row.projectId,
-                                projectName: row.projectName,
-                                label: row.label,
-                                amount: row.amount,
-                                gate: row.gate,
-                                reference: row.reference,
-                                notes: row.notes,
-                              })
-                            }
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-3 lg:items-start">
+              {paymentsByBucket.map((group) => (
+                <PaymentBucketCard
+                  key={group.bucket}
+                  bucket={group.bucket}
+                  rows={group.rows}
+                  canCollect={canCollect}
+                  onNavigate={(projectId) => navigate(`/projects/${projectId}?tab=Lifecycle`)}
+                  onCollect={(row) =>
+                    setCollectTarget({
+                      id: row.id,
+                      projectId: row.projectId,
+                      projectName: row.projectName,
+                      label: row.label,
+                      amount: row.amount,
+                      gate: row.gate,
+                      reference: row.reference,
+                      notes: row.notes,
+                    })
+                  }
+                />
+              ))}
+            </div>
           </div>
         )}
 
@@ -210,6 +200,7 @@ export default function Checkpoints() {
                 tint="oklch(0.50 0.10 25)"
                 tintBg="oklch(0.60 0.10 25 / 12%)"
                 rows={contracts}
+                emptyLabel="No pending contract signatures"
                 canSign={canSign}
                 onRowClick={(r) => navigate(`/projects/${r.projectId}?tab=Lifecycle`)}
                 onSign={(r) =>
@@ -236,6 +227,7 @@ export default function Checkpoints() {
                 tint="oklch(0.38 0.09 240)"
                 tintBg="oklch(0.55 0.09 240 / 12%)"
                 rows={drawings}
+                emptyLabel="No pending drawing sign-offs"
                 canSign={canSign}
                 onRowClick={(r) => navigate(`/projects/${r.projectId}?tab=Lifecycle`)}
                 onSign={(r) =>
@@ -360,20 +352,137 @@ function SectionHeader({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Empty state
+// Pagination — each section paginates independently at PAGE_SIZE items/page
 // ─────────────────────────────────────────────────────────────────────────────
 
-function EmptyCard({ icon: Icon, title, subtitle }: { icon: typeof Coins; title: string; subtitle: string }) {
+/** Slice `items` into pages of `size`, keeping the current page in bounds when the
+ *  list shrinks (e.g. after a row is collected / signed and leaves the list). */
+function usePager<T>(items: T[], size = PAGE_SIZE) {
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(items.length / size));
+  // Clamp if the list shrank under us so we never show a blank page.
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1);
+  }, [page, pageCount]);
+  const current = Math.min(page, pageCount - 1);
+  const slice = items.slice(current * size, current * size + size);
+  return { slice, page: current, pageCount, setPage, total: items.length };
+}
+
+/** Prev / next pager with a "Page X of Y" indicator. Renders nothing for ≤1 page. */
+function Pager({
+  page,
+  pageCount,
+  onChange,
+  label,
+}: {
+  page: number;
+  pageCount: number;
+  onChange: (next: number) => void;
+  label: string;
+}) {
+  if (pageCount <= 1) return null;
+  const btn = (disabled: boolean): React.CSSProperties => ({
+    background: "var(--s-2)",
+    border: "1px solid var(--b-1)",
+    color: disabled ? "var(--t-6)" : "var(--acc-ink)",
+    opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+  });
   return (
     <div
-      className="rounded-2xl p-6 flex flex-col items-center gap-2 text-center"
-      style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
+      className="flex items-center justify-between px-3 py-2"
+      style={{ borderTop: "1px solid var(--s-2)" }}
     >
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "oklch(0.55 0.09 145 / 10%)" }}>
-        <Icon size={18} style={{ color: "oklch(0.38 0.09 145)" }} />
+      <button
+        type="button"
+        onClick={() => onChange(page - 1)}
+        disabled={page === 0}
+        aria-label={`Previous page of ${label}`}
+        className="w-7 h-7 rounded-lg flex items-center justify-center"
+        style={btn(page === 0)}
+      >
+        <ChevronLeft size={14} />
+      </button>
+      <span className="text-[10px] font-label" style={{ color: "var(--t-5)", letterSpacing: "0.06em" }}>
+        PAGE {page + 1} OF {pageCount}
+      </span>
+      <button
+        type="button"
+        onClick={() => onChange(page + 1)}
+        disabled={page >= pageCount - 1}
+        aria-label={`Next page of ${label}`}
+        className="w-7 h-7 rounded-lg flex items-center justify-center"
+        style={btn(page >= pageCount - 1)}
+      >
+        <ChevronRight size={14} />
+      </button>
+    </div>
+  );
+}
+
+/** Centered empty-state body shown inside a section that currently has 0 items. */
+function SectionEmpty({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center gap-1.5 px-4 py-7">
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "var(--s-2)" }}>
+        <Inbox size={16} style={{ color: "var(--t-5)" }} />
       </div>
-      <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>{title}</p>
-      <p className="text-xs" style={{ color: "var(--t-5)" }}>{subtitle}</p>
+      <p className="text-xs" style={{ color: "var(--t-5)" }}>{message}</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payment bucket card — always rendered; paginates its rows; empty-state when 0
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PaymentBucketCard({
+  bucket,
+  rows,
+  canCollect,
+  onNavigate,
+  onCollect,
+}: {
+  bucket: DueBucket;
+  rows: EnrichedPayment[];
+  canCollect: boolean;
+  onNavigate: (projectId: string) => void;
+  onCollect: (row: EnrichedPayment) => void;
+}) {
+  const tone = bucketTone[bucket];
+  const { slice, page, pageCount, setPage } = usePager(rows);
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="h-0.5 w-5 rounded-full" style={{ background: tone.color, opacity: 0.6 }} />
+        <p className="font-label text-[10px]" style={{ color: tone.color, letterSpacing: "0.12em" }}>
+          {bucketLabel[bucket]} ({rows.length})
+        </p>
+        <div className="flex-1 h-px" style={{ background: "var(--b-2)" }} />
+      </div>
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
+      >
+        {rows.length === 0 ? (
+          <SectionEmpty message={bucketEmptyLabel[bucket]} />
+        ) : (
+          <>
+            {slice.map((row, i) => (
+              <PaymentItem
+                key={`${row.projectId}-${row.gate}-${row.id}`}
+                row={row}
+                isLast={i === slice.length - 1}
+                canCollect={canCollect}
+                onClick={() => onNavigate(row.projectId)}
+                onCollect={() => onCollect(row)}
+              />
+            ))}
+            <Pager page={page} pageCount={pageCount} onChange={setPage} label={bucketLabel[bucket].toLowerCase()} />
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -493,6 +602,7 @@ function SignatureGroup({
   tint,
   tintBg,
   rows,
+  emptyLabel,
   canSign,
   onRowClick,
   onSign,
@@ -502,10 +612,12 @@ function SignatureGroup({
   tint: string;
   tintBg: string;
   rows: OpenSignatureRow[];
+  emptyLabel: string;
   canSign: boolean;
   onRowClick: (row: OpenSignatureRow) => void;
   onSign: (row: OpenSignatureRow) => void;
 }) {
+  const { slice, page, pageCount, setPage } = usePager(rows);
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
@@ -516,25 +628,21 @@ function SignatureGroup({
         <div className="flex-1 h-px" style={{ background: "var(--b-2)" }} />
       </div>
 
-      {rows.length === 0 ? (
-        <div
-          className="rounded-2xl p-4 text-center"
-          style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}
-        >
-          <p className="text-xs" style={{ color: "var(--t-5)" }}>All signed off</p>
-        </div>
-      ) : (
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
-        >
-          {rows.map((row, i) => {
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ background: "var(--s-card)", border: "1px solid var(--b-1)", boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)" }}
+      >
+        {rows.length === 0 ? (
+          <SectionEmpty message={emptyLabel} />
+        ) : (
+          <>
+          {slice.map((row, i) => {
             const sc = checkpointStatusConfig[row.status];
             return (
               <div
                 key={`${row.projectId}-${row.key}`}
                 className="w-full px-3 py-3 flex items-center gap-3"
-                style={{ borderBottom: i === rows.length - 1 ? "none" : "1px solid var(--s-2)" }}
+                style={{ borderBottom: i === slice.length - 1 ? "none" : "1px solid var(--s-2)" }}
                 data-testid="signature-row"
                 data-signature-key={`${row.projectId}-${row.key}`}
               >
@@ -600,8 +708,10 @@ function SignatureGroup({
               </div>
             );
           })}
-        </div>
-      )}
+          <Pager page={page} pageCount={pageCount} onChange={setPage} label={title.toLowerCase()} />
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -60,6 +60,14 @@ export default function CreateProject() {
 
   const update = (key: string, value: string | string[]) => setForm((f) => ({ ...f, [key]: value }));
 
+  // Budget is required on the from-scratch wizard (a project must have a budget).
+  // Valid = a finite, positive number. NOTE: the Convert-Inquiry flow intentionally
+  // allows budget = 0 (design-only clients) and is deliberately NOT affected here.
+  const isValidBudget = (raw: string) => {
+    const n = Number(raw);
+    return raw.trim() !== "" && Number.isFinite(n) && n > 0;
+  };
+
   // Required fields per step — block Continue (and name the missing field) until
   // they're filled. Step 3 (cover & notes) is all optional.
   const stepError = (s: number): string | null => {
@@ -70,6 +78,7 @@ export default function CreateProject() {
       if (!form.projectName.trim()) return "Project name";
       if (!form.propertyType) return "Property type";
       if (!form.location.trim()) return "Location";
+      if (!isValidBudget(form.budget)) return "A valid budget (RM)";
     }
     return null;
   };
@@ -123,6 +132,7 @@ export default function CreateProject() {
       !form.projectName.trim() ? "Project name" :
       !form.propertyType ? "Property type" :
       !form.location.trim() ? "Location" :
+      !isValidBudget(form.budget) ? "A valid budget (RM)" :
       null;
     if (missing) {
       toast.error(`${missing} is required`);
@@ -371,8 +381,8 @@ export default function CreateProject() {
                     <input style={inputStyle} placeholder="1850" type="number" value={form.size} onChange={(e) => update("size", e.target.value)} />
                   </div>
                   <div>
-                    <label style={labelStyle}>BUDGET (RM)</label>
-                    <input style={inputStyle} placeholder="280000" type="number" value={form.budget} onChange={(e) => update("budget", e.target.value)} />
+                    <label style={labelStyle}>BUDGET (RM) *</label>
+                    <input data-testid="cp-budget" style={inputStyle} placeholder="280000" type="number" min="1" inputMode="numeric" value={form.budget} onChange={(e) => update("budget", e.target.value)} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
