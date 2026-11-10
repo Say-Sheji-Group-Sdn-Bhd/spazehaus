@@ -214,7 +214,7 @@ export default function Reminders() {
 
         {/* THIS WEEK */}
         <section>
-          <SectionHeader title="THIS WEEK · CADENCE" subtitle="Friday weekly review + site reports" icon={Clock} />
+          <SectionHeader title="THIS WEEK · CADENCE" subtitle="Monday site reports · Friday payment review" icon={Clock} />
           {upcomingItems.length === 0 ? (
             <Empty message="No weekly cadences scheduled." />
           ) : (
