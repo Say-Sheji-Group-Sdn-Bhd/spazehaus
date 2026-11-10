@@ -2668,13 +2668,9 @@ function LifecycleTab({
   const setDefectDone = useSetDefectPeriodDone(projectId);
   const updateProjectMeta = useUpdateProjectMeta();
   const splitProject = useSplitExistingProject();
-  const handleSplitProject = () => {
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const confirmSplitProject = () => {
     if (!project || project.flowVersion === 2) return;
-    if (!window.confirm(
-      `Split "${project.name}" into a linked Design + Renovation project? ` +
-      `This project becomes the Design side (its number changes to SD…) and a new Renovation project (SR…) is created; ` +
-      `renovation-side payments, signatures and stages move to it. Only for jobs that genuinely have both sides.`
-    )) return;
     splitProject.mutate(projectId, {
       onSuccess: renoId => {
         toast.success("Split into Design + Renovation");
@@ -3249,20 +3245,41 @@ function LifecycleTab({
 
       {/* —— Flow 2 §4g: split a legacy project into Design + Renovation (OPS) —— */}
       {project && project.flowVersion !== 2 && canCollect && (
-        <button
-          type="button"
-          onClick={handleSplitProject}
-          disabled={splitProject.isPending}
-          className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left"
-          style={{ background: "var(--s-2)", border: "1px dashed var(--b-strong)" }}
-        >
-          <span className="text-xs font-medium" style={{ color: "var(--t-2)" }}>
-            {splitProject.isPending ? "Splitting…" : "Split into Design + Renovation (Flow 2)"}
-          </span>
-          <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
-            for two-sided jobs
-          </span>
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => setSplitDialogOpen(true)}
+            disabled={splitProject.isPending}
+            className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left"
+            style={{ background: "var(--s-2)", border: "1px dashed var(--b-strong)" }}
+          >
+            <span className="text-xs font-medium" style={{ color: "var(--t-2)" }}>
+              {splitProject.isPending ? "Splitting…" : "Split into Design + Renovation (Flow 2)"}
+            </span>
+            <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
+              for two-sided jobs
+            </span>
+          </button>
+
+          <AlertDialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Split into Design + Renovation?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  “{project.name}” becomes the Design project (SD…), and a new linked
+                  Renovation project (SR…) takes its renovation payments, signatures and
+                  stages. Only for jobs that genuinely have both sides.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmSplitProject}>
+                  Split project
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       )}
 
       {/* —— Phase timeline —— */}
