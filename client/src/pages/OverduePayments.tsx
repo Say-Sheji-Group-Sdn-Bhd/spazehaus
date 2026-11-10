@@ -11,10 +11,7 @@ import { useLocation } from "wouter";
 import { AlertCircle, ChevronRight, Coins } from "lucide-react";
 import { useOpenPayments } from "@/lib/queries";
 import { effectivePaymentStatus, getToday, daysFromToday } from "@/lib/lifecycleData";
-
-function formatRM(n: number): string {
-  return `RM ${Number(n).toLocaleString("en-MY")}`;
-}
+import { formatRM } from "@/lib/quotationData";
 
 export default function OverduePayments() {
   const [, navigate] = useLocation();
