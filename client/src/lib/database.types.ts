@@ -293,6 +293,9 @@ export type Database = {
           access_token: string | null
           email: string | null
           expiry: string | null
+          last_sync_at: string | null
+          last_sync_error: string | null
+          last_sync_status: string | null
           refresh_token: string | null
           scope: string | null
           updated_at: string
@@ -302,6 +305,9 @@ export type Database = {
           access_token?: string | null
           email?: string | null
           expiry?: string | null
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          last_sync_status?: string | null
           refresh_token?: string | null
           scope?: string | null
           updated_at?: string
@@ -311,6 +317,9 @@ export type Database = {
           access_token?: string | null
           email?: string | null
           expiry?: string | null
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          last_sync_status?: string | null
           refresh_token?: string | null
           scope?: string | null
           updated_at?: string
@@ -1840,6 +1849,14 @@ export type Database = {
         Returns: Database["public"]["Tables"]["audit_log"]["Row"][]
       }
       get_client_portal_data: { Args: { p_token: string }; Returns: Json }
+      get_my_google_sync_status: {
+        Args: never
+        Returns: {
+          last_sync_status: string | null
+          last_sync_at: string | null
+          is_connected: boolean
+        }[]
+      }
       is_admin_tier: { Args: never; Returns: boolean }
       is_project_team_member: { Args: { p_project_id: string }; Returns: boolean }
       is_ops_tier: { Args: never; Returns: boolean }

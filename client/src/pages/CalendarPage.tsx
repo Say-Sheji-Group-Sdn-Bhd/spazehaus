@@ -3,19 +3,21 @@
  * Design: Dark premium calendar with event overlay
  */
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import AppHeader from "@/components/AppHeader";
-import { useCalendarEvents, useCalendarEventStaff, useCreateCalendarEvent, useUpdateCalendarEvent, useDeleteCalendarEvent, useAllStaff, useProjects, CALENDAR_EVENT_COLORS } from "@/lib/queries";
+import { useCalendarEvents, useCalendarEventStaff, useCreateCalendarEvent, useUpdateCalendarEvent, useDeleteCalendarEvent, useAllStaff, useProjects, useGoogleSyncStatus, qk, CALENDAR_EVENT_COLORS } from "@/lib/queries";
 import { useAuth } from "@/contexts/AuthContext";
 import type { CalendarEventType, CalendarEventRow } from "@/lib/dbTypes";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { googleConfigured, hasGoogleToken } from "@/lib/google/gis";
 import { removeEventFromGoogle } from "@/lib/google/sync";
 import {
   connectGoogleCalendar,
   resyncGoogleCalendar,
   isGoogleConnectedLocally,
+  setGoogleConnectedLocally,
 } from "@/lib/google/connect";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -60,6 +62,11 @@ export default function CalendarPage() {
   const { data: calendarEvents = [], isSuccess: eventsLoaded } = useCalendarEvents();
   const { data: eventStaff = [] } = useCalendarEventStaff();
   const { data: allStaff = [] } = useAllStaff();
+  // Per-user Google sync health → drives the reconnect banner below. Only a dead
+  // refresh token (reauth_required) shows it; transient errors / never-synced do not.
+  const { data: syncStatus } = useGoogleSyncStatus();
+  const needsReauth = googleConfigured && (syncStatus?.needsReauth ?? false);
+  const qc = useQueryClient();
   const { staff: me, user } = useAuth();
   const [composeOpen, setComposeOpen] = useState(false);
   const [editing, setEditing] = useState<{ event: CalendarEventRow; staffIds: string[] } | null>(null);
@@ -82,16 +89,24 @@ export default function CalendarPage() {
     if (!user) { toast.error("Please sign in first"); return; }
     setSyncing(true);
     try {
-      if (!isGoogleConnectedLocally(user.id)) {
-        // First time on this browser → real OAuth connect (opens the popup).
+      // Go straight to the real OAuth connect when either this browser has never
+      // connected, OR we already know the stored token is dead (reauth banner
+      // showing) — a re-sync would just return reauth_required again, forcing a
+      // second click. The checks are synchronous, so the popup still opens inside
+      // this click gesture.
+      if (!isGoogleConnectedLocally(user.id) || needsReauth) {
+        // Real OAuth connect (opens the popup) → re-stores a fresh refresh token.
         const r = await connectGoogleCalendar(user.email ?? me?.email ?? undefined);
         if (r.connected) {
           setSyncedOk(true);
           toast.success("Google Calendar connected", {
             description: "Your events now sync automatically.",
           });
-          // Push the existing events across right away.
-          void resyncGoogleCalendar().catch(() => {});
+          // Push the existing events across right away, then refresh the sync-health
+          // status so the reconnect banner self-clears once the server records 'synced'.
+          void resyncGoogleCalendar()
+            .catch(() => {})
+            .finally(() => qc.invalidateQueries({ queryKey: qk.googleSyncStatus }));
         }
       } else {
         // Already connected → re-sync now via the server (no popup).
@@ -99,8 +114,14 @@ export default function CalendarPage() {
         if (status === "synced") {
           setSyncedOk(true);
           toast.success("Synced to Google Calendar");
+          // Refresh sync-health → clears the reconnect banner.
+          qc.invalidateQueries({ queryKey: qk.googleSyncStatus });
         } else if (status === "not_connected" || status === "reauth_required") {
           setSyncedOk(false);
+          // The stored token is dead but this browser still carries the "connected"
+          // marker. Clear it so the NEXT click runs the real OAuth popup instead of
+          // another no-op re-sync — that's what actually re-authorises the user.
+          setGoogleConnectedLocally(user.id, false);
           toast.info("Reconnect needed — click Sync Google again to reconnect.");
         } else {
           toast.error("Sync failed. Please try again.");
@@ -220,6 +241,62 @@ export default function CalendarPage() {
       />
 
       <div className="px-4 py-4 pb-24 space-y-4 lg:px-8 lg:py-7 lg:space-y-6">
+        {/* Reconnect nudge — only when THIS user's Google refresh token has died
+            (status === reauth_required). Self-clears once a sync records 'synced'.
+            Colour is backed by an icon + text so it never relies on hue alone. */}
+        <AnimatePresence>
+          {needsReauth && (
+            <motion.div
+              role="status"
+              aria-live="polite"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="rounded-2xl p-4 flex items-start gap-3 sm:items-center"
+              style={{
+                background: "oklch(0.70 0.15 68 / 10%)",
+                border: "1px solid oklch(0.70 0.15 68 / 35%)",
+              }}
+            >
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "oklch(0.70 0.15 68 / 18%)" }}
+                aria-hidden="true"
+              >
+                <AlertTriangle size={18} style={{ color: "oklch(0.55 0.16 52)" }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>
+                  Google Calendar disconnected
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--t-4)" }}>
+                  Your Google connection expired, so your events stopped syncing. Reconnect to resume automatic sync.
+                </p>
+              </div>
+              <button
+                onClick={handleGoogleSync}
+                disabled={syncing}
+                aria-label="Reconnect Google Calendar"
+                className="flex items-center justify-center gap-1.5 px-4 rounded-full text-xs font-label font-semibold shrink-0 w-full sm:w-auto"
+                style={{
+                  minHeight: "44px",
+                  background: "oklch(0.55 0.16 52)",
+                  color: "oklch(1 0 0)",
+                  letterSpacing: "0.04em",
+                  opacity: syncing ? 0.6 : 1,
+                }}
+              >
+                {syncing ? (
+                  <><RefreshCw size={14} className="animate-spin" /> Reconnecting…</>
+                ) : (
+                  <><RefreshCw size={14} /> Reconnect</>
+                )}
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Two-column layout on lg+: calendar left, agenda right */}
         <div className="space-y-4 xl:space-y-0 xl:grid xl:grid-cols-[1fr_340px] xl:gap-6 xl:items-start">
 
