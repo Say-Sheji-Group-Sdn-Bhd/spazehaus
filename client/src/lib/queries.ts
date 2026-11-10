@@ -84,6 +84,8 @@ export type Project = {
   propertyType: string;
   serviceType: string | null;  // "Design" | "Renovation" — drives the SD/SR project code
   projectCode: string | null;  // e.g. SD26-801 / SR26-801 (client-facing number; id stays PRJ0xx)
+  flowVersion: number;         // Flow 2: 1 = legacy unified flow; 2 = two-project split
+  siblingProjectId: string | null; // Flow 2: the linked Design/Renovation project
   location: string;
   size: number;
   budget: number;
@@ -203,6 +205,8 @@ function mapProject(row: ProjectWithStaffJoin): Project {
     propertyType: row.property_type,
     serviceType: row.service_type ?? null,
     projectCode: row.project_code ?? null,
+    flowVersion: row.flow_version ?? 1,
+    siblingProjectId: row.sibling_project_id ?? null,
     location: row.location,
     size: row.size_sqft,
     budget: Number(row.budget),

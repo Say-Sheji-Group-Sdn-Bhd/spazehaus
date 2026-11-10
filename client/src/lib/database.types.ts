@@ -967,7 +967,9 @@ export type Database = {
           description: string | null
           designer_id: string | null
           first_meetup_type: string | null
+          flow_version: number
           has_variation_order: boolean
+          job_seq: number | null
           id: string
           image_path: string | null
           lifecycle_started_at: string | null
@@ -1010,8 +1012,10 @@ export type Database = {
           description?: string | null
           designer_id?: string | null
           first_meetup_type?: string | null
+          flow_version?: number
           has_variation_order?: boolean
           id: string
+          job_seq?: number | null
           image_path?: string | null
           lifecycle_started_at?: string | null
           location: string
@@ -1053,8 +1057,10 @@ export type Database = {
           description?: string | null
           designer_id?: string | null
           first_meetup_type?: string | null
+          flow_version?: number
           has_variation_order?: boolean
           id?: string
+          job_seq?: number | null
           image_path?: string | null
           lifecycle_started_at?: string | null
           location?: string
