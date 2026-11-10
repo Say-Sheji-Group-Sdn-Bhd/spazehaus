@@ -11,6 +11,21 @@
 
 A **production-deployed**, **auth-gated**, **fully-database-backed** internal management app for SPAZEHAUS interior design firm in Johor Bahru. Every page reads from real Postgres through TanStack Query + Supabase. Magic-link auth restricts access to staff with matching emails, **role-based RLS** enforces what each user can read and write, and the daily close-door photo SOP uploads real JPEGs to Supabase Storage. The Vercel production build is lean (no more inlined `vitePluginManusRuntime`).
 
+> **Recent (2026-11-10, Project Flow 2 — PRs #15/#16/#17 pending):** Revised project
+> lifecycle, shipped in reviewed, tested, not-yet-deployed PRs. **Phase 2** (#15): client
+> portal shows weekly Site Reports instead of the daily close-door photo grid; weekly report
+> reminder moved Friday→Monday. **Phase 3** (#16): unified-flow catalogue rework — 29→32 stages
+> (remove design-prop-signed; merge 3D×3 and material+2D; add commission contracts, storage
+> handbook, CIDB/authority, Project PO, handover meeting, statement review; `service_type`
+> metadata); recompute now skips `not-yet`/`skipped`. **Phase 4 safe slice** (#17, stacked on
+> #16): staff-entered payment model (drop fixed 7/50/30/20), Flow-2 signatures, additive
+> `sibling_project_id`. All migrations are FILES pending `supabase db push` (validate the Phase 3
+> catalogue on a prod snapshot first). **Deferred:** the destructive two-project split (SD/SR
+> row-spawn, numbering-at-sign, side-aware UX, live-data migration) — needs product UX sign-off,
+> client A1–A6 (A3 overdue rule has no default), and staging validation. Docs:
+> `.claude/documentation/26-11-10-project-flow-2-phase{1,2,3,4-5}.md`; plans:
+> `.claude/plan/26-11-10-project-flow-2-*.plan.md`.
+
 > **Recent (2026-11-10, `fix/customer-project-flow`, PR pending):** Two customer→project
 > flow improvements from user testing. (1) **Add Customer form** now separates customer
 > identity (name/contact/email/category/tier/location/source) from a collapsible
