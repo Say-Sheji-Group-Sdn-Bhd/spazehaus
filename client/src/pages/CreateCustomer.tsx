@@ -7,9 +7,9 @@
  * (`inquiries_insert_any_authenticated` RLS policy).
  */
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { UserPlus } from "lucide-react";
+import { UserPlus, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import AppHeader from "@/components/AppHeader";
 import { useCreateCustomer, useAllStaff, type CreateInquiryArgs } from "@/lib/queries";
@@ -41,6 +41,10 @@ export default function CreateCustomer() {
   const [stage, setStage] = useState<InquiryStage>("new-inquiry");
   const [assignedToId, setAssignedToId] = useState("");
   const [notes, setNotes] = useState("");
+  // Lead-qualification fields are optional CRM data (they prefill the convert
+  // dialog later). Collapsed by default so adding a customer is obviously just
+  // name + contact + location.
+  const [showEstimates, setShowEstimates] = useState(false);
 
   const assignable = useMemo(() => allStaff.filter((s) => s.status !== "inactive"), [allStaff]);
 
@@ -124,47 +128,91 @@ export default function CreateCustomer() {
           </FieldGroup>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="PROPERTY TYPE" hint="e.g. Condominium, Retail, Office.">
-            <input type="text" value={propertyType} onChange={(e) => setPropertyType(e.target.value)} placeholder="e.g. Condominium" style={inputStyle} />
-          </FieldGroup>
-          <FieldGroup label="LEAD SOURCE">
-            <select value={source} onChange={(e) => setSource(e.target.value)} style={inputStyle}>
-              {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </FieldGroup>
-        </div>
-
         <FieldGroup label="LOCATION *">
           <input data-testid="cc-location" type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Bukit Indah, Johor Bahru" style={inputStyle} />
         </FieldGroup>
 
-        <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="EST. SIZE (SQFT)">
-            <input type="number" value={size} onChange={(e) => setSize(e.target.value)} placeholder="1850" style={inputStyle} />
-          </FieldGroup>
-          <FieldGroup label="EST. BUDGET (RM)">
-            <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="280000" style={inputStyle} />
-          </FieldGroup>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="PIPELINE STAGE">
-            <select value={stage} onChange={(e) => setStage(e.target.value as InquiryStage)} style={inputStyle}>
-              {STAGES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </FieldGroup>
-          <FieldGroup label="ASSIGNED TO">
-            <select value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} style={inputStyle}>
-              <option value="">Unassigned</option>
-              {assignable.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </FieldGroup>
-        </div>
-
-        <FieldGroup label="NOTES">
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Requirements, budget flexibility, timeline, how they found us…" style={{ ...inputStyle, minHeight: "90px", resize: "none" }} />
+        <FieldGroup label="LEAD SOURCE">
+          <select value={source} onChange={(e) => setSource(e.target.value)} style={inputStyle}>
+            {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
         </FieldGroup>
+
+        {/* Optional — lead estimates & pipeline. Collapsed by default: adding a
+            customer is just name + contact + location. These fields are useful CRM
+            data that prefill the convert-to-project dialog later. */}
+        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--s-card)", border: "1px solid var(--b-2)" }}>
+          <button
+            type="button"
+            data-testid="cc-estimates-toggle"
+            onClick={() => setShowEstimates((v) => !v)}
+            aria-expanded={showEstimates}
+            className="w-full flex items-center gap-3 px-4 py-3 text-left"
+            style={{ background: "transparent", cursor: "pointer" }}
+          >
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--s-3)", border: "1px solid var(--b-1)" }}>
+              <SlidersHorizontal size={14} style={{ color: "var(--t-5)" }} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-label font-semibold leading-tight" style={{ color: "var(--t-3)", letterSpacing: "0.02em" }}>
+                Optional — lead estimates &amp; pipeline
+              </p>
+              <p className="text-[10px] mt-0.5 leading-snug" style={{ color: "var(--t-5)" }}>
+                Prefills the convert-to-project dialog later — skip if unknown.
+              </p>
+            </div>
+            <ChevronDown
+              size={16}
+              style={{ color: "var(--t-5)", transform: showEstimates ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
+              className="shrink-0"
+            />
+          </button>
+          <AnimatePresence initial={false}>
+            {showEstimates && (
+              <motion.div
+                key="estimates"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                style={{ overflow: "hidden" }}
+              >
+                <div className="px-4 pt-3 pb-4 space-y-4" style={{ borderTop: "1px solid var(--b-2)" }}>
+                  <FieldGroup label="PROPERTY TYPE" hint="e.g. Condominium, Retail, Office.">
+                    <input type="text" value={propertyType} onChange={(e) => setPropertyType(e.target.value)} placeholder="e.g. Condominium" style={inputStyle} />
+                  </FieldGroup>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <FieldGroup label="EST. SIZE (SQFT)">
+                      <input type="number" value={size} onChange={(e) => setSize(e.target.value)} placeholder="1850" style={inputStyle} />
+                    </FieldGroup>
+                    <FieldGroup label="EST. BUDGET (RM)">
+                      <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="280000" style={inputStyle} />
+                    </FieldGroup>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <FieldGroup label="PIPELINE STAGE">
+                      <select value={stage} onChange={(e) => setStage(e.target.value as InquiryStage)} style={inputStyle}>
+                        {STAGES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </select>
+                    </FieldGroup>
+                    <FieldGroup label="ASSIGNED TO">
+                      <select value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} style={inputStyle}>
+                        <option value="">Unassigned</option>
+                        {assignable.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </FieldGroup>
+                  </div>
+
+                  <FieldGroup label="NOTES">
+                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Requirements, budget flexibility, timeline, how they found us…" style={{ ...inputStyle, minHeight: "90px", resize: "none" }} />
+                  </FieldGroup>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         <div className="flex gap-2 pt-2">
           <button

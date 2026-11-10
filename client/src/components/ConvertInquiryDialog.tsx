@@ -35,6 +35,13 @@ import { formatRM } from "@/lib/quotationData";
 
 type Priority = "high" | "medium" | "low";
 
+// Mirror the New-Project wizard's category→type mapping so convert prefills the
+// same project type the wizard would. (The RPC itself only distinguishes
+// Residential vs Commercial; we send the richer value via the follow-up update.)
+const PROJECT_TYPES = ["Residential", "Commercial", "Community"] as const;
+const categoryToType = (cat: string): string =>
+  cat === "Commercial" || cat === "F&B" || cat === "Office" ? "Commercial" : "Residential";
+
 type FormState = {
   projectName: string;
   designerStaffId: string;
@@ -47,6 +54,14 @@ type FormState = {
   serviceType: "Design" | "Renovation"; // drives the SD/SR project code
   areas: string; // comma-separated
   showroomDone: boolean; // start-choice: is the showroom meet-up already done?
+  // Project-detail fields (match the from-scratch wizard). Prefilled from the
+  // inquiry; persisted via a follow-up useUpdateProject after the convert RPC,
+  // which does not accept these as params (it reads them off the inquiry row).
+  projectType: string;
+  propertyType: string;
+  location: string;
+  size: string; // sqft, string for input control
+  description: string;
 };
 
 // —— date helpers ——
@@ -128,6 +143,11 @@ export default function ConvertInquiryDialog({
     serviceType: "Design",
     areas: "",
     showroomDone: false,
+    projectType: categoryToType(inquiry.category),
+    propertyType: inquiry.propertyType ?? "",
+    location: inquiry.location ?? "",
+    size: inquiry.estimatedSize != null ? String(inquiry.estimatedSize) : "",
+    description: "",
   }));
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const coverRef = useRef<HTMLInputElement>(null);
@@ -189,6 +209,25 @@ export default function ConvertInquiryDialog({
         serviceType: form.serviceType,
         assignedToAvatar: inquiry.assignedTo,
       });
+
+      // Persist the project-detail fields the convert RPC doesn't take as params
+      // (it seeds them from the inquiry row). Prefilled from the inquiry, so this
+      // re-confirms them and captures any edits. Built conditionally so a blank
+      // never clobbers a good RPC default (e.g. the auto "Converted from…" note).
+      const sizeTrim = form.size.trim();
+      const sizeNum = sizeTrim === "" ? null : Number(sizeTrim);
+      try {
+        await updateProject.mutateAsync({
+          id: newId,
+          type: form.projectType,
+          ...(form.propertyType.trim() ? { propertyType: form.propertyType.trim() } : {}),
+          ...(form.location.trim() ? { location: form.location.trim() } : {}),
+          ...(sizeNum != null && Number.isFinite(sizeNum) && sizeNum >= 0 ? { size: sizeNum } : {}),
+          ...(form.description.trim() ? { description: form.description.trim() } : {}),
+        });
+      } catch {
+        toast.error("Project created, but some details didn't save");
+      }
 
       // Optional cover image for the new project (reuses the project cover upload).
       if (coverFile) {
@@ -287,6 +326,64 @@ export default function ConvertInquiryDialog({
                   value={form.projectName}
                   onChange={v => setForm({ ...form, projectName: v })}
                   placeholder="The Paragon Residence"
+                />
+              </FieldGroup>
+
+              <FieldGroup label="PROJECT TYPE">
+                <div className="grid grid-cols-3 gap-2">
+                  {PROJECT_TYPES.map(pt => {
+                    const active = form.projectType === pt;
+                    return (
+                      <button
+                        key={pt}
+                        type="button"
+                        onClick={() => setForm({ ...form, projectType: pt })}
+                        className="py-2 rounded-lg text-xs font-label"
+                        style={{
+                          background: active
+                            ? "oklch(0.62 0.09 68 / 12%)"
+                            : "var(--s-page)",
+                          color: active ? "var(--acc-ink)" : "var(--t-5)",
+                          border: active
+                            ? "1.5px solid var(--acc-ink)"
+                            : "1px solid var(--b-1)",
+                          letterSpacing: "0.04em",
+                          fontWeight: active ? 700 : 500,
+                        }}
+                      >
+                        {pt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FieldGroup>
+
+              <div className="grid grid-cols-2 gap-3">
+                <FieldGroup label="PROPERTY TYPE">
+                  <TextInput
+                    value={form.propertyType}
+                    onChange={v => setForm({ ...form, propertyType: v })}
+                    placeholder="Condominium"
+                  />
+                </FieldGroup>
+                <FieldGroup label="SIZE (SQFT)">
+                  <NumberInput
+                    value={form.size}
+                    onChange={v => setForm({ ...form, size: v })}
+                    hint={
+                      inquiry.estimatedSize != null
+                        ? `Estimated at inquiry: ${inquiry.estimatedSize} sqft`
+                        : undefined
+                    }
+                  />
+                </FieldGroup>
+              </div>
+
+              <FieldGroup label="LOCATION / ADDRESS">
+                <TextInput
+                  value={form.location}
+                  onChange={v => setForm({ ...form, location: v })}
+                  placeholder="Bukit Indah, Johor Bahru"
                 />
               </FieldGroup>
 
@@ -430,6 +527,22 @@ export default function ConvertInquiryDialog({
                   value={form.areas}
                   onChange={v => setForm({ ...form, areas: v })}
                   placeholder="Living Room, Master Bedroom, Kitchen"
+                />
+              </FieldGroup>
+
+              <FieldGroup label="DESCRIPTION / NOTES (optional)">
+                <textarea
+                  value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  placeholder="Scope, client preferences, style direction…"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                  style={{
+                    background: "var(--s-page)",
+                    border: "1px solid var(--b-1)",
+                    color: "var(--t-2)",
+                    minHeight: "84px",
+                    resize: "none",
+                  }}
                 />
               </FieldGroup>
 

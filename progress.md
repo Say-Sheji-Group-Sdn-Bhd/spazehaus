@@ -1,6 +1,6 @@
 # SPAZEHAUS Management App — Progress Report
 
-**Last updated:** 2026-06-02
+**Last updated:** 2026-11-10
 **Repository:** https://github.com/kaseyfong-maker/spazehaus (private)
 **Live URL:** https://spazehaus.vercel.app
 **Database:** Supabase project `exajkbvaqjqdedqavbvs` (Singapore region, free tier)
@@ -10,6 +10,17 @@
 ## Where We Are
 
 A **production-deployed**, **auth-gated**, **fully-database-backed** internal management app for SPAZEHAUS interior design firm in Johor Bahru. Every page reads from real Postgres through TanStack Query + Supabase. Magic-link auth restricts access to staff with matching emails, **role-based RLS** enforces what each user can read and write, and the daily close-door photo SOP uploads real JPEGs to Supabase Storage. The Vercel production build is lean (no more inlined `vitePluginManusRuntime`).
+
+> **Recent (2026-11-10, `fix/customer-project-flow`, PR pending):** Two customer→project
+> flow improvements from user testing. (1) **Add Customer form** now separates customer
+> identity (name/contact/email/category/tier/location/source) from a collapsible
+> "Optional — lead estimates & pipeline" section (property type, est. size/budget, stage,
+> assignee, notes) — adding a customer reads as just name + contact + location; no data
+> removed. (2) **Convert-to-Project** now captures the wizard's full detail set — project
+> type, property type, location, size, description — prefilled from the inquiry and
+> persisted via a follow-up `useUpdateProject` (the convert RPC seeds them from the inquiry
+> row and takes no such params, so **no migration**). Convert's budget = 0 rule (design-only
+> clients) is preserved. Docs: `.claude/documentation/26-11-10-customer-project-flow.md`.
 
 **Tier 1 is mid-flight.** Admins (principal / admin / admin_exec / pm / site_supervisor) can mark payment gates as collected AND upload + sign the 6 contract / drawing documents per project directly from the UI. Signed PDFs are stored privately in Supabase Storage and viewed via short-lived signed URLs. Every status change flows through the audit_log trigger — and the project's `current_stage_id` now auto-advances server-side whenever a checkpoint completes, closing the workflow loop. Admins have a dedicated `/company/audit` viewer with smart event summaries + field-level diffs (now paginated with a row-id search). Sentry error tracking is wired (env-gated, with user context + ErrorBoundary forwarding). The Supabase client is fully typed against the live schema (generated via `bun run gen:types`) — `.from()`, `.update()`, `.insert()`, and `.rpc()` are all checked at compile time.
 
