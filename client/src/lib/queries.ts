@@ -641,6 +641,7 @@ export function useCreateProject() {
         project_type: args.type,
         property_type: args.propertyType,
         service_type: args.serviceType,
+        flow_version: 2, // Flow 2: directly-created projects use the split model too
         source: args.source ?? null,
         location: args.location,
         size_sqft: args.size ?? 0,
@@ -659,10 +660,11 @@ export function useCreateProject() {
       let created: ProjectRow | null = null;
       for (let attempt = 0; attempt < 5; attempt++) {
         const id = `PRJ${String(maxNum + 1 + attempt).padStart(3, "0")}`;
-        const project_code = `${codePrefix}${String(maxCode + 1 + attempt).padStart(3, "0")}`;
+        const seq = maxCode + 1 + attempt;
+        const project_code = `${codePrefix}${String(seq).padStart(3, "0")}`;
         const { data, error } = await supabase
           .from("projects")
-          .insert({ ...base, id, project_code })
+          .insert({ ...base, id, project_code, job_seq: seq })
           .select()
           .single();
         if (!error) { created = data as ProjectRow; break; }
