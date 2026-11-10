@@ -2640,6 +2640,7 @@ function LifecycleTab({
 }) {
   const { data: lc, isLoading } = useProjectLifecycle(projectId);
   const { data: project } = useProject(projectId);
+  const [, navigateLifecycle] = useLocation();
   const { data: rosterStaff = [] } = useAllStaff();
   const { data: stageDates = {} } = useProjectStageDates(projectId);
   const { data: stageStatuses = {} } = useProjectStageStatuses(projectId);
@@ -2935,14 +2936,26 @@ function LifecycleTab({
   const pay = paymentSummary(lc);
   const sig = signatureSummary(lc);
 
-  // Group stages by phase for the section headers
-  const phases: StagePhase[] = [
-    "Inquiry",
-    "Design",
-    "Pre-Build",
-    "Build",
-    "Closeout",
-  ];
+  // Flow 2: a split project (flow_version 2) renders ONLY its own side's stages
+  // (Design = Inquiry/Design/Pre-Build·design; Renovation = Pre-Build·reno/Build/
+  // Closeout). Legacy projects (flow_version 1) render the full unified flow.
+  const sideStages =
+    project?.flowVersion === 2
+      ? LIFECYCLE_STAGES.filter(
+          s => !s.serviceType || s.serviceType === project.serviceType
+        )
+      : LIFECYCLE_STAGES;
+
+  // Group stages by phase for the section headers (in catalogue order, this side only)
+  const phases: StagePhase[] = sideStages.reduce(
+    (acc, s) => (acc.includes(s.phase) ? acc : [...acc, s.phase]),
+    [] as StagePhase[]
+  );
+
+  // The warranty / defect period lives on the Renovation+Handover side. A Flow 2
+  // Design-only project has no defect-period stage, so its closeout logic is just
+  // "work delivered" with no warranty window.
+  const hasWarrantyStage = sideStages.some(s => s.id === "defect-period");
 
   // Build a map of paymentGate -> all related payment records (gate 4 has multiples)
   const paymentsByGate = lc.payments.reduce(
@@ -2961,8 +2974,8 @@ function LifecycleTab({
   // points at the FIRST stage (after New Inquiry) staff haven't marked Completed —
   // a hint, not a gate: staff can still act on any stage's payment/signature out of
   // order via its row. `lastStageId` (Defect Period) is handled by its own marker.
-  const lastStageId = LIFECYCLE_STAGES[LIFECYCLE_STAGES.length - 1]?.id;
-  const currentStage = LIFECYCLE_STAGES.find(
+  const lastStageId = sideStages[sideStages.length - 1]?.id;
+  const currentStage = sideStages.find(
     s =>
       s.order > 1 &&
       s.id !== lastStageId &&
@@ -2987,22 +3000,22 @@ function LifecycleTab({
   // Defect Period) is manually marked Completed — order-independent, matching the
   // out-of-order reality. It's only TRULY complete once the Defect Period (warranty
   // window) is closed — until then the warranty is still active.
-  const workDelivered = LIFECYCLE_STAGES.every(
+  const workDelivered = sideStages.every(
     s =>
       s.order === 1 ||
-      s.id === lastStageId ||
+      (hasWarrantyStage && s.id === lastStageId) ||
       stageStatus(s, stageStatuses) === "completed"
   );
   // Stages (after New Inquiry, before Defect Period) not yet marked Completed —
   // the closeout "mark all remaining complete" convenience targets exactly these.
-  const remainingStages = LIFECYCLE_STAGES.filter(
+  const remainingStages = sideStages.filter(
     s =>
       s.order > 1 &&
       s.id !== lastStageId &&
       stageStatus(s, stageStatuses) !== "completed"
   );
-  const projectComplete = workDelivered && defectDone;
-  const warrantyActive = workDelivered && !defectDone;
+  const projectComplete = workDelivered && (!hasWarrantyStage || defectDone);
+  const warrantyActive = hasWarrantyStage && workDelivered && !defectDone;
   const warrantyEndDate = stageDates["defect-period"];
   const nextParts: string[] = [
     ...nextPayments.map(p => `collect ${p.label} (${formatRM(p.amount)})`),
@@ -3174,9 +3187,28 @@ function LifecycleTab({
         />
       </div>
 
+      {/* —— Flow 2: linked Design ⇄ Renovation project —— */}
+      {project?.siblingProjectId && (
+        <button
+          onClick={() => navigateLifecycle(`/projects/${project.siblingProjectId}`)}
+          className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left"
+          style={{
+            background: "oklch(0.62 0.09 68 / 8%)",
+            border: "1px solid oklch(0.62 0.09 68 / 22%)",
+          }}
+        >
+          <span className="text-xs font-medium" style={{ color: "var(--acc-ink)" }}>
+            Linked {project.serviceType === "Design" ? "Renovation" : "Design"} project
+          </span>
+          <span className="text-xs font-semibold" style={{ color: "var(--acc-ink)" }}>
+            View →
+          </span>
+        </button>
+      )}
+
       {/* —— Phase timeline —— */}
       {phases.map(phase => {
-        const phaseStages = LIFECYCLE_STAGES.filter(s => s.phase === phase);
+        const phaseStages = sideStages.filter(s => s.phase === phase);
         const pc = phaseColors[phase];
         return (
           <div key={phase}>
