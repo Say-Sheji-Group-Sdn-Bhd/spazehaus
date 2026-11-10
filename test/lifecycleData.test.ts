@@ -19,8 +19,8 @@ const TODAY = new Date(2026, 5, 8);
 describe("stageOrder", () => {
   it("returns the canonical order for a known stage", () => {
     expect(stageOrder("new-inquiry")).toBe(1);
-    expect(stageOrder("design-contract")).toBe(9);
-    expect(stageOrder("defect-period")).toBe(29);
+    expect(stageOrder("design-contract")).toBe(8);   // Flow 2 Phase 3: design-prop-signed removed
+    expect(stageOrder("defect-period")).toBe(32);     // Flow 2 Phase 3: +7 new, -4 merged/removed
   });
   it("returns 0 for an unknown stage", () => {
     expect(stageOrder("nope")).toBe(0);
