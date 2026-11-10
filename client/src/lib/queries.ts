@@ -86,6 +86,7 @@ export type Project = {
   projectCode: string | null;  // e.g. SD26-801 / SR26-801 (client-facing number; id stays PRJ0xx)
   flowVersion: number;         // Flow 2: 1 = legacy unified flow; 2 = two-project split
   siblingProjectId: string | null; // Flow 2: the linked Design/Renovation project
+  jobSeq: number | null;       // Flow 2: shared numeric suffix (one per job, across the pair)
   location: string;
   size: number;
   budget: number;
@@ -207,6 +208,7 @@ function mapProject(row: ProjectWithStaffJoin): Project {
     projectCode: row.project_code ?? null,
     flowVersion: row.flow_version ?? 1,
     siblingProjectId: row.sibling_project_id ?? null,
+    jobSeq: row.job_seq ?? null,
     location: row.location,
     size: row.size_sqft,
     budget: Number(row.budget),
@@ -4207,9 +4209,13 @@ export function buildReminders(
   });
 
   // — Weekly site report per active project —
+  // Flow 2: the site report is a Renovation-side deliverable. A split Design project
+  // (flow_version 2, service_type Design) has no site, so it gets no site-report
+  // reminder — this also stops a two-project job double-counting (Design + Renovation).
   const ACTIVE_STATUSES = new Set(["active", "assigned", "under-review"]);
   for (const project of projects) {
     if (!ACTIVE_STATUSES.has(project.status)) continue;
+    if (project.flowVersion === 2 && project.serviceType === "Design") continue;
     reminders.push({
       id: `RM-${project.id}-SITE-REPORT-${friStr}`,
       type: "weekly-site-report",

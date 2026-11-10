@@ -76,6 +76,7 @@ const QuotationList    = lazyWithReload(() => import("./pages/QuotationList"));
 const QuotationDetail  = lazyWithReload(() => import("./pages/QuotationDetail"));     // root of the PDF lazy chain
 const CreateQuotation  = lazyWithReload(() => import("./pages/CreateQuotation"));
 const Checkpoints      = lazyWithReload(() => import("./pages/Checkpoints"));
+const OverduePayments  = lazyWithReload(() => import("./pages/OverduePayments"));
 const CustomerDatabase = lazyWithReload(() => import("./pages/CustomerDatabase"));
 const CustomerDetail   = lazyWithReload(() => import("./pages/CustomerDetail"));
 const CreateCustomer   = lazyWithReload(() => import("./pages/CreateCustomer"));
@@ -163,6 +164,7 @@ function AppLayout() {
 
             {/* Important Checkpoints — Payment Collection + Document Sign SOP */}
             <Route path="/checkpoints" component={Checkpoints} />
+            <Route path="/checkpoints/overdue" component={OverduePayments} />
 
             {/* Customer Database — Inquiry → Awarded funnel + categories */}
             <Route path="/customers" component={CustomerDatabase} />
