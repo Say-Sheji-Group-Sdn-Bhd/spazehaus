@@ -3672,6 +3672,184 @@ function LifecycleTab({
                           />
                         </div>
                       )}
+
+                      {/* Flow 2 · Design-side Progressive Payment — instalments on
+                          the Design project (mirrors the build-side grid). */}
+                      {stage.id === "design-contract" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="progressive-payment-design"
+                            title="Design Progressive Payment"
+                            description="Flow 2: the Design side can also be billed in instalments. Name each, set its estimated date and amount, and attach the invoice if issued."
+                            canManage={canCollect}
+                            withAmount
+                            maxColumns={6}
+                            minColumns={2}
+                            labelPlaceholder="Instalment (e.g. 50%)"
+                            addLabel="Add instalment"
+                            accept="application/pdf,image/*"
+                            emptyHint="No design instalments set yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Flow 2 · Design Commission Contract — commission sign-off. */}
+                      {stage.id === "design-commission-contract" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="design-commission-contract"
+                            defaultDateToday
+                            title="Design Commission Contract sign-off"
+                            description="Upload the signed design commission contract. Add a column per signatory with their sign-off and the signed copy."
+                            canManage={canCollect}
+                            withSignoff
+                            maxColumns={4}
+                            labelPlaceholder="Signatory"
+                            addLabel="Add sign-off"
+                            accept="application/pdf,image/*"
+                            emptyHint="No commission sign-offs yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Flow 2 · Storage Handbook from client — optional upload. */}
+                      {stage.id === "storage-handbook" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="storage-handbook"
+                            defaultDateToday
+                            title="Storage Handbook"
+                            description="Attach the storage handbook received from the client."
+                            canManage={canCollect}
+                            maxColumns={4}
+                            labelPlaceholder="Document"
+                            addLabel="Add document"
+                            accept="application/pdf,image/*"
+                            emptyHint="No handbook uploaded yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Flow 2 · 3D Design — merged 3D drawing + meeting + revised 3D,
+                          multiple submissions, one client sign-off. */}
+                      {stage.id === "revised-3d" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="3d-design"
+                            defaultDateToday
+                            title="3D Design submissions"
+                            description="Flow 2 merges 3D drawing, 3D meeting and revised 3D into one checkpoint. Add a column per submission (V1, Revision 1…); the stage's sign-off locks the final visual."
+                            canManage={canCollect}
+                            maxColumns={10}
+                            labelPlaceholder="Submission (e.g. V1)"
+                            addLabel="Add submission"
+                            accept="application/pdf,image/*"
+                            emptyHint="No 3D submissions yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Flow 2 · 2D Drawings & Material Board — merged material
+                          selection + 2D drawings + shopping list; sign-off → Renovation. */}
+                      {stage.id === "2d-shopping" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="2d-material-board"
+                            defaultDateToday
+                            title="2D Drawings & Material Board"
+                            description="Flow 2 merges material selection, 2D drawings and the shopping list into one checkpoint. Add a column per item; signing this off kicks off the Renovation side."
+                            canManage={canCollect}
+                            maxColumns={12}
+                            labelPlaceholder="Item (2D / material / shopping)"
+                            addLabel="Add item"
+                            accept="application/pdf,image/*"
+                            emptyHint="No 2D / material items yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Flow 2 · Renovation Commission Contract — commission sign-off. */}
+                      {stage.id === "reno-commission-contract" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="reno-commission-contract"
+                            defaultDateToday
+                            title="Renovation Commission Contract sign-off"
+                            description="Upload the signed renovation commission contract. Add a column per signatory with their sign-off and the signed copy."
+                            canManage={canCollect}
+                            withSignoff
+                            maxColumns={4}
+                            labelPlaceholder="Signatory"
+                            addLabel="Add sign-off"
+                            accept="application/pdf,image/*"
+                            emptyHint="No commission sign-offs yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Flow 2 · CIDB / Authority / Insurance — submissions upload. */}
+                      {stage.id === "cidb-authority" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="cidb-authority"
+                            defaultDateToday
+                            title="CIDB / Authority / Insurance"
+                            description="One step for CIDB, management/authority submission and insurance. Add a column per submission with its date and document."
+                            canManage={canCollect}
+                            maxColumns={6}
+                            labelPlaceholder="Submission (CIDB / Authority / Insurance)"
+                            addLabel="Add submission"
+                            accept="application/pdf,image/*"
+                            emptyHint="No submissions logged yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Flow 2 · Project PO — confirm within 2 weeks; upload. */}
+                      {stage.id === "project-po" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="project-po"
+                            defaultDateToday
+                            title="Project PO"
+                            description="Confirm the project PO within two weeks. Attach the PO document(s)."
+                            canManage={canCollect}
+                            maxColumns={4}
+                            labelPlaceholder="PO"
+                            addLabel="Add PO"
+                            accept="application/pdf,image/*"
+                            emptyHint="No PO uploaded yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Flow 2 · Handover Document / As-Built — client-signed. */}
+                      {stage.id === "handover" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="handover-document"
+                            defaultDateToday
+                            title="Handover Document / As-Built"
+                            description="Flow 2: upload the as-built drawings + handover document, signed by the client. Issue the as-built early so the client acknowledges the wiring layout before handover."
+                            canManage={canCollect}
+                            withSignoff
+                            maxColumns={6}
+                            labelPlaceholder="Document (as-built / handover)"
+                            addLabel="Add document"
+                            accept="application/pdf,image/*"
+                            emptyHint="No handover documents yet."
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

@@ -598,6 +598,7 @@ export type Database = {
           order_index: number
           payment_gate: number | null
           phase: string
+          service_type: string | null
           signature_key: string | null
           stage_type: string
         }
@@ -607,6 +608,7 @@ export type Database = {
           order_index: number
           payment_gate?: number | null
           phase: string
+          service_type?: string | null
           signature_key?: string | null
           stage_type: string
         }
@@ -616,6 +618,7 @@ export type Database = {
           order_index?: number
           payment_gate?: number | null
           phase?: string
+          service_type?: string | null
           signature_key?: string | null
           stage_type?: string
         }
