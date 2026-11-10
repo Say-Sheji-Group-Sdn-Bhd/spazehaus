@@ -97,6 +97,7 @@ import {
   useMarkStagesComplete,
   useSetVariationOrder,
   useUpdateProjectMeta,
+  useSplitExistingProject,
   FIRST_MEETUP_TYPES,
   useProjectColumns,
   useUpdatePayment,
@@ -2666,6 +2667,23 @@ function LifecycleTab({
     );
   const setDefectDone = useSetDefectPeriodDone(projectId);
   const updateProjectMeta = useUpdateProjectMeta();
+  const splitProject = useSplitExistingProject();
+  const handleSplitProject = () => {
+    if (!project || project.flowVersion === 2) return;
+    if (!window.confirm(
+      `Split "${project.name}" into a linked Design + Renovation project? ` +
+      `This project becomes the Design side (its number changes to SD…) and a new Renovation project (SR…) is created; ` +
+      `renovation-side payments, signatures and stages move to it. Only for jobs that genuinely have both sides.`
+    )) return;
+    splitProject.mutate(projectId, {
+      onSuccess: renoId => {
+        toast.success("Split into Design + Renovation");
+        navigateLifecycle(`/projects/${renoId}`);
+      },
+      onError: e =>
+        toast.error(`Couldn't split: ${e instanceof Error ? e.message : "unknown error"}`),
+    });
+  };
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
   const revertPayment = useRevertPayment();
@@ -2734,6 +2752,29 @@ function LifecycleTab({
           ),
       }
     );
+
+  // Flow 2 (Phase 5, note §6.3): auto-fill the 6- and 12-month warranty check-ins
+  // from the handover date (the handover document's signed date, else today), in
+  // ONE write. Staff can still override either date by hand.
+  const autoFillWarranty = () => {
+    const localISO = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const m = sigByKey["handover"]?.signedDate?.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const base = m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : new Date();
+    const d6 = new Date(base);
+    d6.setMonth(d6.getMonth() + 6);
+    const d12 = new Date(base);
+    d12.setMonth(d12.getMonth() + 12);
+    updateProjectMeta.mutate(
+      { projectId, warranty6MonthDate: localISO(d6), warranty12MonthDate: localISO(d12) },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't save dates: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
+    );
+  };
 
   // Phase 2 — set a milestone/checkpoint's estimated date. Routes by source:
   // milestones → project_stage_dates; payments → due_date; signatures →
@@ -3206,6 +3247,24 @@ function LifecycleTab({
         </button>
       )}
 
+      {/* —— Flow 2 §4g: split a legacy project into Design + Renovation (OPS) —— */}
+      {project && project.flowVersion !== 2 && canCollect && (
+        <button
+          type="button"
+          onClick={handleSplitProject}
+          disabled={splitProject.isPending}
+          className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left"
+          style={{ background: "var(--s-2)", border: "1px dashed var(--b-strong)" }}
+        >
+          <span className="text-xs font-medium" style={{ color: "var(--t-2)" }}>
+            {splitProject.isPending ? "Splitting…" : "Split into Design + Renovation (Flow 2)"}
+          </span>
+          <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
+            for two-sided jobs
+          </span>
+        </button>
+      )}
+
       {/* —— Phase timeline —— */}
       {phases.map(phase => {
         const phaseStages = sideStages.filter(s => s.phase === phase);
@@ -3468,6 +3527,7 @@ function LifecycleTab({
                               12-month review dates (replaces the plain Defect
                               Period with scheduled follow-ups). */}
                           {stage.id === "defect-period" && workDelivered && (
+                            <>
                             <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                               {(
                                 [
@@ -3503,6 +3563,22 @@ function LifecycleTab({
                                 </label>
                               ))}
                             </div>
+                            {canCollect && (
+                              <button
+                                type="button"
+                                onClick={autoFillWarranty}
+                                disabled={updateProjectMeta.isPending}
+                                className="mt-2 text-[10px] font-label px-2.5 py-1 rounded-md"
+                                style={{
+                                  background: "oklch(0.62 0.09 68 / 10%)",
+                                  border: "1px solid oklch(0.62 0.09 68 / 25%)",
+                                  color: "var(--acc-ink)",
+                                }}
+                              >
+                                Auto-fill from handover (+6 / +12 months)
+                              </button>
+                            )}
+                            </>
                           )}
                           {stage.id === "defect-period" &&
                             workDelivered &&

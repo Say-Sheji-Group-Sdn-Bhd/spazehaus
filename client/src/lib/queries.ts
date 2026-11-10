@@ -1346,6 +1346,31 @@ export function useUpdateProjectMeta() {
   });
 }
 
+/**
+ * Flow 2 §4g — split an EXISTING legacy project into a Design + Renovation pair.
+ * Opt-in, per project; OPS-only (the RPC re-checks is_ops_tier server-side). Returns
+ * the new Renovation project id. Reno-side payments/signatures/stage-dates/columns are
+ * moved to the new row by the RPC.
+ */
+export function useSplitExistingProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (projectId: string): Promise<string> => {
+      const { data, error } = await supabase.rpc("flow2_split_existing_project", {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (_renoId, projectId) => {
+      qc.invalidateQueries({ queryKey: qk.project(projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+      qc.invalidateQueries({ queryKey: qk.openPayments });
+      qc.invalidateQueries({ queryKey: qk.openSignatures });
+    },
+  });
+}
+
 /** Mint a short-lived signed URL for viewing/downloading a column's file. */
 export async function getColumnFileUrl(storagePath: string, expiresInSec = 3600): Promise<string | null> {
   const { data, error } = await supabase.storage
