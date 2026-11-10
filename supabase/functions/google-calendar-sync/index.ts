@@ -415,10 +415,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const results: UserSyncResult[] = [];
   for (const uid of targets) {
+    let r: UserSyncResult;
     try {
-      results.push(await syncOneUser(admin, clientId, clientSecret, uid));
+      r = await syncOneUser(admin, clientId, clientSecret, uid);
     } catch (e) {
-      results.push({ userId: uid, status: "error", error: e instanceof Error ? e.message : String(e) });
+      r = { userId: uid, status: "error", error: e instanceof Error ? e.message : String(e) };
+    }
+    results.push(r);
+    // Persist the per-user sync outcome so the app can surface a reconnect nudge
+    // (reauth_required) that the cron otherwise buries in net._http_response.
+    // Skip not_connected: there's no token row to update. Never writes token
+    // material — only status columns.
+    if (r.status !== "not_connected") {
+      await admin
+        .from("google_oauth_tokens")
+        .update({
+          last_sync_status: r.status,
+          last_sync_at: new Date().toISOString(),
+          last_sync_error: r.error ?? null,
+        })
+        .eq("user_id", uid);
     }
   }
 

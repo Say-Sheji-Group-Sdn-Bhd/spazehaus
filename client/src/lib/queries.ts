@@ -320,6 +320,7 @@ export const qk = {
   staffKpi: (id: string) => ["kpi_records", id] as const,
   calendarEvents: ["calendar_events"] as const,
   calendarEventStaff: ["calendar_event_staff"] as const,
+  googleSyncStatus: ["google_sync_status"] as const,
   notificationPrefs: (staffId: string) => ["notification_preferences", staffId] as const,
   sitePhotos: ["site_photos"] as const,
   projectSitePhotos: (id: string) => ["site_photos", id] as const,
@@ -3070,6 +3071,40 @@ export function useDeleteCalendarEvent() {
       // Auto-sync Google for everyone who had the event → the Edge Function sees
       // it's gone from their creator/assignee set and removes it from Google.
       void triggerGoogleSync(result.affectedStaff);
+    },
+  });
+}
+
+/**
+ * Per-user Google Calendar sync status, for the reconnect nudge on CalendarPage.
+ *
+ * Reads the status-only security-definer RPC `get_my_google_sync_status`, which
+ * returns ONLY this user's status columns + a connected boolean — never token
+ * material (the google_oauth_tokens table stays service-role-only). The row's
+ * `last_sync_status` is written by the google-calendar-sync Edge Function after
+ * each sync (cron or instant-push).
+ *
+ * `needsReauth` is intentionally narrow: only a dead refresh token
+ * (`reauth_required`) drives the banner. A transient `error` or a never-synced
+ * `null` does NOT — those clear on the next 15-min run, so showing a banner for
+ * them would be a false alarm.
+ *
+ * Refetches on window focus so returning to the tab reflects the latest cron run;
+ * invalidate `qk.googleSyncStatus` after a successful sync/connect to self-clear.
+ */
+export function useGoogleSyncStatus() {
+  return useQuery({
+    queryKey: qk.googleSyncStatus,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_my_google_sync_status");
+      if (error) throw error;
+      const row = data?.[0];
+      return {
+        isConnected: Boolean(row?.is_connected),
+        needsReauth: row?.last_sync_status === "reauth_required",
+        lastSyncAt: row?.last_sync_at ?? null,
+      };
     },
   });
 }
