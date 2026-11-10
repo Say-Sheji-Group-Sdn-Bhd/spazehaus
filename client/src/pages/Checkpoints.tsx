@@ -104,15 +104,22 @@ export default function Checkpoints() {
             tint="var(--acc-ink)"
             tintBg="oklch(0.62 0.09 68 / 10%)"
           />
-          <KpiCard
-            icon={AlertCircle}
-            label="Overdue"
-            primary={String(summary.overdueCount)}
-            secondary={summary.overdueRM > 0 ? formatRM(summary.overdueRM) : "All on track"}
-            tint="oklch(0.50 0.12 25)"
-            tintBg="oklch(0.60 0.12 25 / 10%)"
-            urgent={summary.overdueCount > 0}
-          />
+          <button
+            type="button"
+            onClick={() => navigate("/checkpoints/overdue")}
+            className="text-left w-full h-full"
+            title="View all overdue payments"
+          >
+            <KpiCard
+              icon={AlertCircle}
+              label="Overdue"
+              primary={String(summary.overdueCount)}
+              secondary={summary.overdueRM > 0 ? formatRM(summary.overdueRM) : "All on track"}
+              tint="oklch(0.50 0.12 25)"
+              tintBg="oklch(0.60 0.12 25 / 10%)"
+              urgent={summary.overdueCount > 0}
+            />
+          </button>
           <KpiCard
             icon={CalendarDays}
             label="Due This Week"
