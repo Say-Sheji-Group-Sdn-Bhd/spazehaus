@@ -52,7 +52,13 @@ export default function Dashboard() {
   const { data: auditData } = useAuditLog({ daysBack: 14, pageSize: 7 });
   const recentActivity = auditData?.pages[0]?.entries ?? [];
 
-  const activeProjects = projects.filter((p) => p.status === "active" || p.status === "assigned").length;
+  // Count JOBS, not rows: a Flow 2 two-project pair (Design + Renovation) shares one
+  // job_seq, so it counts once; legacy projects count per row.
+  const activeProjects = new Set(
+    projects
+      .filter((p) => p.status === "active" || p.status === "assigned")
+      .map((p) => (p.flowVersion === 2 && p.jobSeq != null ? `job-${p.jobSeq}` : `prj-${p.id}`))
+  ).size;
   const pendingReview = projects.filter((p) => p.status === "under-review").length;
   const completedThisMonth = projects.filter((p) => p.status === "completed").length;
   const totalStaff = allStaff.length;

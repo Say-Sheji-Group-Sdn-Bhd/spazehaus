@@ -967,7 +967,9 @@ export type Database = {
           description: string | null
           designer_id: string | null
           first_meetup_type: string | null
+          flow_version: number
           has_variation_order: boolean
+          job_seq: number | null
           id: string
           image_path: string | null
           lifecycle_started_at: string | null
@@ -981,6 +983,7 @@ export type Database = {
           project_type: string
           property_type: string
           service_type: string | null
+          sibling_project_id: string | null
           size_sqft: number
           source: string | null
           start_date: string | null
@@ -1009,8 +1012,10 @@ export type Database = {
           description?: string | null
           designer_id?: string | null
           first_meetup_type?: string | null
+          flow_version?: number
           has_variation_order?: boolean
           id: string
+          job_seq?: number | null
           image_path?: string | null
           lifecycle_started_at?: string | null
           location: string
@@ -1023,6 +1028,7 @@ export type Database = {
           project_type: string
           property_type: string
           service_type?: string | null
+          sibling_project_id?: string | null
           size_sqft: number
           source?: string | null
           start_date?: string | null
@@ -1051,8 +1057,10 @@ export type Database = {
           description?: string | null
           designer_id?: string | null
           first_meetup_type?: string | null
+          flow_version?: number
           has_variation_order?: boolean
           id?: string
+          job_seq?: number | null
           image_path?: string | null
           lifecycle_started_at?: string | null
           location?: string
@@ -1065,6 +1073,7 @@ export type Database = {
           project_type?: string
           property_type?: string
           service_type?: string | null
+          sibling_project_id?: string | null
           size_sqft?: number
           source?: string | null
           start_date?: string | null
@@ -1794,6 +1803,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      flow2_split_existing_project: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
       convert_inquiry_to_project: {
         Args: {
           p_areas: string[]
