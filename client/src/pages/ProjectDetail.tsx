@@ -96,6 +96,8 @@ import {
   useSetStageStatus,
   useMarkStagesComplete,
   useSetVariationOrder,
+  useUpdateProjectMeta,
+  FIRST_MEETUP_TYPES,
   useProjectColumns,
   useUpdatePayment,
   useUpdateSignature,
@@ -2662,6 +2664,7 @@ function LifecycleTab({
       }
     );
   const setDefectDone = useSetDefectPeriodDone(projectId);
+  const updateProjectMeta = useUpdateProjectMeta();
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
   const revertPayment = useRevertPayment();
@@ -2701,6 +2704,32 @@ function LifecycleTab({
         onError: e =>
           toast.error(
             `Couldn't reopen: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
+    );
+
+  // Flow 2 (Phase 1) — additive per-project fields. First-meet-up channel +
+  // the two warranty follow-up check-in dates. Each saves independently.
+  const setFirstMeetup = (value: string | null) =>
+    updateProjectMeta.mutate(
+      { projectId, firstMeetupType: value },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't save: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
+    );
+  const setWarrantyDate = (
+    which: "warranty6MonthDate" | "warranty12MonthDate",
+    iso: string
+  ) =>
+    updateProjectMeta.mutate(
+      { projectId, [which]: iso || null },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't save date: ${e instanceof Error ? e.message : "unknown error"}`
           ),
       }
     );
@@ -3244,7 +3273,11 @@ function LifecycleTab({
                                       : "var(--t-5)",
                               }}
                             >
-                              {stage.label}
+                              {stage.id === "defect-period"
+                                ? "Warranty follow-up"
+                                : stage.id === "showroom-meet"
+                                  ? "First meet-up"
+                                  : stage.label}
                             </p>
                             {stage.paymentGate && (
                               <GateBadge
@@ -3280,6 +3313,60 @@ function LifecycleTab({
                             >
                               {stage.description}
                             </p>
+                          )}
+                          {/* Flow 2 — First meet-up channel selector (Showroom /
+                              Zoom / Site / Others). A per-project value, surfaced
+                              on this stage. */}
+                          {stage.id === "showroom-meet" && (
+                            <div className="mt-1.5">
+                              <p
+                                className="text-[10px] font-label mb-1"
+                                style={{
+                                  color: "var(--t-5)",
+                                  letterSpacing: "0.04em",
+                                }}
+                              >
+                                FIRST MEET-UP TYPE
+                              </p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {FIRST_MEETUP_TYPES.map(opt => {
+                                  const active = project?.firstMeetupType === opt;
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      onClick={() =>
+                                        setFirstMeetup(active ? null : opt)
+                                      }
+                                      disabled={
+                                        !canCollect || updateProjectMeta.isPending
+                                      }
+                                      aria-pressed={active}
+                                      title={
+                                        active ? "Tap to clear" : `Set ${opt}`
+                                      }
+                                      className="text-[11px] font-label px-3 py-1.5 rounded-lg"
+                                      style={{
+                                        background: active
+                                          ? "var(--acc)"
+                                          : "var(--s-2)",
+                                        color: active
+                                          ? "oklch(1 0 0)"
+                                          : "var(--t-3)",
+                                        border: active
+                                          ? "none"
+                                          : "1px solid var(--b-strong)",
+                                        cursor: canCollect
+                                          ? "pointer"
+                                          : "default",
+                                      }}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           )}
                           {/* Defect Period (final stage): pick a warranty end date +
                               a Done button to close it (project → completed). Staff
@@ -3330,7 +3417,9 @@ function LifecycleTab({
                             </div>
                           ) : (
                             /* Estimated date for the other milestone stages (Phase 2).
-                               Payment/signature stages carry their date on the row below. */
+                               Payment/signature stages carry their date on the row
+                               below; the defect-period workDelivered case is handled
+                               above. */
                             !payments &&
                             !signature && (
                               <div className="mt-1">
@@ -3342,6 +3431,46 @@ function LifecycleTab({
                                 />
                               </div>
                             )
+                          )}
+                          {/* Flow 2 — Warranty follow-up check-ins: 6-month and
+                              12-month review dates (replaces the plain Defect
+                              Period with scheduled follow-ups). */}
+                          {stage.id === "defect-period" && workDelivered && (
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {(
+                                [
+                                  ["warranty6MonthDate", "6-month check-in"],
+                                  ["warranty12MonthDate", "12-month check-in"],
+                                ] as const
+                              ).map(([field, label]) => (
+                                <label
+                                  key={field}
+                                  className="flex flex-col gap-1 text-[10px] font-label"
+                                  style={{
+                                    color: "var(--t-5)",
+                                    letterSpacing: "0.03em",
+                                  }}
+                                >
+                                  {label.toUpperCase()}
+                                  <input
+                                    type="date"
+                                    value={project?.[field] ?? ""}
+                                    disabled={
+                                      !canCollect || updateProjectMeta.isPending
+                                    }
+                                    onChange={e =>
+                                      setWarrantyDate(field, e.target.value)
+                                    }
+                                    className="text-[11px] rounded-md px-2 py-1.5"
+                                    style={{
+                                      background: "var(--s-2)",
+                                      border: "1px solid var(--b-strong)",
+                                      color: "var(--t-2)",
+                                    }}
+                                  />
+                                </label>
+                              ))}
+                            </div>
                           )}
                           {stage.id === "defect-period" &&
                             workDelivered &&
