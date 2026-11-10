@@ -954,6 +954,7 @@ export type Database = {
           defect_period_completed_by: string | null
           description: string | null
           designer_id: string | null
+          first_meetup_type: string | null
           has_variation_order: boolean
           id: string
           image_path: string | null
@@ -977,6 +978,8 @@ export type Database = {
           tasks_completed: number
           team: string[]
           updated_at: string
+          warranty_12month_date: string | null
+          warranty_6month_date: string | null
         }
         Insert: {
           areas?: string[]
@@ -993,6 +996,7 @@ export type Database = {
           defect_period_completed_by?: string | null
           description?: string | null
           designer_id?: string | null
+          first_meetup_type?: string | null
           has_variation_order?: boolean
           id: string
           image_path?: string | null
@@ -1016,6 +1020,8 @@ export type Database = {
           tasks_completed?: number
           team?: string[]
           updated_at?: string
+          warranty_12month_date?: string | null
+          warranty_6month_date?: string | null
         }
         Update: {
           areas?: string[]
@@ -1032,6 +1038,7 @@ export type Database = {
           defect_period_completed_by?: string | null
           description?: string | null
           designer_id?: string | null
+          first_meetup_type?: string | null
           has_variation_order?: boolean
           id?: string
           image_path?: string | null
@@ -1055,6 +1062,8 @@ export type Database = {
           tasks_completed?: number
           team?: string[]
           updated_at?: string
+          warranty_12month_date?: string | null
+          warranty_6month_date?: string | null
         }
         Relationships: [
           {

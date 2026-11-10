@@ -108,8 +108,15 @@ export type Project = {
   defectPeriodCompletedAt: string | null;  // set → warranty window closed, project truly done
   defectPeriodCompletedBy: string | null;  // staff avatar_code who closed it (audit)
   hasVariationOrder: boolean;  // yes/no gate for the Variation Order section
+  firstMeetupType: string | null;      // Flow 2: Showroom | Zoom | Site | Others
+  warranty6MonthDate: string | null;   // Flow 2 warranty follow-up — 6-month check-in (ISO YYYY-MM-DD)
+  warranty12MonthDate: string | null;  // Flow 2 warranty follow-up — 12-month check-in (ISO YYYY-MM-DD)
   clientAccessToken: string;   // UUID for the read-only /portal/:token route
 };
+
+/** The four Flow-2 first-meet-up channels, in selector order. */
+export const FIRST_MEETUP_TYPES = ["Showroom", "Zoom", "Site", "Others"] as const;
+export type FirstMeetupType = (typeof FIRST_MEETUP_TYPES)[number];
 
 export type PaymentRecord = {
   id: number;
@@ -222,6 +229,9 @@ function mapProject(row: ProjectWithStaffJoin): Project {
     defectPeriodCompletedAt: row.defect_period_completed_at,
     defectPeriodCompletedBy: row.defect_period_completed_by,
     hasVariationOrder: row.has_variation_order ?? false,
+    firstMeetupType: row.first_meetup_type ?? null,
+    warranty6MonthDate: row.warranty_6month_date ?? null,
+    warranty12MonthDate: row.warranty_12month_date ?? null,
     clientAccessToken: row.client_access_token,
   };
 }
@@ -1289,6 +1299,37 @@ export function useSetVariationOrder() {
         .from("projects")
         .update({ has_variation_order: args.value })
         .eq("id", args.projectId);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
+/**
+ * Flow 2 (Phase 1) — additive per-project lifecycle fields:
+ *   • first_meetup_type   (Showroom | Zoom | Site | Others | null)
+ *   • warranty_6month_date / warranty_12month_date  (ISO YYYY-MM-DD | null)
+ * Dates are passed through as the native date-input value (ISO) or null to clear.
+ * Only the keys present in `args` are written. Writes are OPS/team-gated by the
+ * existing `projects` write RLS.
+ */
+export function useUpdateProjectMeta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      projectId: string;
+      firstMeetupType?: string | null;
+      warranty6MonthDate?: string | null;
+      warranty12MonthDate?: string | null;
+    }): Promise<void> => {
+      const payload: TablesUpdate<"projects"> = {};
+      if (args.firstMeetupType !== undefined) payload.first_meetup_type = args.firstMeetupType;
+      if (args.warranty6MonthDate !== undefined) payload.warranty_6month_date = args.warranty6MonthDate || null;
+      if (args.warranty12MonthDate !== undefined) payload.warranty_12month_date = args.warranty12MonthDate || null;
+      const { error } = await supabase.from("projects").update(payload).eq("id", args.projectId);
       if (error) throw error;
     },
     onSuccess: (_v, args) => {
