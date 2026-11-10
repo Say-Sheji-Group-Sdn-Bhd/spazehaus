@@ -10,7 +10,13 @@ import { useCalendarEvents, useCalendarEventStaff, useCreateCalendarEvent, useUp
 import { useAuth } from "@/contexts/AuthContext";
 import type { CalendarEventType, CalendarEventRow } from "@/lib/dbTypes";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Plus, X, Check, RefreshCw, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Check, CheckCircle2, RefreshCw, Pencil, Trash2, AlertTriangle, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { googleConfigured, hasGoogleToken } from "@/lib/google/gis";
 import { removeEventFromGoogle } from "@/lib/google/sync";
 import {
@@ -76,6 +82,11 @@ export default function CalendarPage() {
   // Not persisted: the Google token lives only in memory, so after a reload the
   // user must click Sync again (a browser-blocked popup can't be opened silently).
   const [syncedOk, setSyncedOk] = useState(false);
+
+  // The sync button reflects real connection status (not just this session). It's
+  // "connected" when a sync succeeded this session OR this browser already holds a
+  // Google connection marker — but never while a reconnect is required (dead token).
+  const googleConnected = (syncedOk || (!!user && isGoogleConnectedLocally(user.id))) && !needsReauth;
 
   // "Sync Google" IS the real OAuth connect. First click (not yet connected on
   // this browser) runs the Google consent flow → google-oauth-connect stores a
@@ -211,18 +222,18 @@ export default function CalendarPage() {
                 data-testid="google-sync-btn"
                 onClick={handleGoogleSync}
                 disabled={syncing}
-                title={syncedOk ? "Synced to your Google Calendar — click to re-sync" : "Sync to your Google Calendar"}
+                title={googleConnected ? "Synced to your Google Calendar — click to re-sync" : "Sync to your Google Calendar"}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-label font-semibold"
                 style={
-                  syncedOk && !syncing
+                  googleConnected && !syncing
                     ? { background: "oklch(0.55 0.12 150 / 12%)", color: "oklch(0.48 0.13 150)", border: "1px solid oklch(0.55 0.12 150 / 40%)", letterSpacing: "0.04em" }
                     : { background: "var(--s-2)", color: "var(--t-2)", border: "1px solid var(--b-1)", letterSpacing: "0.04em", opacity: syncing ? 0.6 : 1 }
                 }
               >
                 {syncing ? (
                   <><RefreshCw size={14} className="animate-spin" /> Syncing…</>
-                ) : syncedOk ? (
-                  <><Check size={14} /> Synced</>
+                ) : googleConnected ? (
+                  <><CheckCircle2 size={14} /> Synced to Google</>
                 ) : (
                   <><RefreshCw size={14} /> Sync Google</>
                 )}
@@ -421,14 +432,10 @@ export default function CalendarPage() {
                             ))}
                           </div>
                         )}
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => openEdit(event)} title="Edit event" className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "var(--s-2)", border: "1px solid var(--b-1)" }}>
-                            <Pencil size={12} style={{ color: "var(--t-4)" }} />
-                          </button>
-                          <button onClick={() => handleDeleteEvent(event)} title="Delete event" className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "var(--s-2)", border: "1px solid var(--b-1)" }}>
-                            <Trash2 size={12} style={{ color: "oklch(0.55 0.16 25)" }} />
-                          </button>
-                        </div>
+                        <EventActionsMenu
+                          onEdit={() => openEdit(event)}
+                          onDelete={() => handleDeleteEvent(event)}
+                        />
                       </motion.div>
                     ))}
                   </div>
@@ -459,13 +466,17 @@ export default function CalendarPage() {
                         {new Date(event.event_date + "T00:00:00").getDate()}
                       </span>
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm text-[color:var(--t-1)]">{event.title}</p>
                       <p className="text-[10px] mt-0.5" style={{ color: "var(--t-5)" }}>
                         {formatEventDateRange(event.event_date, event.end_date, { weekdaySingle: true })}
                       </p>
                     </div>
                     <div className="w-2 h-2 rounded-full shrink-0" style={{ background: event.color }} />
+                    <EventActionsMenu
+                      onEdit={() => openEdit(event)}
+                      onDelete={() => handleDeleteEvent(event)}
+                    />
                   </motion.div>
                 ))}
               </div>
@@ -484,6 +495,41 @@ export default function CalendarPage() {
         onClose={() => { setComposeOpen(false); setEditing(null); }}
       />
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Event card "⋯" menu — Edit / Delete directly from an event card (selected-day
+// panel + Upcoming list). Mirrors the CheckpointActionsMenu pattern in ProjectDetail.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function EventActionsMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          title="More actions"
+          aria-label="Event actions"
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: "var(--s-2)", border: "1px solid var(--b-1)", color: "var(--t-4)" }}
+        >
+          <MoreVertical size={14} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[8rem]">
+        <DropdownMenuItem onSelect={() => onEdit()} className="gap-2 text-xs">
+          <Pencil size={12} /> Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => onDelete()}
+          className="gap-2 text-xs"
+          style={{ color: "oklch(0.55 0.16 25)" }}
+        >
+          <Trash2 size={12} /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
