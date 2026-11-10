@@ -90,8 +90,9 @@ declare
   v_yy   text := to_char(current_date, 'YY');
   v_reno_id text; v_max int;
 begin
-  -- only act when a signature transitions INTO completed
-  if NEW.status <> 'completed' or coalesce(OLD.status, '') = 'completed' then
+  -- only act when a signature transitions INTO completed (status is an enum, so compare
+  -- directly — never coalesce to '' , which is not a valid checkpoint_status value).
+  if NEW.status <> 'completed' or OLD.status = 'completed' then
     return NEW;
   end if;
 

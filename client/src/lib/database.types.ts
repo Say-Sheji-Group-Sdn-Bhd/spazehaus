@@ -1803,6 +1803,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      flow2_split_existing_project: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
       convert_inquiry_to_project: {
         Args: {
           p_areas: string[]

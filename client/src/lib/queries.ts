@@ -641,6 +641,9 @@ export function useCreateProject() {
         project_type: args.type,
         property_type: args.propertyType,
         service_type: args.serviceType,
+        flow_version: 2, // Flow 2: both creation paths produce split-model projects.
+        // seed_project_lifecycle (called below) is side-aware for flow_version=2, so it
+        // seeds only this project's side — no stranded reno-side rows on a Design project.
         source: args.source ?? null,
         location: args.location,
         size_sqft: args.size ?? 0,
@@ -652,17 +655,20 @@ export function useCreateProject() {
         areas: args.areas ?? [],
         description: args.description ?? null,
         designer_id: args.designerId ?? null,
-        current_stage_id: "new-inquiry",
+        // Flow 2: start at the first stage of this project's own side (a direct
+        // Renovation project opens at reno-contract, not the Design-side new-inquiry).
+        current_stage_id: args.serviceType === "Renovation" ? "reno-contract" : "new-inquiry",
         lifecycle_started_at: new Date().toISOString(),
       };
 
       let created: ProjectRow | null = null;
       for (let attempt = 0; attempt < 5; attempt++) {
         const id = `PRJ${String(maxNum + 1 + attempt).padStart(3, "0")}`;
-        const project_code = `${codePrefix}${String(maxCode + 1 + attempt).padStart(3, "0")}`;
+        const seq = maxCode + 1 + attempt;
+        const project_code = `${codePrefix}${String(seq).padStart(3, "0")}`;
         const { data, error } = await supabase
           .from("projects")
-          .insert({ ...base, id, project_code })
+          .insert({ ...base, id, project_code, job_seq: seq })
           .select()
           .single();
         if (!error) { created = data as ProjectRow; break; }
@@ -1342,6 +1348,31 @@ export function useUpdateProjectMeta() {
     onSuccess: (_v, args) => {
       qc.invalidateQueries({ queryKey: qk.project(args.projectId) });
       qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
+/**
+ * Flow 2 §4g — split an EXISTING legacy project into a Design + Renovation pair.
+ * Opt-in, per project; OPS-only (the RPC re-checks is_ops_tier server-side). Returns
+ * the new Renovation project id. Reno-side payments/signatures/stage-dates/columns are
+ * moved to the new row by the RPC.
+ */
+export function useSplitExistingProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (projectId: string): Promise<string> => {
+      const { data, error } = await supabase.rpc("flow2_split_existing_project", {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (_renoId, projectId) => {
+      qc.invalidateQueries({ queryKey: qk.project(projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+      qc.invalidateQueries({ queryKey: qk.openPayments });
+      qc.invalidateQueries({ queryKey: qk.openSignatures });
     },
   });
 }
