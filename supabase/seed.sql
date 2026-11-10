@@ -93,22 +93,20 @@ insert into payment_records (project_id, gate, label, amount, status, collected_
   ('PRJ002', 5, 'Final Payment',             83280, 'pending',   null, null, null);
 
 -- ── (2d) signature_records ───────────────────────────────────────────────────
--- PRJ001: all 6 pending.
+-- PRJ001: all 5 Flow 2 documents pending (material-selection merged into 2d-shopping).
 insert into signature_records (project_id, signature_key, label, group_name, status) values
-  ('PRJ001','design-contract',     'Design Contract',            'contract', 'pending'),
-  ('PRJ001','revised-3d',          'Revised 3D Drawing',         'drawing',  'pending'),
-  ('PRJ001','renovation-contract', 'Renovation Contract',        'contract', 'pending'),
-  ('PRJ001','material-selection',  'Material Selection',         'drawing',  'pending'),
-  ('PRJ001','2d-shopping',         '2D Drawing / Shopping List', 'drawing',  'pending'),
-  ('PRJ001','handover',            'Handover Acceptance',        'contract', 'pending');
--- PRJ002: signed through stage 18 (5 done), handover pending.
+  ('PRJ001','design-contract',     'Design Contract',               'contract', 'pending'),
+  ('PRJ001','revised-3d',          '3D Design',                     'drawing',  'pending'),
+  ('PRJ001','renovation-contract', 'Renovation Contract',           'contract', 'pending'),
+  ('PRJ001','2d-shopping',         '2D Drawings & Material Board',  'drawing',  'pending'),
+  ('PRJ001','handover',            'Handover Document',             'contract', 'pending');
+-- PRJ002: design-side signed, handover pending.
 insert into signature_records (project_id, signature_key, label, group_name, status, signed_date, signed_by) values
-  ('PRJ002','design-contract',     'Design Contract',            'contract', 'completed', '2026-04-02', 'Lim Holdings'),
-  ('PRJ002','revised-3d',          'Revised 3D Drawing',         'drawing',  'completed', '2026-04-20', 'Lim Holdings'),
-  ('PRJ002','renovation-contract', 'Renovation Contract',        'contract', 'completed', '2026-05-08', 'Lim Holdings'),
-  ('PRJ002','material-selection',  'Material Selection',         'drawing',  'completed', '2026-05-15', 'Lim Holdings'),
-  ('PRJ002','2d-shopping',         '2D Drawing / Shopping List', 'drawing',  'completed', '2026-05-22', 'Lim Holdings'),
-  ('PRJ002','handover',            'Handover Acceptance',        'contract', 'pending',    null, null);
+  ('PRJ002','design-contract',     'Design Contract',               'contract', 'completed', '2026-04-02', 'Lim Holdings'),
+  ('PRJ002','revised-3d',          '3D Design',                     'drawing',  'completed', '2026-04-20', 'Lim Holdings'),
+  ('PRJ002','renovation-contract', 'Renovation Contract',           'contract', 'completed', '2026-05-08', 'Lim Holdings'),
+  ('PRJ002','2d-shopping',         '2D Drawings & Material Board',  'drawing',  'completed', '2026-05-22', 'Lim Holdings'),
+  ('PRJ002','handover',            'Handover Document',             'contract', 'pending',    null, null);
 
 -- ── (2e) inquiries — convertible + attribution pair + awarded + rejected ─────
 -- Customers (Phase 5): one per seed inquiry (local reset applies migrations BEFORE
