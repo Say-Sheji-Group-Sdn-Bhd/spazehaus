@@ -50,8 +50,10 @@ update public.projects set current_stage_id = '2d-shopping'      where current_s
 delete from public.project_stage_dates
  where stage_id in ('design-prop-signed', '3d-drawing', '3d-meeting', 'material-selection');
 
--- 3. Bump order_index out of range so the reorder below never trips UNIQUE(order_index).
-update public.lifecycle_stages set order_index = order_index + 1000;
+-- 3. Shift order_index clear of the 1..32 target range so the reorder below never
+--    trips UNIQUE(order_index). +50 keeps every row inside the CHECK (1..99):
+--    the old max order is 29 (→79), a re-run's max is 32 (→82).
+update public.lifecycle_stages set order_index = order_index + 50;
 
 -- 4. Delete the removed + merged-away stage rows.
 delete from public.lifecycle_stages
