@@ -5,27 +5,26 @@
  *                          Auth session is required)
  *
  * Renders a clean, client-facing summary of one project's progress, payment
- * schedule, document signatures, and recent site photos. Mirrors the staff
+ * schedule, document signatures, and weekly site reports. Mirrors the staff
  * app's mobile-container + warm-gold palette so it feels like the same brand
  * — but with no admin actions, no bottom nav, no role chips.
  *
  * The entire data fetch happens in one RPC (`get_client_portal_data`) keyed
- * by the URL token. Photos are loaded lazily via the `client-portal-photo`
- * Edge Function which mints short-lived signed URLs for the private bucket.
+ * by the URL token. (Flow 2 replaced the daily close-door photo grid with the
+ * weekly site report; staff still log photos internally as the report's input.)
  */
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useRoute } from "wouter";
 import {
-  AlertCircle, CheckCircle2, Clock, FileSignature, Receipt, Camera,
+  AlertCircle, CheckCircle2, Clock, FileSignature, Receipt, FileText,
   MapPin, Calendar, Loader2, Lock, Mail, Phone, User, Building2, Star, Heart,
 } from "lucide-react";
 import {
   useClientPortalData,
-  useClientPortalPhotoUrl,
   type ClientPortalData,
   type ClientPortalPayment,
-  type ClientPortalPhoto,
+  type ClientPortalSiteReport,
   type ClientPortalSignature,
   type ClientPortalStage,
 } from "@/lib/clientPortal";
@@ -87,7 +86,7 @@ export default function ClientPortal() {
         <ProgressSection project={data.project} lifecycle={data.lifecycle} />
         <PaymentsSection payments={data.payments} budget={data.project.budget} />
         <SignaturesSection signatures={data.signatures} />
-        <PhotosSection photos={data.recent_photos} token={token!} />
+        <SiteReportsSection reports={data.recent_site_reports ?? []} />
         <ReviewSection token={token!} clientName={data.project.client_name} />
         <SupportCard project={data.project} />
         <Footer />
@@ -535,16 +534,10 @@ function SignatureRow({ signature }: { signature: ClientPortalSignature }) {
   );
 }
 
-function PhotosSection({
-  photos,
-  token,
-}: {
-  photos: ClientPortalPhoto[];
-  token: string;
-}) {
-  if (photos.length === 0) {
+function SiteReportsSection({ reports }: { reports: ClientPortalSiteReport[] }) {
+  if (reports.length === 0) {
     return (
-      <Section title="SITE PHOTOS" icon={Camera}>
+      <Section title="SITE REPORTS" icon={FileText}>
         <div
           className="rounded-2xl p-6 text-center"
           style={{
@@ -552,74 +545,49 @@ function PhotosSection({
             border: "1px solid oklch(0.90 0.010 75)",
           }}
         >
-          <Camera size={20} className="mx-auto mb-2" style={{ color: "oklch(0.75 0.008 68)" }} />
+          <FileText size={20} className="mx-auto mb-2" style={{ color: "oklch(0.75 0.008 68)" }} />
           <p className="text-xs" style={{ color: "oklch(0.45 0.008 65)" }}>
-            No site photos uploaded in the last 14 days.
+            No site reports published yet. Your team posts a weekly update here.
           </p>
         </div>
       </Section>
     );
   }
   return (
-    <Section title="RECENT SITE PHOTOS" icon={Camera}>
+    <Section title="WEEKLY SITE REPORTS" icon={FileText}>
       <p className="text-[11px] mb-2" style={{ color: "oklch(0.45 0.008 65)" }}>
-        Daily close-door photos from your project site, last 14 days.
+        Your project's weekly progress updates, newest first.
       </p>
-      <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
-        {photos.map((p) => (
-          <PortalPhotoTile key={p.id} photo={p} token={token} />
+      <div className="space-y-2">
+        {reports.map((r) => (
+          <PortalReportCard key={r.week_start} report={r} />
         ))}
       </div>
     </Section>
   );
 }
 
-function PortalPhotoTile({
-  photo,
-  token,
-}: {
-  photo: ClientPortalPhoto;
-  token: string;
-}) {
-  const { data: url, isLoading } = useClientPortalPhotoUrl(token, photo.storage_path);
-  const [errored, setErrored] = useState(false);
+function PortalReportCard({ report }: { report: ClientPortalSiteReport }) {
   return (
     <div
-      className="aspect-square rounded-lg overflow-hidden relative"
-      style={{ background: "oklch(0.92 0.008 75)" }}
+      className="rounded-2xl p-3.5"
+      style={{ background: "oklch(1 0 0)", border: "1px solid oklch(0.90 0.010 75)" }}
     >
-      {isLoading ? (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Loader2
-            size={14}
-            className="animate-spin"
-            style={{ color: "oklch(0.62 0.09 68)" }}
-          />
-        </div>
-      ) : url && !errored ? (
-        <img
-          src={url}
-          alt={`Site photo on ${photo.photo_date}`}
-          className="w-full h-full object-cover"
-          loading="lazy"
-          onError={() => setErrored(true)}
-        />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Camera size={16} style={{ color: "oklch(0.65 0.008 68)" }} />
-        </div>
-      )}
-      <span
-        className="absolute bottom-1 left-1 text-[9px] font-label px-1.5 py-0.5 rounded"
-        style={{
-          background: "oklch(0.14 0.008 65 / 75%)",
-          color: "oklch(1 0 0)",
-          letterSpacing: "0.04em",
-          fontWeight: 600,
-        }}
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Calendar size={11} style={{ color: "oklch(0.62 0.09 68)" }} />
+        <p
+          className="text-[10px] font-label"
+          style={{ color: "oklch(0.42 0.09 68)", letterSpacing: "0.06em", fontWeight: 700 }}
+        >
+          Week of {formatDate(report.week_start)}
+        </p>
+      </div>
+      <p
+        className="text-xs whitespace-pre-line"
+        style={{ color: "oklch(0.28 0.008 65)", lineHeight: 1.6 }}
       >
-        {formatDate(photo.photo_date)}
-      </span>
+        {report.summary}
+      </p>
     </div>
   );
 }

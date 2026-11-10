@@ -41,7 +41,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "How do weekly reminders work?",
-    a: "Every active site needs a daily close-door photo. On Fridays there's a weekly payment review and a weekly site report per active project. Reminders shows what's due, missed, and upcoming.",
+    a: "Each active project gets a weekly site report every Monday — the client-facing progress update — plus one before any payment is collected. Fridays still carry the weekly payment review. Reminders shows what's due, missed, and upcoming.",
   },
 ];
 

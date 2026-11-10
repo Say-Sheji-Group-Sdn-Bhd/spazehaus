@@ -83,6 +83,14 @@ export interface ClientPortalPhoto {
   notes: string | null;
 }
 
+/** Weekly site report — the Flow 2 client-facing progress update (replaces the
+ *  daily close-door photo grid). One row per ISO week (week_start = Monday). */
+export interface ClientPortalSiteReport {
+  week_start: string;          // ISO YYYY-MM-DD (Monday of the week)
+  summary: string;
+  updated_at: string;          // ISO timestamptz
+}
+
 export interface ClientPortalData {
   project: ClientPortalProject;
   lifecycle: {
@@ -92,6 +100,9 @@ export interface ClientPortalData {
   payments: ClientPortalPayment[];
   signatures: ClientPortalSignature[];
   recent_photos: ClientPortalPhoto[];
+  /** Weekly report summaries, newest first (last ~12 weeks). May be absent on
+   *  portals served before the Flow 2 Phase 2 RPC — treat undefined as []. */
+  recent_site_reports?: ClientPortalSiteReport[];
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────

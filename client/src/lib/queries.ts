@@ -4137,6 +4137,13 @@ function upcomingFriday(today: Date): Date {
   return d;
 }
 
+function upcomingMonday(today: Date): Date {
+  const d = new Date(today);
+  const diff = (1 - d.getDay() + 7) % 7;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
 /** Generate the live reminder list from real projects + photo maps + active assignment. */
 export function buildReminders(
   projects: Project[],
@@ -4202,20 +4209,26 @@ export function buildReminders(
     note: "Reconcile collected vs outstanding · review overdue gates",
   });
 
-  // — Weekly site report per active project —
+  // — Weekly site report per active project (Mondays) —
+  // Flow 2 (7 Nov client meeting §2.8): the designer compiles one weekly PDF every
+  // Monday — the client-facing progress update — and always one before a payment is
+  // collected. Cadence moved Friday → Monday to match.
+  const mon = upcomingMonday(today);
+  const monStr = fmtDDMM(mon);
+  const monDays = _daysFromToday(monStr, today) ?? 7;
   const ACTIVE_STATUSES = new Set(["active", "assigned", "under-review"]);
   for (const project of projects) {
     if (!ACTIVE_STATUSES.has(project.status)) continue;
     reminders.push({
-      id: `RM-${project.id}-SITE-REPORT-${friStr}`,
+      id: `RM-${project.id}-SITE-REPORT-${monStr}`,
       type: "weekly-site-report",
       title: `Weekly Site Report · ${project.name}`,
-      dueDate: friStr,
+      dueDate: monStr,
       assignee: project.team[0] || "WH",
       projectId: project.id,
       projectName: project.name,
-      status: friDays === 0 ? "pending" : "upcoming",
-      note: "Photos · progress · blockers · next-week plan",
+      status: monDays === 0 ? "pending" : "upcoming",
+      note: "Monday PDF · progress · blockers · also required before each payment",
     });
   }
 

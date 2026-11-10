@@ -11,6 +11,17 @@
 
 A **production-deployed**, **auth-gated**, **fully-database-backed** internal management app for SPAZEHAUS interior design firm in Johor Bahru. Every page reads from real Postgres through TanStack Query + Supabase. Magic-link auth restricts access to staff with matching emails, **role-based RLS** enforces what each user can read and write, and the daily close-door photo SOP uploads real JPEGs to Supabase Storage. The Vercel production build is lean (no more inlined `vitePluginManusRuntime`).
 
+> **Recent (2026-11-10, `feature/project-flow-2-phase2`, PR pending):** **Project Flow 2 —
+> Phase 2** (safe, catalogue-independent; no stage/numbering change). (1) Client portal now shows
+> **weekly Site Reports** instead of the daily close-door photo grid ("the site report is enough",
+> 7 Nov client meeting §2.11) — `get_client_portal_data` returns `recent_site_reports` (migration
+> `20261110020000_portal_site_reports.sql`, additive; **pending `supabase db push`**). (2) The
+> weekly site-report reminder moved **Friday → Monday** + "before each payment" (§2.8). Staff still
+> log site photos internally (the report's raw material). Phase 1 (first-meet-up type + warranty
+> follow-up) already live. The structural split (two projects, SD/SR numbering, merged stages) is
+> planned in `.claude/plan/26-11-10-project-flow-2-phase3-4-build.plan.md` but **not** in this PR.
+> Docs: `.claude/documentation/26-11-10-project-flow-2-phase2.md`.
+
 > **Recent (2026-11-10, `fix/customer-project-flow`, PR pending):** Two customer→project
 > flow improvements from user testing. (1) **Add Customer form** now separates customer
 > identity (name/contact/email/category/tier/location/source) from a collapsible
