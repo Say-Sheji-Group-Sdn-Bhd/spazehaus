@@ -981,6 +981,7 @@ export type Database = {
           project_type: string
           property_type: string
           service_type: string | null
+          sibling_project_id: string | null
           size_sqft: number
           source: string | null
           start_date: string | null
@@ -1023,6 +1024,7 @@ export type Database = {
           project_type: string
           property_type: string
           service_type?: string | null
+          sibling_project_id?: string | null
           size_sqft: number
           source?: string | null
           start_date?: string | null
@@ -1065,6 +1067,7 @@ export type Database = {
           project_type?: string
           property_type?: string
           service_type?: string | null
+          sibling_project_id?: string | null
           size_sqft?: number
           source?: string | null
           start_date?: string | null
