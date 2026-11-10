@@ -21,9 +21,12 @@
 --   • ADD     lifecycle_stages.service_type (Design/Renovation) — additive metadata
 --             Phase 4 uses to render each project's own side.
 --
--- Safety: runs with triggers disabled (session_replication_role=replica) so bulk
--- writes don't fire the guarded recompute (no auth.uid in a migration); FK-consistent
--- at COMMIT because every project is repointed then recomputed inline to a real stage.
+-- Safety: the manual-status recompute trigger (trg_stage_status_recompute) is disabled
+-- for the bulk rewrite — it calls the auth-guarded recompute, which raises in a
+-- migration's no-auth context — then re-enabled at the end. (Disabling the one trigger,
+-- rather than session_replication_role=replica, is transaction-independent: it works
+-- whether or not the runner wraps the file in a transaction.) FK-consistent because every
+-- project is repointed off removed stages then recomputed inline to a real stage.
 -- New stages are backfilled 'not-yet' for projects already past them so recompute
 -- (which now skips 'not-yet') never drags current_stage_id backward.
 --
@@ -31,7 +34,7 @@
 -- removed/merged stage rows, so VALIDATE ON A PROD SNAPSHOT before pushing to prod.
 -- Deploy: `supabase db push`; then `bun run gen:types`.
 
-set local session_replication_role = replica;
+alter table public.project_stage_dates disable trigger trg_stage_status_recompute;
 
 -- 0. Additive metadata column.
 alter table public.lifecycle_stages
@@ -140,3 +143,6 @@ begin
   end loop;
 end
 $$;
+
+-- Re-enable the manual-status recompute trigger.
+alter table public.project_stage_dates enable trigger trg_stage_status_recompute;
