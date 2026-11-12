@@ -21,6 +21,8 @@ import {
   CalendarClock,
   Coins,
   PenSquare,
+  BadgeCheck,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,6 +33,8 @@ import {
   useUploadColumnFile,
   useRemoveColumnFile,
   useDeleteColumn,
+  useCollectInstalment,
+  useUncollectInstalment,
   getColumnFileUrl,
   type ProjectColumn,
 } from "@/lib/queries";
@@ -61,6 +65,8 @@ export default function ColumnGrid({
   defaultDateToday = false,
   labelPlaceholder = "Name this column",
   addLabel = "Add column",
+  collectable = false,
+  uploadLabel = "Upload file (optional)",
   accept,
   emptyHint,
 }: {
@@ -76,6 +82,10 @@ export default function ColumnGrid({
   defaultDateToday?: boolean;
   labelPlaceholder?: string;
   addLabel?: string;
+  /** Progressive-payment instalments: each row gets a "Mark as paid" action. */
+  collectable?: boolean;
+  /** Label for the file-upload button (e.g. "Upload invoice / receipt (optional)"). */
+  uploadLabel?: string;
   accept?: string;
   emptyHint?: string;
 }) {
@@ -85,6 +95,12 @@ export default function ColumnGrid({
   );
   const addColumn = useAddColumn();
   const { staff: me } = useAuth();
+
+  // The first still-unpaid instalment (by arrangement order) is the "next due".
+  const nextDueId = collectable
+    ? (columns.find(c => !c.paid_date && c.amount != null && Number(c.amount) > 0)
+        ?.id ?? null)
+    : null;
 
   const atMax = columns.length >= maxColumns;
   const handleAdd = () => {
@@ -187,6 +203,9 @@ export default function ColumnGrid({
               withAmount={withAmount}
               withSignoff={withSignoff}
               labelPlaceholder={labelPlaceholder}
+              collectable={collectable}
+              isNextDue={collectable && col.id === nextDueId}
+              uploadLabel={uploadLabel}
               accept={accept}
             />
           ))}
@@ -213,6 +232,9 @@ function ColumnCard({
   withAmount,
   withSignoff,
   labelPlaceholder,
+  collectable,
+  isNextDue,
+  uploadLabel,
   accept,
 }: {
   col: ProjectColumn;
@@ -223,14 +245,23 @@ function ColumnCard({
   withAmount: boolean;
   withSignoff: boolean;
   labelPlaceholder: string;
+  collectable: boolean;
+  isNextDue: boolean;
+  uploadLabel: string;
   accept?: string;
 }) {
   const updateColumn = useUpdateColumn();
   const uploadFile = useUploadColumnFile();
   const removeFile = useRemoveColumnFile();
   const deleteColumn = useDeleteColumn();
+  const collectInstalment = useCollectInstalment();
+  const uncollectInstalment = useUncollectInstalment();
   const fileRef = useRef<HTMLInputElement>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingPaid, setConfirmingPaid] = useState(false);
+
+  const paid = collectable && Boolean(col.paid_date);
+  const lockEdits = !canManage || paid;
   const [opening, setOpening] = useState(false);
   const [docUrl, setDocUrl] = useState<string | null>(null);
   const isPdf = (col.file_name || col.file_path || "")
@@ -331,6 +362,34 @@ function ColumnCard({
     else toast.error("Couldn't open file");
   };
 
+  const markPaid = () => {
+    setConfirmingPaid(false);
+    collectInstalment.mutate(
+      { columnId: col.id, projectId, section },
+      {
+        onSuccess: () => toast.success("Instalment marked paid"),
+        onError: e =>
+          toast.error(
+            `Couldn't mark paid: ${e instanceof Error ? e.message : "error"}`
+          ),
+      }
+    );
+  };
+  const undoPaid = () => {
+    uncollectInstalment.mutate(
+      { columnId: col.id, projectId, section },
+      {
+        onSuccess: () => toast.success("Payment reversed"),
+        onError: e =>
+          toast.error(
+            `Couldn't reverse: ${e instanceof Error ? e.message : "error"}`
+          ),
+      }
+    );
+  };
+  const collecting =
+    collectInstalment.isPending || uncollectInstalment.isPending;
+
   const busy = uploadFile.isPending || updateColumn.isPending;
 
   return (
@@ -391,6 +450,7 @@ function ColumnCard({
               type="text"
               defaultValue={col.label}
               placeholder={labelPlaceholder}
+              disabled={paid}
               onBlur={e => saveLabel(e.target.value.trim())}
               className="flex-1 min-w-0 text-sm font-medium rounded-md px-2 py-1.5"
               style={{
@@ -409,6 +469,7 @@ function ColumnCard({
           )}
           {canManage &&
             canDelete &&
+            !paid &&
             (confirmingDelete ? (
               <span className="inline-flex items-center gap-1 shrink-0">
                 <button
@@ -466,7 +527,7 @@ function ColumnCard({
           <input
             type="date"
             defaultValue={col.col_date ?? ""}
-            disabled={!canManage}
+            disabled={lockEdits}
             onBlur={e => saveDate(e.target.value)}
             className="flex-1 text-[11px] rounded-md px-1.5 py-1"
             style={{
@@ -489,7 +550,7 @@ function ColumnCard({
               type="number"
               inputMode="decimal"
               defaultValue={col.amount ?? ""}
-              disabled={!canManage}
+              disabled={lockEdits}
               placeholder="0"
               onBlur={e => saveAmount(e.target.value)}
               className="flex-1 w-full text-[12px] rounded-md px-1.5 py-1 text-right"
@@ -501,6 +562,103 @@ function ColumnCard({
             />
           </label>
         )}
+
+        {/* Collect (progressive-payment instalments): arrangement first, then
+            "Mark as paid" — writes the collection + advances the next due. */}
+        {collectable &&
+          (paid ? (
+            <div
+              className="rounded-md px-2 py-1.5 flex items-center gap-2"
+              style={{
+                background: "var(--ok-bg, var(--s-2))",
+                border: "1px solid var(--b-1)",
+              }}
+            >
+              <BadgeCheck size={13} style={{ color: "var(--acc-ink)" }} />
+              <span className="text-[11px] flex-1" style={{ color: "var(--t-2)" }}>
+                Collected
+                {col.paid_date
+                  ? ` · ${new Date(col.paid_date).toLocaleDateString("en-GB")}`
+                  : ""}
+              </span>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={undoPaid}
+                  disabled={collecting}
+                  className="inline-flex items-center gap-1 text-[10px] font-label px-1.5 py-1 rounded-md"
+                  style={{
+                    color: "var(--t-5)",
+                    border: "1px solid var(--b-strong)",
+                    cursor: collecting ? "default" : "pointer",
+                  }}
+                >
+                  {collecting ? (
+                    <Loader2 size={11} className="animate-spin" />
+                  ) : (
+                    <RotateCcw size={11} />
+                  )}
+                  Undo
+                </button>
+              )}
+            </div>
+          ) : canManage ? (
+            col.amount != null && Number(col.amount) > 0 ? (
+              confirmingPaid ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={markPaid}
+                    disabled={collecting}
+                    className="flex-1 inline-flex items-center justify-center gap-1 text-[11px] font-label px-2 py-1.5 rounded-md"
+                    style={{
+                      background: "var(--acc-ink)",
+                      color: "var(--acc-contrast, #fff)",
+                      cursor: collecting ? "default" : "pointer",
+                    }}
+                  >
+                    {collecting ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <BadgeCheck size={12} />
+                    )}
+                    Confirm paid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingPaid(false)}
+                    className="p-1 rounded-md"
+                    style={{ color: "var(--t-5)", cursor: "pointer" }}
+                    aria-label="Cancel"
+                  >
+                    <X size={13} />
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingPaid(true)}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-label"
+                  style={{
+                    background: "transparent",
+                    color: "var(--acc-ink)",
+                    border: isNextDue
+                      ? "1px solid var(--acc-ink)"
+                      : "1px dashed var(--b-strong)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Coins size={12} />
+                  Mark as paid
+                  {isNextDue ? " · next due" : ""}
+                </button>
+              )
+            ) : (
+              <p className="text-[10px] italic" style={{ color: "var(--t-6)" }}>
+                Set an amount to collect this instalment.
+              </p>
+            )
+          ) : null)}
 
         {/* File */}
         <input
@@ -601,7 +759,7 @@ function ColumnCard({
             ) : (
               <Upload size={13} />
             )}
-            {uploadFile.isPending ? "Uploading…" : "Upload file (optional)"}
+            {uploadFile.isPending ? "Uploading…" : uploadLabel}
           </button>
         ) : (
           <p className="text-[10px] italic" style={{ color: "var(--t-6)" }}>

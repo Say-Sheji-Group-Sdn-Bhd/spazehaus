@@ -759,6 +759,8 @@ export type Database = {
           file_size: number | null
           id: number
           label: string
+          paid_date: string | null
+          payment_record_id: number | null
           project_id: string
           section: string
           signed_by: string | null
@@ -776,6 +778,8 @@ export type Database = {
           file_size?: number | null
           id?: never
           label?: string
+          paid_date?: string | null
+          payment_record_id?: number | null
           project_id: string
           section: string
           signed_by?: string | null
@@ -793,6 +797,8 @@ export type Database = {
           file_size?: number | null
           id?: never
           label?: string
+          paid_date?: string | null
+          payment_record_id?: number | null
           project_id?: string
           section?: string
           signed_by?: string | null
@@ -1897,12 +1903,24 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["staff_role"]
       }
+      flow2_collect_instalment: {
+        Args: {
+          p_collected_date?: string
+          p_column_id: number
+          p_reference?: string
+        }
+        Returns: number
+      }
       flow2_create_renovation_project: {
         Args: { p_design_project_id: string }
         Returns: string
       }
       flow2_delete_project: {
         Args: { p_project_id: string }
+        Returns: undefined
+      }
+      flow2_uncollect_instalment: {
+        Args: { p_column_id: number }
         Returns: undefined
       }
       flow2_next_job_seq: { Args: { p_yy: string }; Returns: number }
