@@ -267,6 +267,48 @@ export type Database = {
         }
         Relationships: []
       }
+      customers: {
+        Row: {
+          address: string | null
+          category: Database["public"]["Enums"]["customer_category"]
+          contact: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          name: string
+          source: string | null
+          tier: Database["public"]["Enums"]["customer_tier"]
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          category?: Database["public"]["Enums"]["customer_category"]
+          contact?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id: string
+          name: string
+          source?: string | null
+          tier?: Database["public"]["Enums"]["customer_tier"]
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          category?: Database["public"]["Enums"]["customer_category"]
+          contact?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          source?: string | null
+          tier?: Database["public"]["Enums"]["customer_tier"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       developers: {
         Row: {
           created_at: string
@@ -324,48 +366,6 @@ export type Database = {
           scope?: string | null
           updated_at?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      customers: {
-        Row: {
-          address: string | null
-          category: Database["public"]["Enums"]["customer_category"]
-          contact: string | null
-          created_at: string
-          created_by: string | null
-          email: string | null
-          id: string
-          name: string
-          source: string | null
-          tier: Database["public"]["Enums"]["customer_tier"]
-          updated_at: string
-        }
-        Insert: {
-          address?: string | null
-          category?: Database["public"]["Enums"]["customer_category"]
-          contact?: string | null
-          created_at?: string
-          created_by?: string | null
-          email?: string | null
-          id: string
-          name: string
-          source?: string | null
-          tier?: Database["public"]["Enums"]["customer_tier"]
-          updated_at?: string
-        }
-        Update: {
-          address?: string | null
-          category?: Database["public"]["Enums"]["customer_category"]
-          contact?: string | null
-          created_at?: string
-          created_by?: string | null
-          email?: string | null
-          id?: string
-          name?: string
-          source?: string | null
-          tier?: Database["public"]["Enums"]["customer_tier"]
-          updated_at?: string
         }
         Relationships: []
       }
@@ -461,6 +461,13 @@ export type Database = {
             columns: ["awarded_project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inquiries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -741,51 +748,6 @@ export type Database = {
           },
         ]
       }
-      project_reviews: {
-        Row: {
-          comment: string | null
-          created_at: string
-          created_by: string | null
-          id: string
-          project_id: string
-          rating: number
-          reviewer_name: string | null
-        }
-        Insert: {
-          comment?: string | null
-          created_at?: string
-          created_by?: string | null
-          id: string
-          project_id: string
-          rating: number
-          reviewer_name?: string | null
-        }
-        Update: {
-          comment?: string | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          project_id?: string
-          rating?: number
-          reviewer_name?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_reviews_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "staff"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_reviews_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       project_columns: {
         Row: {
           amount: number | null
@@ -841,6 +803,66 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "project_columns_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_job_seq: {
+        Row: {
+          last_seq: number
+          year_yy: string
+        }
+        Insert: {
+          last_seq: number
+          year_yy: string
+        }
+        Update: {
+          last_seq?: number
+          year_yy?: string
+        }
+        Relationships: []
+      }
+      project_reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          rating: number
+          reviewer_name: string | null
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          created_by?: string | null
+          id: string
+          project_id: string
+          rating: number
+          reviewer_name?: string | null
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          project_id?: string
+          rating?: number
+          reviewer_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_reviews_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_reviews_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -969,9 +991,9 @@ export type Database = {
           first_meetup_type: string | null
           flow_version: number
           has_variation_order: boolean
-          job_seq: number | null
           id: string
           image_path: string | null
+          job_seq: number | null
           lifecycle_started_at: string | null
           location: string
           name: string
@@ -1015,8 +1037,8 @@ export type Database = {
           flow_version?: number
           has_variation_order?: boolean
           id: string
-          job_seq?: number | null
           image_path?: string | null
+          job_seq?: number | null
           lifecycle_started_at?: string | null
           location: string
           name: string
@@ -1060,8 +1082,8 @@ export type Database = {
           flow_version?: number
           has_variation_order?: boolean
           id?: string
-          job_seq?: number | null
           image_path?: string | null
+          job_seq?: number | null
           lifecycle_started_at?: string | null
           location?: string
           name?: string
@@ -1113,6 +1135,13 @@ export type Database = {
             columns: ["pm_id"]
             isOneToOne: false
             referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_sibling_project_id_fkey"
+            columns: ["sibling_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -1803,10 +1832,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      flow2_split_existing_project: {
-        Args: { p_project_id: string }
-        Returns: string
-      }
       convert_inquiry_to_project: {
         Args: {
           p_areas: string[]
@@ -1869,22 +1894,45 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["staff_role"]
       }
+      flow2_next_job_seq: { Args: { p_yy: string }; Returns: number }
+      flow2_split_existing_project: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
       get_checkpoint_history: {
-        Args: { p_table: string; p_row_id: string }
-        Returns: Database["public"]["Tables"]["audit_log"]["Row"][]
+        Args: { p_row_id: string; p_table: string }
+        Returns: {
+          action: string
+          after_data: Json | null
+          before_data: Json | null
+          changed_at: string
+          changed_by: string | null
+          id: number
+          row_id: string
+          table_name: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "audit_log"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_client_portal_data: { Args: { p_token: string }; Returns: Json }
       get_my_google_sync_status: {
         Args: never
         Returns: {
-          last_sync_status: string | null
-          last_sync_at: string | null
           is_connected: boolean
+          last_sync_at: string
+          last_sync_status: string
         }[]
       }
       is_admin_tier: { Args: never; Returns: boolean }
-      is_project_team_member: { Args: { p_project_id: string }; Returns: boolean }
       is_ops_tier: { Args: never; Returns: boolean }
+      is_project_team_member: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       log_wa_click: {
         Args: {
           p_locale?: string
@@ -1905,13 +1953,17 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
-      recompute_project_stage: {
-        Args: { p_project_id: string }
-        Returns: string
-      }
       recalc_project_task_rollup: {
         Args: { p_project_id: string }
         Returns: undefined
+      }
+      recompute_current_stage_from_status: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
+      recompute_project_stage: {
+        Args: { p_project_id: string }
+        Returns: string
       }
       seed_project_lifecycle: {
         Args: { p_budget: number; p_project_id: string }
