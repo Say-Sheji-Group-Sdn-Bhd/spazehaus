@@ -3561,7 +3561,10 @@ export function useSiteReports(projectId: string | undefined) {
   });
 }
 
-/** Upsert (or clear when blank) a week's site-report summary. OPS-tier (RLS). */
+/** Upsert (or clear when blank) a week's site-report summary. OPS-tier (RLS).
+ *  Clearing the text nulls the summary rather than deleting the row, so a week
+ *  that was shared to the client portal keeps its shared_at (and its photos
+ *  stay visible) even after the summary is removed. */
 export function useSetSiteReportSummary() {
   const qc = useQueryClient();
   return useMutation({
@@ -3570,7 +3573,7 @@ export function useSetSiteReportSummary() {
       if (!trimmed) {
         const { error } = await supabase
           .from("site_reports")
-          .delete()
+          .update({ summary: null })
           .eq("project_id", args.projectId)
           .eq("week_start", args.weekStart);
         if (error) throw error;
