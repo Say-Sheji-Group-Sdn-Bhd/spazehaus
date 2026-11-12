@@ -89,6 +89,17 @@ export interface ClientPortalSiteReport {
   week_start: string;          // ISO YYYY-MM-DD (Monday of the week)
   summary: string;
   updated_at: string;          // ISO timestamptz
+  /** The week's site photos (shared reports carry their photos so a photo-only
+   *  week is visible without a written summary). Absent on older portals → []. */
+  photos?: ClientPortalReportPhoto[];
+}
+
+/** A site photo attached to a shared weekly report. */
+export interface ClientPortalReportPhoto {
+  id: number;
+  photo_date: string;          // ISO YYYY-MM-DD
+  storage_path: string;
+  notes: string | null;
 }
 
 export interface ClientPortalData {

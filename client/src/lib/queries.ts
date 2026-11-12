@@ -83,6 +83,7 @@ export type Project = {
   type: string;
   propertyType: string;
   serviceType: string | null;  // "Design" | "Renovation" — drives the SD/SR project code
+  source: string | null;       // lead channel: how the client found us (website / WhatsApp / …)
   projectCode: string | null;  // e.g. SD26-801 / SR26-801 (client-facing number; id stays PRJ0xx)
   flowVersion: number;         // Flow 2: 1 = legacy unified flow; 2 = two-project split
   siblingProjectId: string | null; // Flow 2: the linked Design/Renovation project
@@ -205,6 +206,7 @@ function mapProject(row: ProjectWithStaffJoin): Project {
     type: row.project_type,
     propertyType: row.property_type,
     serviceType: row.service_type ?? null,
+    source: row.source ?? null,
     projectCode: row.project_code ?? null,
     flowVersion: row.flow_version ?? 1,
     siblingProjectId: row.sibling_project_id ?? null,
@@ -1370,6 +1372,54 @@ export function useSplitExistingProject() {
     },
     onSuccess: (_renoId, projectId) => {
       qc.invalidateQueries({ queryKey: qk.project(projectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+      qc.invalidateQueries({ queryKey: qk.openPayments });
+      qc.invalidateQueries({ queryKey: qk.openSignatures });
+    },
+  });
+}
+
+/**
+ * Flow 2: create the linked Renovation project from inside a Design project.
+ * The deliberate replacement for the old auto-spawn trigger — jobs can be
+ * design-only / renovation-only / both, so the operator mints the SR row when
+ * the job genuinely has a renovation side. Idempotent (returns the existing
+ * sibling id if one already exists). Returns the renovation project id.
+ */
+export function useCreateRenovationProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (designProjectId: string): Promise<string> => {
+      const { data, error } = await supabase.rpc("flow2_create_renovation_project", {
+        p_design_project_id: designProjectId,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (_renoId, designProjectId) => {
+      qc.invalidateQueries({ queryKey: qk.project(designProjectId) });
+      qc.invalidateQueries({ queryKey: qk.projects });
+      qc.invalidateQueries({ queryKey: qk.openPayments });
+      qc.invalidateQueries({ queryKey: qk.openSignatures });
+    },
+  });
+}
+
+/**
+ * Delete a project. A linked sibling (the other side of a Design⇄Renovation
+ * pair) is UNLINKED, never deleted — the RPC nulls the sibling pointer, then
+ * deletes the row (child tables cascade). OPS-tier only.
+ */
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (projectId: string): Promise<void> => {
+      const { error } = await supabase.rpc("flow2_delete_project", {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.projects });
       qc.invalidateQueries({ queryKey: qk.openPayments });
       qc.invalidateQueries({ queryKey: qk.openSignatures });
@@ -3490,6 +3540,7 @@ export type SiteReportRow = {
   week_start: string;   // ISO date (Monday)
   summary: string | null;
   created_by: string | null;
+  shared_at: string | null;  // set when shared to the client portal (null = not shared)
 };
 
 /** Per-week summaries for a project, keyed by week_start ISO date. */
@@ -3500,7 +3551,7 @@ export function useSiteReports(projectId: string | undefined) {
     queryFn: async (): Promise<Record<string, SiteReportRow>> => {
       const { data, error } = await supabase
         .from("site_reports")
-        .select("id, week_start, summary, created_by")
+        .select("id, week_start, summary, created_by, shared_at")
         .eq("project_id", projectId ?? "");
       if (error) throw error;
       const out: Record<string, SiteReportRow> = {};
@@ -3529,6 +3580,34 @@ export function useSetSiteReportSummary() {
         .from("site_reports")
         .upsert(
           { project_id: args.projectId, week_start: args.weekStart, summary: trimmed },
+          { onConflict: "project_id,week_start" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: qk.siteReports(args.projectId) });
+    },
+  });
+}
+
+/**
+ * Share (or un-share) a week's site report to the client portal. Upserts the
+ * week's row with shared_at set/cleared — creating the row for a photo-only
+ * week that has no summary yet, so pressing "Share to client portal" surfaces
+ * the week (photos + summary) in the portal. OPS-tier (RLS).
+ */
+export function useShareSiteReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; weekStart: string; shared: boolean }): Promise<void> => {
+      const { error } = await supabase
+        .from("site_reports")
+        .upsert(
+          {
+            project_id: args.projectId,
+            week_start: args.weekStart,
+            shared_at: args.shared ? new Date().toISOString() : null,
+          },
           { onConflict: "project_id,week_start" },
         );
       if (error) throw error;

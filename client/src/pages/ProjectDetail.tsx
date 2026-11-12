@@ -98,6 +98,8 @@ import {
   useSetVariationOrder,
   useUpdateProjectMeta,
   useSplitExistingProject,
+  useCreateRenovationProject,
+  useDeleteProject,
   FIRST_MEETUP_TYPES,
   useProjectColumns,
   useUpdatePayment,
@@ -122,6 +124,7 @@ import {
   useDeleteSitePhoto,
   useSiteReports,
   useSetSiteReportSummary,
+  useShareSiteReport,
   getSitePhotoUrl,
   useProjectReviews,
   useDeleteReview,
@@ -424,6 +427,8 @@ export default function ProjectDetail() {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const deleteReview = useDeleteReview();
+  const deleteProject = useDeleteProject();
+  const [deleteProjectOpen, setDeleteProjectOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTaskRow | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -507,6 +512,20 @@ export default function ProjectDetail() {
   }));
   // Phase 5 — OPS tier OR a member of THIS project's team may edit its data.
   const canEdit = canEditProjectData(me, project);
+  // Deleting a whole project (incl. a linked pair) is OPS-tier only.
+  const canDeleteProject = canEditPayments(me?.role);
+
+  const handleDeleteProject = async () => {
+    try {
+      await deleteProject.mutateAsync(project.id);
+      toast.success("Project deleted");
+      navigate("/projects");
+    } catch (err) {
+      toast.error(
+        `Couldn't delete project: ${err instanceof Error ? err.message : "unknown error"}`
+      );
+    }
+  };
 
   async function onCoverPicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1135,6 +1154,7 @@ export default function ProjectDetail() {
                     { label: "Start Date", value: project.startDate },
                     { label: "Target Completion", value: project.targetDate },
                     { label: "Priority", value: pc.label, color: pc.color },
+                    { label: "Lead source", value: project.source || "—" },
                   ].map(item => (
                     <div
                       key={item.label}
@@ -1152,6 +1172,73 @@ export default function ProjectDetail() {
                     </div>
                   ))}
                 </div>
+
+                {/* Danger zone — delete this project. A linked sibling (the other
+                    side of a Design⇄Renovation pair) is unlinked, NOT deleted. */}
+                {canDeleteProject && (
+                  <div
+                    className="rounded-2xl p-4 space-y-2"
+                    style={{
+                      background: "oklch(0.55 0.15 25 / 5%)",
+                      border: "1px solid oklch(0.55 0.15 25 / 22%)",
+                    }}
+                  >
+                    <h4
+                      className="font-display text-sm font-semibold"
+                      style={{ color: "oklch(0.48 0.15 25)" }}
+                    >
+                      Delete project
+                    </h4>
+                    <p className="text-xs" style={{ color: "var(--t-5)" }}>
+                      Permanently deletes this project and its payments, signatures,
+                      photos, reports and tasks.{" "}
+                      {project.siblingProjectId
+                        ? "Its linked project is unlinked, not deleted."
+                        : ""}{" "}
+                      This cannot be undone.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteProjectOpen(true)}
+                      disabled={deleteProject.isPending}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-label"
+                      style={{
+                        background: "oklch(0.55 0.15 25)",
+                        color: "oklch(1 0 0)",
+                        cursor: "pointer",
+                        opacity: deleteProject.isPending ? 0.6 : 1,
+                      }}
+                    >
+                      <Trash2 size={13} />
+                      {deleteProject.isPending ? "Deleting…" : "Delete project"}
+                    </button>
+                  </div>
+                )}
+
+                <AlertDialog open={deleteProjectOpen} onOpenChange={setDeleteProjectOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete “{project.name}”?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This permanently deletes the project and all of its data
+                        (payments, signatures, photos, reports, tasks).{" "}
+                        {project.siblingProjectId
+                          ? "The linked project is kept — only its link to this one is removed."
+                          : ""}{" "}
+                        This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteProject}
+                        style={{ background: "oklch(0.55 0.15 25)", color: "oklch(1 0 0)" }}
+                      >
+                        Delete project
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
 
@@ -1736,6 +1823,7 @@ export default function ProjectDetail() {
                 { label: "Start Date", value: project.startDate },
                 { label: "Target Completion", value: project.targetDate },
                 { label: "Priority", value: pc.label, color: pc.color },
+                { label: "Lead source", value: project.source || "—" },
               ].map(item => (
                 <div
                   key={item.label}
@@ -2496,10 +2584,25 @@ function ReportsTab({
   const { data: photos = [] } = useProjectSitePhotos(projectId);
   const { data: reports = {} } = useSiteReports(projectId);
   const setSummary = useSetSiteReportSummary();
+  const shareReport = useShareSiteReport();
   const [lightbox, setLightbox] = useState<{
     url: string;
     label: string;
   } | null>(null);
+
+  const toggleShare = (weekStart: string, shared: boolean) => {
+    shareReport.mutate(
+      { projectId, weekStart, shared },
+      {
+        onSuccess: () =>
+          toast.success(shared ? "Shared to client portal" : "Removed from client portal"),
+        onError: e =>
+          toast.error(
+            `Couldn't update sharing: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
+    );
+  };
 
   // Bucket photos by Monday-of-week; weeks newest first (on-demand — only weeks
   // that actually have photos show up, no empty shells).
@@ -2572,6 +2675,7 @@ function ReportsTab({
       </div>
       {weeks.map(wk => {
         const wkPhotos = buckets.get(wk)!;
+        const isShared = !!reports[wk]?.shared_at;
         return (
           <div
             key={wk}
@@ -2594,9 +2698,23 @@ function ReportsTab({
               >
                 {weekRangeLabel(wk)}
               </p>
-              <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
-                {wkPhotos.length} photo{wkPhotos.length > 1 ? "s" : ""}
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                {isShared && (
+                  <span
+                    className="text-[9px] font-label px-1.5 py-0.5 rounded"
+                    style={{
+                      background: "oklch(0.55 0.09 145 / 12%)",
+                      color: "oklch(0.38 0.09 145)",
+                      letterSpacing: "0.03em",
+                    }}
+                  >
+                    SHARED
+                  </span>
+                )}
+                <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
+                  {wkPhotos.length} photo{wkPhotos.length > 1 ? "s" : ""}
+                </span>
+              </div>
             </div>
             <div className="p-3 space-y-3">
               <WeekSummary
@@ -2615,6 +2733,26 @@ function ReportsTab({
                   />
                 ))}
               </div>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => toggleShare(wk, !isShared)}
+                  disabled={shareReport.isPending}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-label"
+                  style={{
+                    background: isShared ? "var(--s-2)" : "oklch(0.62 0.09 68 / 10%)",
+                    color: isShared ? "var(--t-4)" : "var(--acc-ink)",
+                    border: isShared
+                      ? "1px solid var(--b-strong)"
+                      : "1px solid oklch(0.62 0.09 68 / 25%)",
+                    cursor: "pointer",
+                    opacity: shareReport.isPending ? 0.6 : 1,
+                  }}
+                >
+                  <Share2 size={12} />
+                  {isShared ? "Shared to client portal · tap to unshare" : "Share to client portal"}
+                </button>
+              )}
             </div>
           </div>
         );
@@ -2680,6 +2818,26 @@ function LifecycleTab({
         toast.error(`Couldn't split: ${e instanceof Error ? e.message : "unknown error"}`),
     });
   };
+  // Flow 2: the Renovation project is created deliberately (no auto-spawn) from
+  // inside a Design project — jobs can be design-only, renovation-only, or both.
+  const createRenovation = useCreateRenovationProject();
+  const [createRenoOpen, setCreateRenoOpen] = useState(false);
+  const confirmCreateRenovation = () => {
+    createRenovation.mutate(projectId, {
+      onSuccess: renoId => {
+        toast.success("Renovation project created");
+        navigateLifecycle(`/projects/${renoId}`);
+      },
+      onError: e =>
+        toast.error(
+          `Couldn't create renovation project: ${e instanceof Error ? e.message : "unknown error"}`
+        ),
+    });
+  };
+  // Flow 2: a Design project can create its renovation side once, when no
+  // sibling exists yet.
+  const canCreateRenovation =
+    !!project && project.flowVersion === 2 && project.serviceType === "Design" && !project.siblingProjectId;
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
   const revertPayment = useRevertPayment();
@@ -3224,64 +3382,6 @@ function LifecycleTab({
         />
       </div>
 
-      {/* —— Flow 2: linked Design ⇄ Renovation project —— */}
-      {project?.siblingProjectId && (
-        <button
-          onClick={() => navigateLifecycle(`/projects/${project.siblingProjectId}`)}
-          className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left"
-          style={{
-            background: "oklch(0.62 0.09 68 / 8%)",
-            border: "1px solid oklch(0.62 0.09 68 / 22%)",
-          }}
-        >
-          <span className="text-xs font-medium" style={{ color: "var(--acc-ink)" }}>
-            Linked {project.serviceType === "Design" ? "Renovation" : "Design"} project
-          </span>
-          <span className="text-xs font-semibold" style={{ color: "var(--acc-ink)" }}>
-            View →
-          </span>
-        </button>
-      )}
-
-      {/* —— Flow 2 §4g: split a legacy project into Design + Renovation (OPS) —— */}
-      {project && project.flowVersion !== 2 && canCollect && (
-        <>
-          <button
-            type="button"
-            onClick={() => setSplitDialogOpen(true)}
-            disabled={splitProject.isPending}
-            className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left"
-            style={{ background: "var(--s-2)", border: "1px dashed var(--b-strong)" }}
-          >
-            <span className="text-xs font-medium" style={{ color: "var(--t-2)" }}>
-              {splitProject.isPending ? "Splitting…" : "Split into Design + Renovation (Flow 2)"}
-            </span>
-            <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
-              for two-sided jobs
-            </span>
-          </button>
-
-          <AlertDialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Split into Design + Renovation?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  “{project.name}” becomes the Design project (SD…), and a new linked
-                  Renovation project (SR…) takes its renovation payments, signatures and
-                  stages. Only for jobs that genuinely have both sides.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmSplitProject}>
-                  Split project
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
-      )}
-
       {/* —— Phase timeline —— */}
       {phases.map(phase => {
         const phaseStages = sideStages.filter(s => s.phase === phase);
@@ -3730,7 +3830,7 @@ function LifecycleTab({
                             maxColumns={6}
                             minColumns={2}
                             labelPlaceholder="Instalment (e.g. 50%)"
-                            addLabel="Add instalment"
+                            addLabel="Add payment"
                             accept="application/pdf,image/*"
                             emptyHint="No instalments set yet."
                           />
@@ -3812,7 +3912,7 @@ function LifecycleTab({
                             maxColumns={6}
                             minColumns={2}
                             labelPlaceholder="Instalment (e.g. 50%)"
-                            addLabel="Add instalment"
+                            addLabel="Add payment"
                             accept="application/pdf,image/*"
                             emptyHint="No design instalments set yet."
                           />
@@ -4097,6 +4197,117 @@ function LifecycleTab({
             afterwards
           </span>
         </div>
+      )}
+
+      {/* —— Flow 2: Renovation project link / creation (bottom of the page) ——
+          A job can be design-only, renovation-only, or both, so the renovation
+          side is created deliberately, not auto-spawned. The "linked project"
+          row only appears AFTER the renovation exists. */}
+      {canCreateRenovation && canCollect && (
+        <div
+          className="rounded-2xl p-3.5 space-y-2"
+          style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}
+        >
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--t-1)" }}>
+              Renovation project
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--t-5)" }}>
+              Does this job have a renovation side? Create its linked Renovation
+              project (SR…) — it carries the renovation contract, payments and
+              handover. Leave it if this is a design-only job.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCreateRenoOpen(true)}
+            disabled={createRenovation.isPending}
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2.5"
+            style={{ background: "var(--acc)", color: "oklch(1 0 0)", cursor: "pointer" }}
+          >
+            <Plus size={14} />
+            <span className="text-xs font-semibold">
+              {createRenovation.isPending ? "Creating…" : "Create renovation project"}
+            </span>
+          </button>
+
+          <AlertDialog open={createRenoOpen} onOpenChange={setCreateRenoOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Create the renovation project?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  A new linked Renovation project (SR…) is created for “{project?.name}”,
+                  with its own renovation contract, payment gates and handover document.
+                  Only do this for a job that genuinely has a renovation side.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmCreateRenovation}>
+                  Create renovation project
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
+
+      {/* The "link renovation project" row — only once the sibling exists. */}
+      {project?.siblingProjectId && (
+        <button
+          onClick={() => navigateLifecycle(`/projects/${project.siblingProjectId}`)}
+          className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left"
+          style={{
+            background: "oklch(0.62 0.09 68 / 8%)",
+            border: "1px solid oklch(0.62 0.09 68 / 22%)",
+          }}
+        >
+          <span className="text-xs font-medium" style={{ color: "var(--acc-ink)" }}>
+            Linked {project.serviceType === "Design" ? "Renovation" : "Design"} project
+          </span>
+          <span className="text-xs font-semibold" style={{ color: "var(--acc-ink)" }}>
+            View →
+          </span>
+        </button>
+      )}
+
+      {/* —— Flow 2 §4g: split a legacy project into Design + Renovation (OPS) —— */}
+      {project && project.flowVersion !== 2 && canCollect && (
+        <>
+          <button
+            type="button"
+            onClick={() => setSplitDialogOpen(true)}
+            disabled={splitProject.isPending}
+            className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left"
+            style={{ background: "var(--s-2)", border: "1px dashed var(--b-strong)" }}
+          >
+            <span className="text-xs font-medium" style={{ color: "var(--t-2)" }}>
+              {splitProject.isPending ? "Splitting…" : "Split into Design + Renovation (Flow 2)"}
+            </span>
+            <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
+              for two-sided jobs
+            </span>
+          </button>
+
+          <AlertDialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Split into Design + Renovation?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  “{project.name}” becomes the Design project (SD…), and a new linked
+                  Renovation project (SR…) takes its renovation payments, signatures and
+                  stages. Only for jobs that genuinely have both sides.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmSplitProject}>
+                  Split project
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       )}
 
       {/* —— Footer note —— */}
