@@ -1,6 +1,6 @@
 # SPAZEHAUS Management App — Progress Report
 
-**Last updated:** 2026-11-10
+**Last updated:** 2026-11-12
 **Repository:** https://github.com/kaseyfong-maker/spazehaus (private)
 **Live URL:** https://spazehaus.vercel.app
 **Database:** Supabase project `exajkbvaqjqdedqavbvs` (Singapore region, free tier)
@@ -10,6 +10,22 @@
 ## Where We Are
 
 A **production-deployed**, **auth-gated**, **fully-database-backed** internal management app for SPAZEHAUS interior design firm in Johor Bahru. Every page reads from real Postgres through TanStack Query + Supabase. Magic-link auth restricts access to staff with matching emails, **role-based RLS** enforces what each user can read and write, and the daily close-door photo SOP uploads real JPEGs to Supabase Storage. The Vercel production build is lean (no more inlined `vitePluginManusRuntime`).
+
+> **Recent (2026-11-12, Flow 2 · 10 Nov run-through fixes — `feature/flow2-meeting-fixes`,
+> PR pending):** Corrections from the 10 Nov client run-through. (1) **Renovation project is
+> created manually** — removed the `2d-shopping` auto-spawn; a "Create renovation project"
+> button (Flow 2 Design, no sibling) calls new RPC `flow2_create_renovation_project`; the
+> linked-project link + split moved to the **bottom**. (2) **`flow2_delete_project`** RPC +
+> OPS "Delete project" button — independent delete (linked sibling unlinked, not cascaded).
+> (3) **"Add instalment" → "Add payment"**. (4) **Lead source** shown on ProjectDetail (convert
+> copies `inquiries.source` + backfill). (5) **Portal feedback form hidden** (`PORTAL_FEEDBACK_ENABLED`).
+> (6) **Site-report share bug fixed** — `site_reports.shared_at` + per-week share toggle; portal
+> returns shared reports (even photo-only) with that week's photos. One migration
+> `20261112010000_flow2_meeting_fixes.sql` (FILES — user deploys + `vercel --prod`). `check` +
+> 56 unit ✓; code-review (1 low fix), security-review clean. **Deferred (2nd wave):** report
+> docs+payments, calendar date-sync, progress bar, portal UI redesign. Doc:
+> `.claude/documentation/26-11-12-flow2-meeting-fixes.md`; plan:
+> `.claude/plan/26-11-12-flow2-meeting-fixes.plan.md`.
 
 > **Recent (2026-11-10, Project Flow 2 — PRs #15/#16/#17 pending):** Revised project
 > lifecycle, shipped in reviewed, tested, not-yet-deployed PRs. **Phase 2** (#15): client

@@ -1442,6 +1442,7 @@ export type Database = {
           created_by: string | null
           id: number
           project_id: string
+          shared_at: string | null
           summary: string | null
           updated_at: string
           week_start: string
@@ -1451,6 +1452,7 @@ export type Database = {
           created_by?: string | null
           id?: number
           project_id: string
+          shared_at?: string | null
           summary?: string | null
           updated_at?: string
           week_start: string
@@ -1460,6 +1462,7 @@ export type Database = {
           created_by?: string | null
           id?: number
           project_id?: string
+          shared_at?: string | null
           summary?: string | null
           updated_at?: string
           week_start?: string
@@ -1893,6 +1896,14 @@ export type Database = {
       current_staff_role: {
         Args: never
         Returns: Database["public"]["Enums"]["staff_role"]
+      }
+      flow2_create_renovation_project: {
+        Args: { p_design_project_id: string }
+        Returns: string
+      }
+      flow2_delete_project: {
+        Args: { p_project_id: string }
+        Returns: undefined
       }
       flow2_next_job_seq: { Args: { p_yy: string }; Returns: number }
       flow2_split_existing_project: {

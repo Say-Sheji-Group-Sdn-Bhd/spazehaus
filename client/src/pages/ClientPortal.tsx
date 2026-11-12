@@ -22,8 +22,10 @@ import {
 } from "lucide-react";
 import {
   useClientPortalData,
+  useClientPortalPhotoUrl,
   type ClientPortalData,
   type ClientPortalPayment,
+  type ClientPortalReportPhoto,
   type ClientPortalSiteReport,
   type ClientPortalSignature,
   type ClientPortalStage,
@@ -32,6 +34,14 @@ import { useSubmitClientReview } from "@/lib/queries";
 
 const HERO_BG =
   "/hero/portfolio.jpg";
+
+/**
+ * The client portal is ONE-WAY (10 Nov client decision): it informs the client
+ * of progress, payments and what to prepare — it is not a feedback channel.
+ * The review form is kept in code but hidden behind this flag so it can return
+ * if the decision changes.
+ */
+const PORTAL_FEEDBACK_ENABLED = false;
 
 // ─── Page ─────────────────────────────────────────────────────────────────
 
@@ -86,8 +96,10 @@ export default function ClientPortal() {
         <ProgressSection project={data.project} lifecycle={data.lifecycle} />
         <PaymentsSection payments={data.payments} budget={data.project.budget} />
         <SignaturesSection signatures={data.signatures} />
-        <SiteReportsSection reports={data.recent_site_reports ?? []} />
-        <ReviewSection token={token!} clientName={data.project.client_name} />
+        <SiteReportsSection reports={data.recent_site_reports ?? []} token={token!} />
+        {PORTAL_FEEDBACK_ENABLED && (
+          <ReviewSection token={token!} clientName={data.project.client_name} />
+        )}
         <SupportCard project={data.project} />
         <Footer />
       </div>
@@ -534,7 +546,13 @@ function SignatureRow({ signature }: { signature: ClientPortalSignature }) {
   );
 }
 
-function SiteReportsSection({ reports }: { reports: ClientPortalSiteReport[] }) {
+function SiteReportsSection({
+  reports,
+  token,
+}: {
+  reports: ClientPortalSiteReport[];
+  token: string;
+}) {
   if (reports.length === 0) {
     return (
       <Section title="SITE REPORTS" icon={FileText}>
@@ -560,14 +578,21 @@ function SiteReportsSection({ reports }: { reports: ClientPortalSiteReport[] }) 
       </p>
       <div className="space-y-2">
         {reports.map((r) => (
-          <PortalReportCard key={r.week_start} report={r} />
+          <PortalReportCard key={r.week_start} report={r} token={token} />
         ))}
       </div>
     </Section>
   );
 }
 
-function PortalReportCard({ report }: { report: ClientPortalSiteReport }) {
+function PortalReportCard({
+  report,
+  token,
+}: {
+  report: ClientPortalSiteReport;
+  token: string;
+}) {
+  const photos = report.photos ?? [];
   return (
     <div
       className="rounded-2xl p-3.5"
@@ -582,12 +607,54 @@ function PortalReportCard({ report }: { report: ClientPortalSiteReport }) {
           Week of {formatDate(report.week_start)}
         </p>
       </div>
-      <p
-        className="text-xs whitespace-pre-line"
-        style={{ color: "oklch(0.28 0.008 65)", lineHeight: 1.6 }}
-      >
-        {report.summary}
-      </p>
+      {report.summary.trim() ? (
+        <p
+          className="text-xs whitespace-pre-line"
+          style={{ color: "oklch(0.28 0.008 65)", lineHeight: 1.6 }}
+        >
+          {report.summary}
+        </p>
+      ) : (
+        <p className="text-xs" style={{ color: "oklch(0.45 0.008 65)" }}>
+          Site progress photos for this week.
+        </p>
+      )}
+      {photos.length > 0 && (
+        <div className="grid grid-cols-3 gap-1.5 mt-2.5">
+          {photos.map((p) => (
+            <PortalReportPhoto key={p.id} token={token} photo={p} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PortalReportPhoto({
+  token,
+  photo,
+}: {
+  token: string;
+  photo: ClientPortalReportPhoto;
+}) {
+  const { data: url } = useClientPortalPhotoUrl(token, photo.storage_path);
+  return (
+    <div
+      className="aspect-square rounded-lg overflow-hidden"
+      style={{ background: "oklch(0.94 0.008 75)" }}
+    >
+      {url ? (
+        <img
+          src={url}
+          alt={photo.notes ?? "Site photo"}
+          loading="lazy"
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <Loader2 size={14} className="animate-spin" style={{ color: "oklch(0.75 0.008 68)" }} />
+        </div>
+      )}
     </div>
   );
 }
