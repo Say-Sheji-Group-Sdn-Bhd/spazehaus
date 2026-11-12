@@ -1305,6 +1305,59 @@ export function useDeleteColumn() {
   });
 }
 
+/**
+ * Mark a progressive-payment instalment (a project_columns row) as COLLECTED.
+ * Writes one payment_record for the instalment and neutralizes the seeded lump,
+ * server-side, via flow2_collect_instalment (OPS/team-gated). The money then shows
+ * in Overdue/Collected/portal exactly once. `collectedDate` is ISO YYYY-MM-DD
+ * (defaults to today server-side).
+ */
+export function useCollectInstalment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      columnId: number;
+      projectId: string;
+      section: string;
+      collectedDate?: string; // ISO YYYY-MM-DD
+      reference?: string | null;
+    }): Promise<number> => {
+      const { data, error } = await supabase.rpc("flow2_collect_instalment", {
+        p_column_id: args.columnId,
+        ...(args.collectedDate ? { p_collected_date: args.collectedDate } : {}),
+        ...(args.reference ? { p_reference: args.reference } : {}),
+      });
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: (_v, args) => {
+      invalidateColumns(qc, args.projectId, args.section);
+      qc.invalidateQueries({ queryKey: qk.projectLifecycle(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.openPayments });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
+/** Undo a collected instalment: delete its payment_record + clear the paid flag. */
+export function useUncollectInstalment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { columnId: number; projectId: string; section: string }): Promise<void> => {
+      const { error } = await supabase.rpc("flow2_uncollect_instalment", {
+        p_column_id: args.columnId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      invalidateColumns(qc, args.projectId, args.section);
+      qc.invalidateQueries({ queryKey: qk.projectLifecycle(args.projectId) });
+      qc.invalidateQueries({ queryKey: qk.openPayments });
+      qc.invalidateQueries({ queryKey: qk.projects });
+    },
+  });
+}
+
 /** Toggle the project's "has a Variation Order?" yes/no gate. */
 export function useSetVariationOrder() {
   const qc = useQueryClient();

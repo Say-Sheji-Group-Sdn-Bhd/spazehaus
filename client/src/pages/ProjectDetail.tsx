@@ -3383,8 +3383,12 @@ function LifecycleTab({
                 const manualStatusStage =
                   stage.order > 1 && stage.id !== "defect-period";
                 const isLast = i === phaseStages.length - 1;
+                // Hide per-instalment records (shown in the Progressive Payment
+                // grid) and the neutralized "skipped" lump from the gate's row list.
                 const payments = stage.paymentGate
-                  ? paymentsByGate[stage.paymentGate]
+                  ? paymentsByGate[stage.paymentGate]?.filter(
+                      p => p.instalment == null && p.status !== "skipped"
+                    )
                   : undefined;
                 const signature = stage.signatureKey
                   ? sigByKey[stage.signatureKey]
@@ -3784,6 +3788,8 @@ function LifecycleTab({
                             minColumns={2}
                             labelPlaceholder="Instalment (e.g. 50%)"
                             addLabel="Add payment"
+                            collectable
+                            uploadLabel="Upload invoice / receipt (optional)"
                             accept="application/pdf,image/*"
                             emptyHint="No instalments set yet."
                           />
@@ -3866,6 +3872,8 @@ function LifecycleTab({
                             minColumns={2}
                             labelPlaceholder="Instalment (e.g. 50%)"
                             addLabel="Add payment"
+                            collectable
+                            uploadLabel="Upload invoice / receipt (optional)"
                             accept="application/pdf,image/*"
                             emptyHint="No design instalments set yet."
                           />

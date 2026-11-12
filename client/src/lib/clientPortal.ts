@@ -102,6 +102,13 @@ export interface ClientPortalReportPhoto {
   notes: string | null;
 }
 
+/** The next unpaid progressive instalment (in the designer's arrangement order). */
+export interface ClientPortalNextPaymentDue {
+  label: string;
+  amount: number;
+  due_date: string | null;     // ISO YYYY-MM-DD (estimated instalment date)
+}
+
 export interface ClientPortalData {
   project: ClientPortalProject;
   lifecycle: {
@@ -114,6 +121,9 @@ export interface ClientPortalData {
   /** Weekly report summaries, newest first (last ~12 weeks). May be absent on
    *  portals served before the Flow 2 Phase 2 RPC — treat undefined as []. */
   recent_site_reports?: ClientPortalSiteReport[];
+  /** The next unpaid progressive instalment, or null when none is outstanding.
+   *  Absent on portals served before this RPC — treat undefined as null. */
+  next_payment_due?: ClientPortalNextPaymentDue | null;
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────

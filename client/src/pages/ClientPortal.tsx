@@ -25,6 +25,7 @@ import {
   useClientPortalPhotoUrl,
   type ClientPortalData,
   type ClientPortalPayment,
+  type ClientPortalNextPaymentDue,
   type ClientPortalReportPhoto,
   type ClientPortalSiteReport,
   type ClientPortalSignature,
@@ -94,7 +95,11 @@ export default function ClientPortal() {
       <div className="px-4 py-5 space-y-6 pb-24 lg:px-8 lg:py-7 lg:space-y-8">
         <ProjectMetaCard project={data.project} />
         <ProgressSection project={data.project} lifecycle={data.lifecycle} />
-        <PaymentsSection payments={data.payments} budget={data.project.budget} />
+        <PaymentsSection
+          payments={data.payments}
+          budget={data.project.budget}
+          nextDue={data.next_payment_due ?? null}
+        />
         <SignaturesSection signatures={data.signatures} />
         <SiteReportsSection reports={data.recent_site_reports ?? []} token={token!} />
         {PORTAL_FEEDBACK_ENABLED && (
@@ -345,19 +350,47 @@ function ProgressSection({
 function PaymentsSection({
   payments,
   budget,
+  nextDue,
 }: {
   payments: ClientPortalPayment[];
   budget: number | null;
+  nextDue?: ClientPortalNextPaymentDue | null;
 }) {
-  if (payments.length === 0) return null;
-  const collected = payments
+  // A neutralized lump ("skipped") is an internal bookkeeping row — never shown
+  // to the client, and never counted toward the collected/total progress.
+  const visible = payments.filter((p) => p.status !== "skipped");
+  if (visible.length === 0 && !nextDue) return null;
+  const collected = visible
     .filter((p) => p.status === "completed")
     .reduce((s, p) => s + Number(p.amount), 0);
-  const total = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const total = visible.reduce((s, p) => s + Number(p.amount), 0);
   const pct = total === 0 ? 0 : Math.round((collected / total) * 100);
 
   return (
     <Section title="PAYMENTS" icon={Receipt}>
+      {nextDue && (
+        <div
+          className="rounded-2xl p-4 mb-3 flex items-center gap-3"
+          style={{
+            background: "oklch(0.97 0.02 85)",
+            border: "1px solid oklch(0.85 0.05 80)",
+          }}
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-label" style={{ color: "oklch(0.52 0.06 70)", letterSpacing: "0.06em" }}>
+              NEXT PAYMENT DUE
+            </p>
+            <p className="font-display text-base font-semibold truncate" style={{ color: "oklch(0.20 0.03 65)" }}>
+              {nextDue.label} — RM {Number(nextDue.amount).toLocaleString("en-MY")}
+            </p>
+            {nextDue.due_date && (
+              <p className="text-[10px]" style={{ color: "oklch(0.52 0.010 68)" }}>
+                Estimated {new Date(nextDue.due_date).toLocaleDateString("en-GB")}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
       <div
         className="rounded-2xl p-4 mb-3"
         style={{
@@ -385,7 +418,7 @@ function PaymentsSection({
         </div>
       </div>
       <div className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-2 lg:items-start">
-        {payments.map((p) => (
+        {visible.map((p) => (
           <PaymentRow key={p.id} payment={p} />
         ))}
       </div>
