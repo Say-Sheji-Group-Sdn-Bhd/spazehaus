@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { Check, ImagePlus } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
-import { useCreateProject, useInquiries } from "@/lib/queries";
+import { useCreateProject, useCreateRenovationProject, useInquiries } from "@/lib/queries";
 import { useAuth } from "@/contexts/AuthContext";
 import SearchableSelect from "@/components/SearchableSelect";
 import { toast } from "sonner";
@@ -33,6 +33,7 @@ const propertyTypes = {
 export default function CreateProject() {
   const [, navigate] = useLocation();
   const createProject = useCreateProject();
+  const createRenovation = useCreateRenovationProject();
   const { staff: me } = useAuth();
   const { data: inquiries = [] } = useInquiries();
   const [step, setStep] = useState(1);
@@ -145,8 +146,14 @@ export default function CreateProject() {
         const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
         return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
       };
+      // "Both" = a job with design + renovation sides. We create the DESIGN
+      // project (named "<name> (Design)"), then immediately mint its linked
+      // RENOVATION project (named "<name> (Renovation)") via the same RPC the
+      // in-project "Create renovation project" button uses.
+      const isBoth = form.serviceType === "Both";
+      const baseName = form.projectName.trim();
       const project = await createProject.mutateAsync({
-        name: form.projectName.trim(),
+        name: isBoth ? `${baseName} (Design)` : baseName,
         client: form.clientName.trim(),
         clientContact: form.clientContact.trim() || null,
         clientEmail: form.clientEmail.trim() || null,
@@ -154,7 +161,7 @@ export default function CreateProject() {
         propertyType: form.propertyType === "Others" && form.propertyOther.trim()
           ? form.propertyOther.trim()
           : form.propertyType,
-        serviceType: form.serviceType as "Design" | "Renovation",
+        serviceType: isBoth ? "Design" : (form.serviceType as "Design" | "Renovation"),
         source: form.source || null,
         location: form.location.trim(),
         size: form.size ? Number(form.size) : 0,
@@ -169,7 +176,23 @@ export default function CreateProject() {
         // default (meeting note #6). Editable later via EditProjectSheet.
         designerId: me?.id ?? null,
       });
-      toast.success("Project created successfully!", { description: `${project.name} (${project.id}) has been added.` });
+
+      if (isBoth) {
+        try {
+          await createRenovation.mutateAsync(project.id);
+          toast.success("Design + Renovation projects created", {
+            description: `${baseName} (Design) and (Renovation) are linked.`,
+          });
+        } catch (renoErr) {
+          // The design project exists; the renovation can still be created from
+          // inside it. Surface the error but don't lose the design project.
+          toast.error(
+            `Design project created, but the renovation failed: ${renoErr instanceof Error ? renoErr.message : "unknown error"}. Create it from the Design project's Lifecycle tab.`
+          );
+        }
+      } else {
+        toast.success("Project created successfully!", { description: `${project.name} (${project.id}) has been added.` });
+      }
       navigate(`/projects/${project.id}`);
     } catch (err) {
       toast.error(`Could not create project: ${err instanceof Error ? err.message : "unknown error"}`);
@@ -315,7 +338,7 @@ export default function CreateProject() {
                 <div>
                   <label style={labelStyle}>SERVICE TYPE *</label>
                   <div className="flex gap-2">
-                    {["Design", "Renovation"].map((t) => (
+                    {["Design", "Renovation", "Both"].map((t) => (
                       <button
                         key={t}
                         onClick={() => update("serviceType", t)}
@@ -332,7 +355,9 @@ export default function CreateProject() {
                     ))}
                   </div>
                   <p className="text-[11px] mt-1.5" style={{ color: "var(--t-5)" }}>
-                    Sets the project number — Design → SD26-801, Renovation → SR26-801.
+                    {form.serviceType === "Both"
+                      ? "Creates a linked pair — a Design project (SD26-801) and a Renovation project (SR26-801)."
+                      : "Sets the project number — Design → SD26-801, Renovation → SR26-801. Choose Both for a job that has both sides."}
                   </p>
                 </div>
                 <div>
@@ -490,12 +515,12 @@ export default function CreateProject() {
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={step < 4 ? goNext : handleSubmit}
-          disabled={createProject.isPending}
+          disabled={createProject.isPending || createRenovation.isPending}
           data-testid="cp-next"
           className="flex-1 py-3.5 rounded-xl text-sm font-label font-semibold"
-          style={{ background: "linear-gradient(135deg, var(--acc-bright), var(--acc-2))", color: "oklch(1 0 0)", letterSpacing: "0.04em", opacity: createProject.isPending ? 0.6 : 1 }}
+          style={{ background: "linear-gradient(135deg, var(--acc-bright), var(--acc-2))", color: "oklch(1 0 0)", letterSpacing: "0.04em", opacity: createProject.isPending || createRenovation.isPending ? 0.6 : 1 }}
         >
-          {step < 4 ? "Continue" : createProject.isPending ? "Creating…" : "Create Project"}
+          {step < 4 ? "Continue" : createProject.isPending || createRenovation.isPending ? "Creating…" : "Create Project"}
         </motion.button>
       </div>
     </div>
