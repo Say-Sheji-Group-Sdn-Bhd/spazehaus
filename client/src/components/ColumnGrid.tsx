@@ -61,6 +61,7 @@ export default function ColumnGrid({
   defaultDateToday = false,
   labelPlaceholder = "Name this column",
   addLabel = "Add column",
+  signoffPlaceholder = "Signed by (client)",
   accept,
   emptyHint,
 }: {
@@ -76,6 +77,8 @@ export default function ColumnGrid({
   defaultDateToday?: boolean;
   labelPlaceholder?: string;
   addLabel?: string;
+  /** Placeholder for the client sign-off name field (only when withSignoff). */
+  signoffPlaceholder?: string;
   accept?: string;
   emptyHint?: string;
 }) {
@@ -187,6 +190,7 @@ export default function ColumnGrid({
               withAmount={withAmount}
               withSignoff={withSignoff}
               labelPlaceholder={labelPlaceholder}
+              signoffPlaceholder={signoffPlaceholder}
               accept={accept}
             />
           ))}
@@ -213,6 +217,7 @@ function ColumnCard({
   withAmount,
   withSignoff,
   labelPlaceholder,
+  signoffPlaceholder,
   accept,
 }: {
   col: ProjectColumn;
@@ -223,6 +228,7 @@ function ColumnCard({
   withAmount: boolean;
   withSignoff: boolean;
   labelPlaceholder: string;
+  signoffPlaceholder: string;
   accept?: string;
 }) {
   const updateColumn = useUpdateColumn();
@@ -625,7 +631,7 @@ function ColumnCard({
               type="text"
               defaultValue={col.signed_by ?? ""}
               disabled={!canManage}
-              placeholder="Signed by (client)"
+              placeholder={signoffPlaceholder}
               onBlur={e => saveSignedBy(e.target.value.trim())}
               className="text-[11px] rounded-md px-1.5 py-1"
               style={{
