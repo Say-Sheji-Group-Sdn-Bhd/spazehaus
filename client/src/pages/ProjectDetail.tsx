@@ -124,7 +124,6 @@ import {
   useDeleteSitePhoto,
   useSiteReports,
   useSetSiteReportSummary,
-  useShareSiteReport,
   getSitePhotoUrl,
   useProjectReviews,
   useDeleteReview,
@@ -2584,25 +2583,10 @@ function ReportsTab({
   const { data: photos = [] } = useProjectSitePhotos(projectId);
   const { data: reports = {} } = useSiteReports(projectId);
   const setSummary = useSetSiteReportSummary();
-  const shareReport = useShareSiteReport();
   const [lightbox, setLightbox] = useState<{
     url: string;
     label: string;
   } | null>(null);
-
-  const toggleShare = (weekStart: string, shared: boolean) => {
-    shareReport.mutate(
-      { projectId, weekStart, shared },
-      {
-        onSuccess: () =>
-          toast.success(shared ? "Shared to client portal" : "Removed from client portal"),
-        onError: e =>
-          toast.error(
-            `Couldn't update sharing: ${e instanceof Error ? e.message : "unknown error"}`
-          ),
-      }
-    );
-  };
 
   // Bucket photos by Monday-of-week; weeks newest first (on-demand — only weeks
   // that actually have photos show up, no empty shells).
@@ -2673,9 +2657,12 @@ function ReportsTab({
           PDF
         </button>
       </div>
+      <p className="text-[11px]" style={{ color: "var(--t-5)" }}>
+        Each week's photos appear in the client portal automatically. Add an optional summary
+        to show it above the photos.
+      </p>
       {weeks.map(wk => {
         const wkPhotos = buckets.get(wk)!;
-        const isShared = !!reports[wk]?.shared_at;
         return (
           <div
             key={wk}
@@ -2698,23 +2685,9 @@ function ReportsTab({
               >
                 {weekRangeLabel(wk)}
               </p>
-              <div className="flex items-center gap-2 shrink-0">
-                {isShared && (
-                  <span
-                    className="text-[9px] font-label px-1.5 py-0.5 rounded"
-                    style={{
-                      background: "oklch(0.55 0.09 145 / 12%)",
-                      color: "oklch(0.38 0.09 145)",
-                      letterSpacing: "0.03em",
-                    }}
-                  >
-                    SHARED
-                  </span>
-                )}
-                <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
-                  {wkPhotos.length} photo{wkPhotos.length > 1 ? "s" : ""}
-                </span>
-              </div>
+              <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
+                {wkPhotos.length} photo{wkPhotos.length > 1 ? "s" : ""}
+              </span>
             </div>
             <div className="p-3 space-y-3">
               <WeekSummary
@@ -2733,26 +2706,6 @@ function ReportsTab({
                   />
                 ))}
               </div>
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => toggleShare(wk, !isShared)}
-                  disabled={shareReport.isPending}
-                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-label"
-                  style={{
-                    background: isShared ? "var(--s-2)" : "oklch(0.62 0.09 68 / 10%)",
-                    color: isShared ? "var(--t-4)" : "var(--acc-ink)",
-                    border: isShared
-                      ? "1px solid var(--b-strong)"
-                      : "1px solid oklch(0.62 0.09 68 / 25%)",
-                    cursor: "pointer",
-                    opacity: shareReport.isPending ? 0.6 : 1,
-                  }}
-                >
-                  <Share2 size={12} />
-                  {isShared ? "Shared to client portal · tap to unshare" : "Share to client portal"}
-                </button>
-              )}
             </div>
           </div>
         );
