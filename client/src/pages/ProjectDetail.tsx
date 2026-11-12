@@ -3815,6 +3815,26 @@ function LifecycleTab({
                         </div>
                       )}
 
+                      {/* Renovation Quotation — supports multiple revisions, each
+                          with its own quotation file (mirrors Design Proposal). */}
+                      {stage.id === "reno-quotation" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="reno-quotation"
+                            defaultDateToday
+                            title="Renovation Quotation revisions"
+                            description="Supports multiple revisions — add each revision (R1, R2…), set its date and attach the quotation file the client receives."
+                            canManage={canCollect}
+                            maxColumns={10}
+                            labelPlaceholder="Revision (e.g. R1, Revision 1)"
+                            addLabel="Add revision"
+                            accept="application/pdf,image/*"
+                            emptyHint="No quotation revisions yet."
+                          />
+                        </div>
+                      )}
+
                       {/* Work Schedule — signed PDF, by BOTH the PM and the owner.
                           One column per signatory captures each sign-off. */}
                       {stage.id === "work-schedule" && (
@@ -3894,6 +3914,7 @@ function LifecycleTab({
                             maxColumns={4}
                             labelPlaceholder="Signatory"
                             addLabel="Add sign-off"
+                            signoffPlaceholder="Client's name"
                             accept="application/pdf,image/*"
                             emptyHint="No commission sign-offs yet."
                           />
@@ -3973,6 +3994,7 @@ function LifecycleTab({
                             maxColumns={4}
                             labelPlaceholder="Signatory"
                             addLabel="Add sign-off"
+                            signoffPlaceholder="Client's name"
                             accept="application/pdf,image/*"
                             emptyHint="No commission sign-offs yet."
                           />
