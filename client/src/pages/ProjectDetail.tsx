@@ -4214,7 +4214,7 @@ function LifecycleTab({
             </p>
             <p className="text-xs mt-0.5" style={{ color: "var(--t-5)" }}>
               Does this job have a renovation side? Create its linked Renovation
-              project (SR…) — it carries the renovation contract, payments and
+              project, it carries the renovation contract, payments and
               handover. Leave it if this is a design-only job.
             </p>
           </div>
