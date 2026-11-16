@@ -20,8 +20,10 @@ describe("stageOrder", () => {
   it("returns the canonical order for a known stage", () => {
     expect(stageOrder("new-inquiry")).toBe(1);
     expect(stageOrder("design-contract")).toBe(8);   // Flow 2 Phase 3: design-prop-signed removed
-    expect(stageOrder("reno-commission-release")).toBe(32); // Flow 2 (16 Nov): new Handover stage
-    expect(stageOrder("defect-period")).toBe(33);     // bumped 32→33 by reno-commission-release
+    expect(stageOrder("shopping-list")).toBe(13);     // Flow 2 (16 Nov): new design-side stage
+    expect(stageOrder("design-commission-release")).toBe(18); // Flow 2 (16 Nov): design-side
+    expect(stageOrder("reno-commission-release")).toBe(37); // shifted +5 by 5 new design stages
+    expect(stageOrder("defect-period")).toBe(38);     // last stage (was 33)
   });
   it("returns 0 for an unknown stage", () => {
     expect(stageOrder("nope")).toBe(0);
