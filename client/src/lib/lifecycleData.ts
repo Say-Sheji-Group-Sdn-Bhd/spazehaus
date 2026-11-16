@@ -85,18 +85,18 @@ export const LIFECYCLE_STAGES: LifecycleStage[] = [
   { id: "proposal-meeting",     order: 7,  label: "Design Proposal Meeting",      type: "milestone", phase: "Design", serviceType: "Design", description: "Loop back to Revised Design Proposal if not accepted" },
   { id: "design-contract",      order: 8,  label: "Design Contract Signed",       type: "contract-sign", phase: "Design", serviceType: "Design", signatureKey: "design-contract", paymentGate: 2, description: "Document sign + Payment ② · mints SD26 (Phase 4)" },
   { id: "design-commission-contract", order: 9, label: "Design Commission Contract Signed", type: "milestone", phase: "Design", serviceType: "Design", description: "Commission sign-off" },
-  { id: "design-progressive-pay", order: 10, label: "Progressive Payment",       type: "milestone", phase: "Design", serviceType: "Design", description: "Design side instalments (Mark as paid)" },
+  { id: "design-progressive-pay", order: 10, label: "Progressive Payment",       type: "milestone", phase: "Design", serviceType: "Design" },
   { id: "storage-handbook",     order: 11, label: "Storage Handbook From Client", type: "milestone", phase: "Design", serviceType: "Design", description: "Optional upload" },
 
   // —— PRE BUILD (design-side deliverables + design closeout) ——
   { id: "revised-3d",           order: 12, label: "3D Design — Signed",           type: "drawing-sign", phase: "Pre build", serviceType: "Design", signatureKey: "revised-3d", description: "Merged 3D drawing + meeting + revised 3D; multiple submissions" },
   { id: "reno-quotation",       order: 13, label: "Renovation Quotation",         type: "milestone", phase: "Pre build", serviceType: "Design", description: "Supports multiple revisions" },
-  { id: "shopping-list",        order: 14, label: "Shopping List",                type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side shopping list" },
+  { id: "shopping-list",        order: 14, label: "Shopping List",                type: "milestone", phase: "Pre build", serviceType: "Design" },
   { id: "2d-shopping",          order: 15, label: "2D Drawings & Material Board — Signed", type: "drawing-sign", phase: "Pre build", serviceType: "Design", signatureKey: "2d-shopping", description: "Merged material selection + 2D; sign-off kicks off Renovation" },
-  { id: "design-site-marking",  order: 16, label: "Site Marking",                 type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side site marking" },
-  { id: "design-contractor-brief", order: 17, label: "Contractor Briefing",       type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side contractor briefing" },
-  { id: "design-completion",    order: 18, label: "Design Project Completion",    type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side completion" },
-  { id: "design-commission-release", order: 19, label: "Design Project Commission Release", type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side commission release" },
+  { id: "design-site-marking",  order: 16, label: "Site Marking",                 type: "milestone", phase: "Pre build", serviceType: "Design" },
+  { id: "design-contractor-brief", order: 17, label: "Contractor Briefing",       type: "milestone", phase: "Pre build", serviceType: "Design" },
+  { id: "design-completion",    order: 18, label: "Design Project Completion",    type: "milestone", phase: "Pre build", serviceType: "Design" },
+  { id: "design-commission-release", order: 19, label: "Design Project Commission Release", type: "milestone", phase: "Pre build", serviceType: "Design" },
 
   // —— PRE BUILD (renovation-side kickoff) ——
   { id: "reno-contract",        order: 20, label: "Renovation Contract Signed",   type: "contract-sign", phase: "Pre build", serviceType: "Renovation", signatureKey: "renovation-contract", description: "Mints SR26 (Phase 4)" },
