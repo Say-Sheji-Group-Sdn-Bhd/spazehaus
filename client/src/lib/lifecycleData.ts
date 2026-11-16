@@ -107,7 +107,7 @@ export const LIFECYCLE_STAGES: LifecycleStage[] = [
   // —— RENOVATION (renovation execution) ——
   { id: "cidb-authority",       order: 24, label: "CIDB / Authority / Insurance", type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "One submission step" },
   { id: "kick-off",             order: 25, label: "Site Marking",                 type: "milestone", phase: "Renovation", serviceType: "Renovation" },
-  { id: "contractor-brief",     order: 26, label: "Contractor Briefing",          type: "milestone", phase: "Renovation", serviceType: "Renovation" },
+  { id: "contractor-brief",     order: 26, label: "Contractor Briefing Meeting",  type: "milestone", phase: "Renovation", serviceType: "Renovation" },
   { id: "project-po",           order: 27, label: "Project PO",                   type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "Confirm within 2 weeks" },
   { id: "site-inspection",      order: 28, label: "Site Inspection",              type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "Multiple inspections" },
   { id: "site-report",          order: 29, label: "Site Report",                  type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "To client before each payment" },

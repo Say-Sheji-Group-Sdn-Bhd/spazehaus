@@ -51,7 +51,7 @@ insert into lifecycle_stages (order_index, id, label, phase, stage_type, payment
   (23, 'work-schedule',              'Site Work Schedule',                      'Pre build',  'milestone',     null, null,                  'Renovation'),
   (24, 'cidb-authority',             'CIDB / Authority / Insurance',            'Renovation', 'milestone',     null, null,                  'Renovation'),
   (25, 'kick-off',                   'Site Marking',                            'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (26, 'contractor-brief',           'Contractor Briefing',                     'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (26, 'contractor-brief',           'Contractor Briefing Meeting',                     'Renovation', 'milestone',     null, null,                  'Renovation'),
   (27, 'project-po',                 'Project PO',                              'Renovation', 'milestone',     null, null,                  'Renovation'),
   (28, 'site-inspection',            'Site Inspection',                         'Renovation', 'milestone',     null, null,                  'Renovation'),
   (29, 'site-report',                'Site Report',                             'Renovation', 'milestone',     null, null,                  'Renovation'),
