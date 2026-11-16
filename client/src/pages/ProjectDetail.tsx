@@ -3553,23 +3553,7 @@ function LifecycleTab({
                                   </button>
                                 ))}
                             </div>
-                          ) : (
-                            /* Estimated date for the other milestone stages (Phase 2).
-                               Payment/signature stages carry their date on the row
-                               below; the defect-period workDelivered case is handled
-                               above. */
-                            !payments &&
-                            !signature && (
-                              <div className="mt-1">
-                                <StageDateControl
-                                  value={stageDates[stage.id]}
-                                  canEdit={canCollect}
-                                  onSet={d => setMilestoneDate(stage.id, d)}
-                                  saving={setStageDate.isPending}
-                                />
-                              </div>
-                            )
-                          )}
+                          ) : null /* milestone est-date now renders beside the Status pill (G1, 16 Nov) */}
                           {/* Flow 2 — Warranty follow-up check-ins: free-form dates
                               (client 16 Nov: add as many as needed, no fixed 6/12). */}
                           {stage.id === "defect-period" && workDelivered && (
@@ -3608,13 +3592,28 @@ function LifecycleTab({
                               </p>
                             )}
                         </div>
-                        <StageStatusControl
-                          status={status}
-                          canEdit={canCollect}
-                          interactive={manualStatusStage}
-                          saving={setStageStatus.isPending}
-                          onChange={next => changeStageStatus(stage.id, next)}
-                        />
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* G1 (16 Nov): est-date sits next to the Status pill for every
+                              milestone stage (payment/signature stages carry their date on
+                              the row below; defect-period handles its own warranty date). */}
+                          {!payments &&
+                            !signature &&
+                            !(stage.id === "defect-period" && workDelivered) && (
+                              <StageDateControl
+                                value={stageDates[stage.id]}
+                                canEdit={canCollect}
+                                onSet={d => setMilestoneDate(stage.id, d)}
+                                saving={setStageDate.isPending}
+                              />
+                            )}
+                          <StageStatusControl
+                            status={status}
+                            canEdit={canCollect}
+                            interactive={manualStatusStage}
+                            saving={setStageStatus.isPending}
+                            onChange={next => changeStageStatus(stage.id, next)}
+                          />
+                        </div>
                       </div>
 
                       {/* Payment detail (one or more rows for gate 4) */}
@@ -3688,6 +3687,29 @@ function LifecycleTab({
                         />
                       )}
 
+                      {/* Design Contract — key in the agreed amount + attach the signed
+                          contract. (16 Nov: the fee is recorded here on the sign, NOT
+                          collected as a payment; the sign-off above mints the SD code.) */}
+                      {stage.id === "design-contract" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="design-contract-amount"
+                            defaultDateToday
+                            title="Design contract amount"
+                            description="Key in the agreed design contract amount and attach the signed contract. No separate fee is collected — the amount is recorded here."
+                            canManage={canCollect}
+                            withAmount
+                            hideLabel
+                            maxColumns={1}
+                            addLabel="Add amount"
+                            uploadLabel="Upload signed contract (optional)"
+                            accept="application/pdf,image/*"
+                            emptyHint="No contract amount entered yet."
+                          />
+                        </div>
+                      )}
+
                       {/* Site Inspections — user-named columns, each a date + an
                           OPTIONAL file (sometimes just a date). Lives on its stage. */}
                       {stage.id === "site-inspection" && (
@@ -3739,13 +3761,33 @@ function LifecycleTab({
                             section="design-proposal"
                             defaultDateToday
                             title="Design Proposal versions"
-                            description="Track each version the client sees — Version 1, then Revision 1, Revision 2… Set the date and attach each version's file."
+                            description="Track each version the client sees — Version 1, then Revision 1, Revision 2… Set the date, the proposed amount (e.g. RM 300k / 400k / 500k), and attach each version's file."
                             canManage={canCollect}
+                            withAmount
                             maxColumns={10}
                             labelPlaceholder="Version (e.g. V1, Revision 1)"
                             addLabel="Add version"
                             accept="application/pdf,image/*"
                             emptyHint="No versions yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Proposal Meeting — revisions, each a date + a remark note. */}
+                      {stage.id === "proposal-meeting" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="proposal-meeting"
+                            defaultDateToday
+                            title="Proposal meeting revisions"
+                            description="Log each proposal meeting / revision — set the date and a remark note for what was discussed or changed."
+                            canManage={canCollect}
+                            maxColumns={10}
+                            labelPlaceholder="Remark / note"
+                            addLabel="Add revision"
+                            accept="application/pdf,image/*"
+                            emptyHint="No meetings logged yet."
                           />
                         </div>
                       )}
@@ -3777,7 +3819,7 @@ function LifecycleTab({
                           <button
                             type="button"
                             onClick={onOpenReports}
-                            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-label"
+                            className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-label font-bold w-full sm:w-auto justify-center"
                             style={{
                               background: "var(--acc)",
                               color: "oklch(1 0 0)",
@@ -3785,8 +3827,11 @@ function LifecycleTab({
                               cursor: "pointer",
                             }}
                           >
-                            <FileText size={14} /> Open site reports →
+                            <FileText size={16} /> Open site reports &amp; add update →
                           </button>
+                          <p className="text-[10px] mt-1.5" style={{ color: "var(--t-5)" }}>
+                            Weekly reports build automatically from site photos; open the Reports tab to add or update them.
+                          </p>
                         </div>
                       )}
 
