@@ -69,6 +69,7 @@ export default function ColumnGrid({
   collectable = false,
   uploadLabel = "Upload file (optional)",
   hideLabel = false,
+  singleSignoff = false,
   accept,
   emptyHint,
 }: {
@@ -92,6 +93,8 @@ export default function ColumnGrid({
   uploadLabel?: string;
   /** Hide the per-column name field (for a single fixed sign-off / date entry). */
   hideLabel?: boolean;
+  /** Exactly ONE fixed sign-off entry: no "Add" button, no extra columns, no delete. */
+  singleSignoff?: boolean;
   accept?: string;
   emptyHint?: string;
 }) {
@@ -135,6 +138,22 @@ export default function ColumnGrid({
     );
   };
 
+  // Single sign-off: show exactly ONE entry (the first), no "Add" button; create
+  // the one entry automatically if none exists yet.
+  const displayColumns = singleSignoff ? columns.slice(0, 1) : columns;
+  useEffect(() => {
+    if (
+      singleSignoff &&
+      canManage &&
+      !isLoading &&
+      columns.length === 0 &&
+      !addColumn.isPending
+    ) {
+      handleAdd();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [singleSignoff, canManage, isLoading, columns.length]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-2">
@@ -148,7 +167,7 @@ export default function ColumnGrid({
             </p>
           )}
         </div>
-        {canManage && (
+        {canManage && !singleSignoff && (
           <button
             type="button"
             onClick={handleAdd}
@@ -178,7 +197,7 @@ export default function ColumnGrid({
         >
           Loading…
         </div>
-      ) : columns.length === 0 ? (
+      ) : displayColumns.length === 0 && !singleSignoff ? (
         <div
           className="rounded-xl p-6 text-center"
           style={{
@@ -198,14 +217,14 @@ export default function ColumnGrid({
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {columns.map(col => (
+          {displayColumns.map(col => (
             <ColumnCard
               key={col.id}
               col={col}
               projectId={projectId}
               section={section}
               canManage={canManage}
-              canDelete={canManage && columns.length !== minColumns}
+              canDelete={canManage && !singleSignoff && columns.length !== minColumns}
               withAmount={withAmount}
               withSignoff={withSignoff}
               labelPlaceholder={labelPlaceholder}
@@ -220,7 +239,7 @@ export default function ColumnGrid({
         </div>
       )}
 
-      {canManage && columns.length > 0 && (
+      {canManage && !singleSignoff && columns.length > 0 && (
         <p className="text-[10px]" style={{ color: "var(--t-6)" }}>
           {columns.length}/{maxColumns} columns
           {minColumns > 0 ? ` · at least ${minColumns} required` : ""} · files

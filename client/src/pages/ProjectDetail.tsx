@@ -3798,11 +3798,9 @@ function LifecycleTab({
                             canManage={canCollect}
                             withSignoff
                             hideLabel
-                            maxColumns={1}
+                            singleSignoff
                             signoffPlaceholder="Client's name"
-                            addLabel="Add client sign-off"
                             accept="application/pdf,image/*"
-                            emptyHint="No client sign-off yet."
                           />
                         </div>
                       )}
@@ -3926,11 +3924,9 @@ function LifecycleTab({
                             canManage={canCollect}
                             withSignoff
                             hideLabel
-                            maxColumns={1}
+                            singleSignoff
                             signoffPlaceholder="Client's name"
-                            addLabel="Add client sign-off"
                             accept="application/pdf,image/*"
-                            emptyHint="No client sign-off yet."
                           />
                         </div>
                       )}
@@ -4183,7 +4179,7 @@ function LifecycleTab({
             style={{ background: "var(--s-2)", border: "1px dashed var(--b-strong)" }}
           >
             <span className="text-xs font-medium" style={{ color: "var(--t-2)" }}>
-              {splitProject.isPending ? "Splitting…" : "Split into Design + Renovation (Flow 2)"}
+              {splitProject.isPending ? "Splitting…" : "Split into Design + Renovation"}
             </span>
             <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
               for two-sided jobs
