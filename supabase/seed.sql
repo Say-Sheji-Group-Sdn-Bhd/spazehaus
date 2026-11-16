@@ -24,47 +24,45 @@ truncate table
   lifecycle_stages, audit_log
   restart identity cascade;
 
--- ── (1) lifecycle_stages — 39 stages (Flow 2; required reference data) ──
+-- ── (1) lifecycle_stages — 37 stages (Flow 2, Phase 1 16 Nov; required reference data) ──
 insert into lifecycle_stages (order_index, id, label, phase, stage_type, payment_gate, signature_key, service_type) values
   (1,  'new-inquiry',                'New Inquiry',                             'Proposal',   'milestone',     null, null,                  'Design'),
   (2,  'inquiry-form',               'Fill In Inquiry Form',                    'Proposal',   'milestone',     null, null,                  'Design'),
   (3,  'showroom-meet',              'First Meet-Up',                           'Proposal',   'milestone',     null, null,                  'Design'),
   (4,  'proposal-deposit',           'Proposal Deposit Collected',              'Proposal',   'payment',       1,    null,                  'Design'),
   (5,  'design-proposal',            'Design Proposal',                         'Proposal',   'milestone',     null, null,                  'Design'),
-  (6,  'design-quotation',           'Design Quotation',                        'Design',     'milestone',     null, null,                  'Design'),
-  (7,  'proposal-meeting',           'Design Proposal Meeting',                 'Design',     'milestone',     null, null,                  'Design'),
-  (8,  'design-contract',            'Design Contract Signed',                  'Design',     'contract-sign', 2,    'design-contract',     'Design'),
-  (9,  'design-commission-contract', 'Design Commission Contract Signed',       'Design',     'milestone',     null, null,                  'Design'),
-  (10, 'design-progressive-pay',     'Progressive Payment',                     'Design',     'milestone',     null, null,                  'Design'),
-  (11, 'storage-handbook',           'Storage Handbook From Client',            'Design',     'milestone',     null, null,                  'Design'),
-  (12, 'revised-3d',                 '3D Design — Signed',                      'Pre build',  'drawing-sign',  null, 'revised-3d',          'Design'),
-  (13, 'reno-quotation',             'Renovation Quotation',                    'Pre build',  'milestone',     null, null,                  'Design'),
-  (14, 'shopping-list',              'Shopping List',                           'Pre build',  'milestone',     null, null,                  'Design'),
-  (15, '2d-shopping',                '2D Drawings & Material Board — Signed',    'Pre build',  'drawing-sign',  null, '2d-shopping',         'Design'),
-  (16, 'design-site-marking',        'Site Marking',                            'Pre build',  'milestone',     null, null,                  'Design'),
-  (17, 'design-contractor-brief',    'Contractor Briefing',                     'Pre build',  'milestone',     null, null,                  'Design'),
-  (18, 'design-completion',          'Design Project Completion',               'Pre build',  'milestone',     null, null,                  'Design'),
-  (19, 'design-commission-release',  'Design Project Commission Release',       'Pre build',  'milestone',     null, null,                  'Design'),
-  (20, 'reno-contract',              'Renovation Contract Signed',              'Pre build',  'contract-sign', null, 'renovation-contract', 'Renovation'),
-  (21, 'reno-commission-contract',   'Renovation Commission Contract Signed',   'Pre build',  'milestone',     null, null,                  'Renovation'),
-  (22, 'reno-deposit',               'Renovation Deposit Collected',            'Pre build',  'payment',       3,    null,                  'Renovation'),
-  (23, 'work-schedule',              'Site Work Schedule',                      'Pre build',  'milestone',     null, null,                  'Renovation'),
-  (24, 'cidb-authority',             'CIDB / Authority / Insurance',            'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (25, 'kick-off',                   'Site Marking',                            'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (26, 'contractor-brief',           'Contractor Briefing Meeting',                     'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (27, 'project-po',                 'Project PO',                              'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (28, 'site-inspection',            'Site Inspection',                         'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (29, 'site-report',                'Site Report',                             'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (30, 'progressive-pay',            'Progressive Payment',                     'Renovation', 'payment',       4,    null,                  'Renovation'),
-  (31, 'site-completed',             'Client Site Inspection',                  'Handover',   'milestone',     null, null,                  'Renovation'),
-  (32, 'furniture-delivery',         'Supplier Delivery & Installation',        'Handover',   'milestone',     null, null,                  'Renovation'),
-  (33, 'handover',                   'Handover Document / As-Built Drawings — Signed', 'Handover', 'contract-sign', null, 'handover',       'Renovation'),
-  (34, 'handover-meeting',           'Handover Meeting',                        'Handover',   'milestone',     null, null,                  'Renovation'),
-  (35, 'final-payment',              'Final Payment',                           'Handover',   'payment',       5,    null,                  'Renovation'),
-  (36, 'project-statement-review',   'Project Statement Review',                'Handover',   'milestone',     null, null,                  'Renovation'),
-  (37, 'completion',                 'Renovation Project Completion',           'Handover',   'milestone',     null, null,                  'Renovation'),
-  (38, 'reno-commission-release',    'Renovation Project Commission Release',   'Handover',   'milestone',     null, null,                  'Renovation'),
-  (39, 'defect-period',              'Warranty Follow-Up',                      'Handover',   'milestone',     null, null,                  'Renovation');
+  (6,  'proposal-meeting',           'Design Proposal Meeting',                 'Proposal',   'milestone',     null, null,                  'Design'),
+  (7,  'design-contract',            'Design Contract Signed',                  'Design',     'contract-sign', null, 'design-contract',     'Design'),
+  (8,  'design-commission-contract', 'Design Commission Contract Signed',       'Design',     'milestone',     null, null,                  'Design'),
+  (9,  'design-progressive-pay',     'Progressive Payment',                     'Design',     'milestone',     null, null,                  'Design'),
+  (10, 'storage-handbook',           'Storage Handbook From Client',            'Design',     'milestone',     null, null,                  'Design'),
+  (11, 'revised-3d',                 '3D Design — Signed',                      'Design',     'drawing-sign',  null, 'revised-3d',          'Design'),
+  (12, 'reno-quotation',             'Renovation Quotation',                    'Pre build',  'milestone',     null, null,                  'Design'),
+  (13, 'shopping-list',              'Shopping List',                           'Pre build',  'milestone',     null, null,                  'Design'),
+  (14, '2d-shopping',                '2D Drawings & Material Board — Signed',    'Pre build',  'drawing-sign',  null, '2d-shopping',         'Design'),
+  (15, 'design-site-marking',        'Site Marking',                            'Pre build',  'milestone',     null, null,                  'Design'),
+  (16, 'design-contractor-brief',    'Contractor Briefing',                     'Pre build',  'milestone',     null, null,                  'Design'),
+  (17, 'design-completion',          'Design Project Completion',               'Pre build',  'milestone',     null, null,                  'Design'),
+  (18, 'design-commission-release',  'Design Project Commission Release',       'Pre build',  'milestone',     null, null,                  'Design'),
+  (19, 'reno-contract',              'Renovation Contract Signed',              'Renovation', 'contract-sign', null, 'renovation-contract', 'Renovation'),
+  (20, 'reno-commission-contract',   'Renovation Commission Contract Signed',   'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (21, 'work-schedule',              'Site Work Schedule',                      'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (22, 'cidb-authority',             'CIDB / Authority / Insurance',            'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (23, 'kick-off',                   'Site Marking',                            'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (24, 'contractor-brief',           'Contractor Briefing Meeting',             'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (25, 'project-po',                 'Project PO',                              'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (26, 'site-inspection',            'Site Inspection',                         'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (27, 'site-report',                'Site Report',                             'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (28, 'progressive-pay',            'Progressive Payment',                     'Renovation', 'payment',       4,    null,                  'Renovation'),
+  (29, 'site-completed',             'Client Site Inspection',                  'Handover',   'milestone',     null, null,                  'Renovation'),
+  (30, 'furniture-delivery',         'Supplier Delivery & Installation',        'Handover',   'milestone',     null, null,                  'Renovation'),
+  (31, 'handover',                   'Handover Document / As-Built Drawings — Signed', 'Handover', 'contract-sign', null, 'handover',       'Renovation'),
+  (32, 'handover-meeting',           'Handover Meeting',                        'Handover',   'milestone',     null, null,                  'Renovation'),
+  (33, 'final-payment',              'Final Payment',                           'Handover',   'payment',       5,    null,                  'Renovation'),
+  (34, 'project-statement-review',   'Project Statement Review',                'Handover',   'milestone',     null, null,                  'Renovation'),
+  (35, 'completion',                 'Renovation Project Completion',           'Handover',   'milestone',     null, null,                  'Renovation'),
+  (36, 'reno-commission-release',    'Renovation Project Commission Release',   'Handover',   'milestone',     null, null,                  'Renovation'),
+  (37, 'defect-period',              'Warranty Follow-Up',                      'Handover',   'milestone',     null, null,                  'Renovation');
 
 -- ── (2a) staff — one per tier, 2 admins, a same-initials pair (JT) ───────────
 -- auth_user_id is null: each links on first magic-link login by email.
@@ -84,18 +82,15 @@ insert into projects (id, name, client_name, client_contact, client_email, proje
   ('PRJ002','Lim Office Fitout', 'Lim Holdings',   '+60127770002','ops@limholdings.example','Commercial', 'Office',     'KLCC, KL',       3500, 480000, '2026-03-15','2026-09-30','active',  'medium', 60, 'SH005','SH003', '{JT,PM}', 'kick-off',        '2026-03-15', '{Reception,Open Office,Meeting Room,Pantry}', 'Office fitout, renovation underway.', 'SH001', '22222222-2222-2222-2222-222222222222');
 
 -- ── (2c) payment_records ─────────────────────────────────────────────────────
--- PRJ001: Gate 1 collected (at conversion), Gates 2–5 pending.
+-- PRJ001: Gate 1 collected (at conversion); gates 4/5 pending. (Phase 1 16 Nov: no gate-2
+-- Design Contract Fee / gate-3 Renovation Deposit lumps — design money = progressive payment.)
 insert into payment_records (project_id, gate, label, amount, status, collected_date, reference, notes) values
   ('PRJ001', 1, 'Proposal Deposit',          10000, 'completed', '2026-05-01', 'PD-2026-001', null),
-  ('PRJ001', 2, 'Design Contract Fee',       10500, 'pending',   null, null, null),
-  ('PRJ001', 3, 'Renovation Deposit (50%)',  64750, 'pending',   null, null, null),
   ('PRJ001', 4, 'Progressive Payment',       38850, 'pending',   null, null, 'To be split into instalments'),
   ('PRJ001', 5, 'Final Payment',             25900, 'pending',   null, null, null);
--- PRJ002: Gates 1–3 collected (it's at kick-off, stage 19), Gates 4–5 pending.
+-- PRJ002: Gate 1 collected; gates 4/5 pending. (No gate-2/gate-3 lumps — Phase 1.)
 insert into payment_records (project_id, gate, label, amount, status, collected_date, reference, notes) values
   ('PRJ002', 1, 'Proposal Deposit',          30000, 'completed', '2026-03-15', 'PD-2026-002', null),
-  ('PRJ002', 2, 'Design Contract Fee',       33600, 'completed', '2026-04-02', 'DC-2026-002', null),
-  ('PRJ002', 3, 'Renovation Deposit (50%)', 208200, 'completed', '2026-05-10', 'RD-2026-002', null),
   ('PRJ002', 4, 'Progressive Payment',      124920, 'pending',   null, null, 'To be split into instalments'),
   ('PRJ002', 5, 'Final Payment',             83280, 'pending',   null, null, null);
 
