@@ -3352,13 +3352,17 @@ function LifecycleTab({
                 const manualStatusStage =
                   stage.order > 1 && stage.id !== "defect-period";
                 const isLast = i === phaseStages.length - 1;
-                // Hide per-instalment records (shown in the Progressive Payment
-                // grid) and the neutralized "skipped" lump from the gate's row list.
-                const payments = stage.paymentGate
-                  ? paymentsByGate[stage.paymentGate]?.filter(
-                      p => p.instalment == null && p.status !== "skipped"
-                    )
-                  : undefined;
+                // Progressive Payment: the instalment grid IS the payment UI, so
+                // don't also show the single lump row (it looked like a duplicate).
+                // Other gates: hide per-instalment records + the neutralized lump.
+                const payments =
+                  stage.id === "progressive-pay"
+                    ? undefined
+                    : stage.paymentGate
+                      ? paymentsByGate[stage.paymentGate]?.filter(
+                          p => p.instalment == null && p.status !== "skipped"
+                        )
+                      : undefined;
                 const signature = stage.signatureKey
                   ? sigByKey[stage.signatureKey]
                   : undefined;
