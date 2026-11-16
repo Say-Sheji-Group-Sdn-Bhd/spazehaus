@@ -922,11 +922,11 @@ function formatDate(iso: string): string {
 
 function groupByPhase(stages: ClientPortalStage[]): { phase: string; stages: ClientPortalStage[] }[] {
   const order: Record<string, number> = {
-    Inquiry: 0,
+    Proposal: 0,
     Design: 1,
-    "Pre-Build": 2,
-    Build: 3,
-    Closeout: 4,
+    "Pre build": 2,
+    Renovation: 3,
+    Handover: 4,
   };
   const byPhase = new Map<string, ClientPortalStage[]>();
   for (const s of stages) {
