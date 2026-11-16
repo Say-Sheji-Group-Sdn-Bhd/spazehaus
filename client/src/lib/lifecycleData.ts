@@ -19,7 +19,7 @@
  * plus the summary helpers consumed by the ProjectDetail Lifecycle tab.
  */
 
-export type StagePhase = "Inquiry" | "Design" | "Pre-Build" | "Build" | "Closeout";
+export type StagePhase = "Proposal" | "Design" | "Pre build" | "Renovation" | "Handover";
 
 /**
  * Which side of the Flow 2 two-project split a stage belongs to. Phase 3 stores
@@ -72,9 +72,9 @@ export type LifecycleStage = {
  */
 export const LIFECYCLE_STAGES: LifecycleStage[] = [
   // —— INQUIRY (Design project, ID26) ——
-  { id: "new-inquiry",          order: 1,  label: "New Inquiry",                  type: "milestone", phase: "Inquiry", serviceType: "Design" },
-  { id: "inquiry-form",         order: 2,  label: "Fill In Inquiry Form",         type: "milestone", phase: "Inquiry", serviceType: "Design" },
-  { id: "showroom-meet",        order: 3,  label: "First Meet-Up",                type: "milestone", phase: "Inquiry", serviceType: "Design" },
+  { id: "new-inquiry",          order: 1,  label: "New Inquiry",                  type: "milestone", phase: "Proposal", serviceType: "Design" },
+  { id: "inquiry-form",         order: 2,  label: "Fill In Inquiry Form",         type: "milestone", phase: "Proposal", serviceType: "Design" },
+  { id: "showroom-meet",        order: 3,  label: "First Meet-Up",                type: "milestone", phase: "Proposal", serviceType: "Design" },
 
   // —— DESIGN —— (Flow 2: "Design Proposal Signed" removed — the deposit triggers design)
   { id: "proposal-deposit",     order: 4,  label: "Proposal Deposit Collected",   type: "payment",   phase: "Design", serviceType: "Design", paymentGate: 1, description: "Triggers design work" },
@@ -86,34 +86,35 @@ export const LIFECYCLE_STAGES: LifecycleStage[] = [
   { id: "storage-handbook",     order: 10, label: "Storage Handbook From Client", type: "milestone", phase: "Design", serviceType: "Design", description: "NEW (Flow 2) — optional upload" },
 
   // —— PRE-BUILD (design-side deliverables) ——
-  { id: "revised-3d",           order: 11, label: "3D Design — Signed",           type: "drawing-sign", phase: "Pre-Build", serviceType: "Design", signatureKey: "revised-3d", description: "Merged 3D drawing + meeting + revised 3D; multiple submissions" },
-  { id: "reno-quotation",       order: 12, label: "Renovation Quotation",         type: "milestone", phase: "Pre-Build", serviceType: "Design", description: "Supports multiple revisions" },
-  { id: "2d-shopping",          order: 13, label: "2D Drawings & Material Board — Signed", type: "drawing-sign", phase: "Pre-Build", serviceType: "Design", signatureKey: "2d-shopping", description: "Merged material selection + 2D + shopping list; sign-off kicks off Renovation" },
+  { id: "revised-3d",           order: 11, label: "3D Design — Signed",           type: "drawing-sign", phase: "Pre build", serviceType: "Design", signatureKey: "revised-3d", description: "Merged 3D drawing + meeting + revised 3D; multiple submissions" },
+  { id: "reno-quotation",       order: 12, label: "Renovation Quotation",         type: "milestone", phase: "Pre build", serviceType: "Design", description: "Supports multiple revisions" },
+  { id: "2d-shopping",          order: 13, label: "2D Drawings & Material Board — Signed", type: "drawing-sign", phase: "Pre build", serviceType: "Design", signatureKey: "2d-shopping", description: "Merged material selection + 2D + shopping list; sign-off kicks off Renovation" },
 
   // —— RENOVATION (Renovation project, SR26) ——
-  { id: "reno-contract",        order: 14, label: "Renovation Contract Signed",   type: "contract-sign", phase: "Pre-Build", serviceType: "Renovation", signatureKey: "renovation-contract", description: "Mints SR26 (Phase 4)" },
-  { id: "reno-commission-contract", order: 15, label: "Renovation Commission Contract Signed", type: "milestone", phase: "Pre-Build", serviceType: "Renovation", description: "NEW (Flow 2)" },
-  { id: "reno-deposit",         order: 16, label: "Renovation Deposit Collected", type: "payment",   phase: "Pre-Build", serviceType: "Renovation", paymentGate: 3 },
-  { id: "work-schedule",        order: 17, label: "Site Work Schedule",           type: "milestone", phase: "Pre-Build", serviceType: "Renovation" },
+  { id: "reno-contract",        order: 14, label: "Renovation Contract Signed",   type: "contract-sign", phase: "Pre build", serviceType: "Renovation", signatureKey: "renovation-contract", description: "Mints SR26 (Phase 4)" },
+  { id: "reno-commission-contract", order: 15, label: "Renovation Commission Contract Signed", type: "milestone", phase: "Pre build", serviceType: "Renovation", description: "NEW (Flow 2)" },
+  { id: "reno-deposit",         order: 16, label: "Renovation Deposit Collected", type: "payment",   phase: "Pre build", serviceType: "Renovation", paymentGate: 3 },
+  { id: "work-schedule",        order: 17, label: "Site Work Schedule",           type: "milestone", phase: "Pre build", serviceType: "Renovation" },
 
   // —— BUILD (renovation execution) ——
-  { id: "cidb-authority",       order: 18, label: "CIDB / Authority / Insurance", type: "milestone", phase: "Build", serviceType: "Renovation", description: "NEW (Flow 2) — one submission step" },
-  { id: "kick-off",             order: 19, label: "Site Marking",                 type: "milestone", phase: "Build", serviceType: "Renovation" },
-  { id: "contractor-brief",     order: 20, label: "Contractor Briefing",          type: "milestone", phase: "Build", serviceType: "Renovation" },
-  { id: "project-po",           order: 21, label: "Project PO",                   type: "milestone", phase: "Build", serviceType: "Renovation", description: "NEW (Flow 2) — confirm within 2 weeks" },
-  { id: "site-inspection",      order: 22, label: "Site Inspection",              type: "milestone", phase: "Build", serviceType: "Renovation", description: "Multiple inspections" },
-  { id: "site-report",          order: 23, label: "Site Report",                  type: "milestone", phase: "Build", serviceType: "Renovation", description: "To client before each payment" },
-  { id: "progressive-pay",      order: 24, label: "Progressive Payment",          type: "payment",   phase: "Build", serviceType: "Renovation", paymentGate: 4, description: "Repeating; staff-entered amounts" },
+  { id: "cidb-authority",       order: 18, label: "CIDB / Authority / Insurance", type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "NEW (Flow 2) — one submission step" },
+  { id: "kick-off",             order: 19, label: "Site Marking",                 type: "milestone", phase: "Renovation", serviceType: "Renovation" },
+  { id: "contractor-brief",     order: 20, label: "Contractor Briefing",          type: "milestone", phase: "Renovation", serviceType: "Renovation" },
+  { id: "project-po",           order: 21, label: "Project PO",                   type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "NEW (Flow 2) — confirm within 2 weeks" },
+  { id: "site-inspection",      order: 22, label: "Site Inspection",              type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "Multiple inspections" },
+  { id: "site-report",          order: 23, label: "Site Report",                  type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "To client before each payment" },
+  { id: "progressive-pay",      order: 24, label: "Progressive Payment",          type: "payment",   phase: "Renovation", serviceType: "Renovation", paymentGate: 4, description: "Repeating; staff-entered amounts" },
 
   // —— CLOSEOUT / HANDOVER ——
-  { id: "site-completed",       order: 25, label: "Client Site Inspection",       type: "milestone", phase: "Closeout", serviceType: "Renovation" },
-  { id: "furniture-delivery",   order: 26, label: "Supplier Delivery & Installation", type: "milestone", phase: "Closeout", serviceType: "Renovation" },
-  { id: "handover",             order: 27, label: "Handover Document / As-Built — Signed", type: "contract-sign", phase: "Closeout", serviceType: "Renovation", signatureKey: "handover", description: "Client-signed; issue as-built early" },
-  { id: "handover-meeting",     order: 28, label: "Handover Meeting",             type: "milestone", phase: "Closeout", serviceType: "Renovation", description: "NEW (Flow 2)" },
-  { id: "final-payment",        order: 29, label: "Final Payment",                type: "payment",   phase: "Closeout", serviceType: "Renovation", paymentGate: 5 },
-  { id: "project-statement-review", order: 30, label: "Project Statement Review", type: "milestone", phase: "Closeout", serviceType: "Renovation", description: "NEW (Flow 2)" },
-  { id: "completion",           order: 31, label: "Project Completion",           type: "milestone", phase: "Closeout", serviceType: "Renovation" },
-  { id: "defect-period",        order: 32, label: "Warranty Follow-Up",           type: "milestone", phase: "Closeout", serviceType: "Renovation", description: "6-month & 12-month check-ins (12-month liability)" },
+  { id: "site-completed",       order: 25, label: "Client Site Inspection",       type: "milestone", phase: "Handover", serviceType: "Renovation" },
+  { id: "furniture-delivery",   order: 26, label: "Supplier Delivery & Installation", type: "milestone", phase: "Handover", serviceType: "Renovation" },
+  { id: "handover",             order: 27, label: "Handover Document / As-Built Drawings — Signed", type: "contract-sign", phase: "Handover", serviceType: "Renovation", signatureKey: "handover", description: "Client-signed; issue as-built early" },
+  { id: "handover-meeting",     order: 28, label: "Handover Meeting",             type: "milestone", phase: "Handover", serviceType: "Renovation", description: "NEW (Flow 2)" },
+  { id: "final-payment",        order: 29, label: "Final Payment",                type: "payment",   phase: "Handover", serviceType: "Renovation", paymentGate: 5 },
+  { id: "project-statement-review", order: 30, label: "Project Statement Review", type: "milestone", phase: "Handover", serviceType: "Renovation", description: "NEW (Flow 2)" },
+  { id: "completion",           order: 31, label: "Renovation Project Completion", type: "milestone", phase: "Handover", serviceType: "Renovation" },
+  { id: "reno-commission-release", order: 32, label: "Renovation Project Commission Release", type: "milestone", phase: "Handover", serviceType: "Renovation", description: "NEW (16 Nov) — commission released to the renovation team" },
+  { id: "defect-period",        order: 33, label: "Warranty Follow-Up",           type: "milestone", phase: "Handover", serviceType: "Renovation", description: "6-month & 12-month check-ins (12-month liability)" },
 ];
 
 // —————————————————————————————————————————————————————————————
@@ -181,11 +182,11 @@ export const stageOrder = (id: string) => stageById(id)?.order ?? 0;
  * Phase color tokens (matches the existing warm-gold palette).
  */
 export const phaseColors: Record<StagePhase, { color: string; bg: string; border: string }> = {
-  "Inquiry":   { color: "oklch(0.45 0.10 55)",  bg: "oklch(0.65 0.10 55 / 10%)",  border: "oklch(0.65 0.10 55 / 25%)" },
-  "Design":    { color: "oklch(0.42 0.09 68)",  bg: "oklch(0.62 0.09 68 / 10%)",  border: "oklch(0.62 0.09 68 / 25%)" },
-  "Pre-Build": { color: "oklch(0.38 0.09 240)", bg: "oklch(0.55 0.09 240 / 10%)", border: "oklch(0.55 0.09 240 / 25%)" },
-  "Build":     { color: "oklch(0.50 0.10 25)",  bg: "oklch(0.60 0.10 25 / 10%)",  border: "oklch(0.60 0.10 25 / 25%)" },
-  "Closeout":  { color: "oklch(0.38 0.09 145)", bg: "oklch(0.55 0.09 145 / 10%)", border: "oklch(0.55 0.09 145 / 25%)" },
+  "Proposal":   { color: "oklch(0.45 0.10 55)",  bg: "oklch(0.65 0.10 55 / 10%)",  border: "oklch(0.65 0.10 55 / 25%)" },
+  "Design":     { color: "oklch(0.42 0.09 68)",  bg: "oklch(0.62 0.09 68 / 10%)",  border: "oklch(0.62 0.09 68 / 25%)" },
+  "Pre build":  { color: "oklch(0.38 0.09 240)", bg: "oklch(0.55 0.09 240 / 10%)", border: "oklch(0.55 0.09 240 / 25%)" },
+  "Renovation": { color: "oklch(0.50 0.10 25)",  bg: "oklch(0.60 0.10 25 / 10%)",  border: "oklch(0.60 0.10 25 / 25%)" },
+  "Handover":   { color: "oklch(0.38 0.09 145)", bg: "oklch(0.55 0.09 145 / 10%)", border: "oklch(0.55 0.09 145 / 25%)" },
 };
 
 export const checkpointStatusConfig: Record<CheckpointStatus, { label: string; color: string; bg: string; border: string }> = {
