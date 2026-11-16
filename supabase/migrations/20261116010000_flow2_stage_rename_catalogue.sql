@@ -28,6 +28,11 @@
 
 alter table public.project_stage_dates disable trigger trg_stage_status_recompute;
 
+-- 0. The base schema's phase CHECK (lifecycle_stages_phase_check) only allows the
+--    OLD names (Inquiry/Design/Pre-Build/Build/Closeout). Drop it before renaming;
+--    re-add it with the NEW names after every phase write (step 4b).
+alter table public.lifecycle_stages drop constraint if exists lifecycle_stages_phase_check;
+
 -- 1. Rename the five phases (grouping unchanged).
 update public.lifecycle_stages set phase = 'Proposal'   where phase = 'Inquiry';
 update public.lifecycle_stages set phase = 'Pre build'  where phase = 'Pre-Build';
@@ -59,6 +64,11 @@ on conflict (id) do update set
   payment_gate  = excluded.payment_gate,
   signature_key = excluded.signature_key,
   service_type  = excluded.service_type;
+
+-- 4b. Re-add the phase CHECK with the renamed values (every row now uses them).
+alter table public.lifecycle_stages
+  add constraint lifecycle_stages_phase_check
+  check (phase in ('Proposal', 'Design', 'Pre build', 'Renovation', 'Handover'));
 
 -- 5. Backfill the new stage 'not-yet' for any project already PAST it (current stage
 --    order > 32 — i.e. at/after Warranty), so the recompute never drags it back.
