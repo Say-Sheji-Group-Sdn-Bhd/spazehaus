@@ -3810,9 +3810,9 @@ function LifecycleTab({
                       {/* Contractor Briefing — estimated date + status only
                           (client 16 Nov: no sign-off sheet needed). */}
 
-                      {/* Flow 2 · Design-side Progressive Payment — instalments on
-                          the Design project (mirrors the build-side grid). */}
-                      {stage.id === "design-contract" && (
+                      {/* Flow 2 · Design-side Progressive Payment — its own stage
+                          (client 16 Nov), mirrors the Renovation instalment grid. */}
+                      {stage.id === "design-progressive-pay" && (
                         <div className="mt-3">
                           <ColumnGrid
                             projectId={projectId}
