@@ -2920,6 +2920,19 @@ function LifecycleTab({
     );
   };
 
+  // Design Contract — the agreed amount is keyed on the sign row (Phase 2, 16 Nov).
+  const setSignatureAmount = (id: number, amount: number) => {
+    updateSignature.mutate(
+      { id, projectId, amount },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't set amount: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
+    );
+  };
+
   // Phase 3 — editable gate amounts (status untouched).
   const setPaymentAmount = (id: number, amount: number) => {
     updatePayment.mutate(
@@ -3667,6 +3680,11 @@ function LifecycleTab({
                           canSign={canSign}
                           staffById={staffById}
                           onSetDate={d => setSignatureDate(signature.id, d)}
+                          showAmount={signature.key === "design-contract"}
+                          hideDate={signature.key === "design-contract"}
+                          onSetAmount={amt =>
+                            setSignatureAmount(signature.id, amt)
+                          }
                           onRevert={() => doRevertSignature(signature)}
                           reverting={revertSignature.isPending}
                           onSign={() =>
@@ -3686,29 +3704,6 @@ function LifecycleTab({
                             })
                           }
                         />
-                      )}
-
-                      {/* Design Contract — key in the agreed amount + attach the signed
-                          contract. (16 Nov: the fee is recorded here on the sign, NOT
-                          collected as a payment; the sign-off above mints the SD code.) */}
-                      {stage.id === "design-contract" && (
-                        <div className="mt-3">
-                          <ColumnGrid
-                            projectId={projectId}
-                            section="design-contract-amount"
-                            defaultDateToday
-                            title="Design contract amount"
-                            description="Key in the agreed design contract amount and attach the signed contract. No separate fee is collected — the amount is recorded here."
-                            canManage={canCollect}
-                            withAmount
-                            hideLabel
-                            maxColumns={1}
-                            addLabel="Add amount"
-                            uploadLabel="Upload signed contract (optional)"
-                            accept="application/pdf,image/*"
-                            emptyHint="No contract amount entered yet."
-                          />
-                        </div>
                       )}
 
                       {/* Site Inspections — user-named columns, each a date + an
@@ -4713,6 +4708,9 @@ function SignatureRow({
   onRevert,
   reverting,
   staffById,
+  showAmount,
+  onSetAmount,
+  hideDate,
 }: {
   signature: DocumentSignRecord;
   canSign: boolean;
@@ -4721,6 +4719,10 @@ function SignatureRow({
   onRevert?: () => void;
   reverting?: boolean;
   staffById?: Record<string, string>;
+  /** Design Contract: key the agreed amount in on the sign row (no est-date). */
+  showAmount?: boolean;
+  onSetAmount?: (amount: number) => void;
+  hideDate?: boolean;
 }) {
   const sc = checkpointStatusConfig[signature.status];
   const isOpen =
@@ -4849,12 +4851,42 @@ function SignatureRow({
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {isOpen && onSetDate && (
+          {isOpen && onSetDate && !hideDate && (
             <StageDateControl
               value={signature.estimatedDate}
               canEdit={canSign}
               onSet={onSetDate}
             />
+          )}
+          {showAmount && (
+            <div
+              className="flex items-center gap-1 rounded-full px-2 py-1"
+              style={{
+                background: "var(--s-2)",
+                border: "1px solid var(--b-strong)",
+              }}
+            >
+              <span
+                className="text-[9px] font-label"
+                style={{ color: "var(--t-5)" }}
+              >
+                RM
+              </span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                defaultValue={signature.amount ?? ""}
+                disabled={!canSign || !onSetAmount}
+                onBlur={e => {
+                  const v = parseFloat(e.currentTarget.value);
+                  onSetAmount?.(Number.isFinite(v) && v >= 0 ? v : 0);
+                }}
+                placeholder="0"
+                className="text-[10px] w-20 bg-transparent text-right outline-none"
+                style={{ color: "var(--t-2)" }}
+              />
+            </div>
           )}
           {isCompleted && canSign && onRevert && (
             <CheckpointActionsMenu onRevert={onRevert} disabled={reverting} />
