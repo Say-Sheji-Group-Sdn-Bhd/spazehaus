@@ -3352,13 +3352,17 @@ function LifecycleTab({
                 const manualStatusStage =
                   stage.order > 1 && stage.id !== "defect-period";
                 const isLast = i === phaseStages.length - 1;
-                // Hide per-instalment records (shown in the Progressive Payment
-                // grid) and the neutralized "skipped" lump from the gate's row list.
-                const payments = stage.paymentGate
-                  ? paymentsByGate[stage.paymentGate]?.filter(
-                      p => p.instalment == null && p.status !== "skipped"
-                    )
-                  : undefined;
+                // Progressive Payment: the instalment grid IS the payment UI, so
+                // don't also show the single lump row (it looked like a duplicate).
+                // Other gates: hide per-instalment records + the neutralized lump.
+                const payments =
+                  stage.id === "progressive-pay"
+                    ? undefined
+                    : stage.paymentGate
+                      ? paymentsByGate[stage.paymentGate]?.filter(
+                          p => p.instalment == null && p.status !== "skipped"
+                        )
+                      : undefined;
                 const signature = stage.signatureKey
                   ? sigByKey[stage.signatureKey]
                   : undefined;
@@ -3798,11 +3802,9 @@ function LifecycleTab({
                             canManage={canCollect}
                             withSignoff
                             hideLabel
-                            maxColumns={1}
+                            singleSignoff
                             signoffPlaceholder="Client's name"
-                            addLabel="Add client sign-off"
                             accept="application/pdf,image/*"
-                            emptyHint="No client sign-off yet."
                           />
                         </div>
                       )}
@@ -3840,16 +3842,14 @@ function LifecycleTab({
                             projectId={projectId}
                             section="design-commission-contract"
                             defaultDateToday
-                            title="Design Commission Contract sign-off"
-                            description="Upload the signed design commission contract. Add a column per signatory with their sign-off and the signed copy."
+                            title="Design Commission Contract — client sign-off"
+                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed contract if you have it."
                             canManage={canCollect}
                             withSignoff
-                            maxColumns={4}
-                            labelPlaceholder="Signatory"
-                            addLabel="Add sign-off"
+                            hideLabel
+                            singleSignoff
                             signoffPlaceholder="Client's name"
                             accept="application/pdf,image/*"
-                            emptyHint="No commission sign-offs yet."
                           />
                         </div>
                       )}
@@ -3926,11 +3926,9 @@ function LifecycleTab({
                             canManage={canCollect}
                             withSignoff
                             hideLabel
-                            maxColumns={1}
+                            singleSignoff
                             signoffPlaceholder="Client's name"
-                            addLabel="Add client sign-off"
                             accept="application/pdf,image/*"
-                            emptyHint="No client sign-off yet."
                           />
                         </div>
                       )}
@@ -3969,8 +3967,8 @@ function LifecycleTab({
                             canManage={canCollect}
                             withSignoff
                             maxColumns={6}
-                            labelPlaceholder="Document (as-built / handover)"
-                            addLabel="Add document"
+                            labelPlaceholder="Drawing (as-built / handover)"
+                            addLabel="Add drawings"
                             accept="application/pdf,image/*"
                             emptyHint="No handover documents yet."
                           />
@@ -4183,7 +4181,7 @@ function LifecycleTab({
             style={{ background: "var(--s-2)", border: "1px dashed var(--b-strong)" }}
           >
             <span className="text-xs font-medium" style={{ color: "var(--t-2)" }}>
-              {splitProject.isPending ? "Splitting…" : "Split into Design + Renovation (Flow 2)"}
+              {splitProject.isPending ? "Splitting…" : "Split into Design + Renovation"}
             </span>
             <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
               for two-sided jobs
