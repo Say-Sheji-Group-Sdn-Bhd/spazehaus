@@ -218,7 +218,7 @@ function StageDateControl({
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="text-[9px] rounded-md px-1.5 py-0.5"
+        className="text-[9px] rounded-full px-2 py-1"
         style={{
           background: "var(--s-2)",
           border: "1px solid var(--b-strong)",
@@ -232,16 +232,17 @@ function StageDateControl({
       type="button"
       onClick={() => canEdit && setEditing(true)}
       disabled={saving || !canEdit}
-      className="text-[9px] font-label px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 shrink-0"
+      className="text-[9px] font-label px-2 py-1 rounded-full inline-flex items-center gap-1 shrink-0"
       style={{
         background: value ? "oklch(0.62 0.09 68 / 10%)" : "transparent",
         color: value ? "var(--acc-ink)" : "var(--t-5)",
         border: `1px dashed ${value ? "oklch(0.62 0.09 68 / 30%)" : "var(--b-strong)"}`,
+        letterSpacing: "0.04em",
         cursor: canEdit ? "pointer" : "default",
       }}
       title={canEdit ? pickLabel : undefined}
     >
-      <CalendarClock size={9} />
+      <CalendarClock size={10} />
       {value ? `${setPrefix} ${value}` : pickLabel}
     </button>
   );
