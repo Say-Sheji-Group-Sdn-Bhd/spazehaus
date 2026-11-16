@@ -3965,8 +3965,8 @@ function LifecycleTab({
                             canManage={canCollect}
                             withSignoff
                             maxColumns={6}
-                            labelPlaceholder="Document (as-built / handover)"
-                            addLabel="Add document"
+                            labelPlaceholder="Drawing (as-built / handover)"
+                            addLabel="Add drawings"
                             accept="application/pdf,image/*"
                             emptyHint="No handover documents yet."
                           />
