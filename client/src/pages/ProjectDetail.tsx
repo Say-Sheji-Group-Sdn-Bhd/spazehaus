@@ -3755,7 +3755,7 @@ function LifecycleTab({
                             section="reno-quotation"
                             defaultDateToday
                             title="Renovation Quotation revisions"
-                            description="Supports multiple revisions — add each revision (R1, R2…), set its date and attach the quotation file the client receives."
+                            description="Add each renovation revision, set its date and attach the quotation file the client receives."
                             canManage={canCollect}
                             maxColumns={10}
                             labelPlaceholder="Revision (e.g. R1, Revision 1)"
@@ -3818,7 +3818,7 @@ function LifecycleTab({
                             projectId={projectId}
                             section="progressive-payment-design"
                             title="Design Progressive Payment"
-                            description="Flow 2: the Design side can also be billed in instalments. Name each, set its estimated date and amount, and attach the invoice if issued."
+                            description="Design side instalments bills. Name each, set its estimated date and amount, and attach the invoice if issued."
                             canManage={canCollect}
                             withAmount
                             maxColumns={6}
@@ -3882,7 +3882,7 @@ function LifecycleTab({
                             section="3d-design"
                             defaultDateToday
                             title="3D Design submissions"
-                            description="Flow 2 merges 3D drawing, 3D meeting and revised 3D into one checkpoint. Add a column per submission (V1, Revision 1…); the stage's sign-off locks the final visual."
+                            description="3D drawing, 3D meeting and revised 3D into one checkpoint. Add a column for each submissions."
                             canManage={canCollect}
                             maxColumns={10}
                             labelPlaceholder="Submission (e.g. V1)"
@@ -3902,7 +3902,7 @@ function LifecycleTab({
                             section="2d-material-board"
                             defaultDateToday
                             title="2D Drawings & Material Board"
-                            description="Flow 2 merges material selection, 2D drawings and the shopping list into one checkpoint. Add a column per item; signing this off kicks off the Renovation side."
+                            description="Material selection, 2D drawings and the shopping list into one checkpoint. Add a column per item; signing this off kicks off the Renovation side."
                             canManage={canCollect}
                             maxColumns={12}
                             labelPlaceholder="Item (2D / material / shopping)"
@@ -3965,7 +3965,7 @@ function LifecycleTab({
                             section="handover-document"
                             defaultDateToday
                             title="Handover Document / As-Built"
-                            description="Flow 2: upload the as-built drawings + handover document, signed by the client. Issue the as-built early so the client acknowledges the wiring layout before handover."
+                            description="Upload the as built drawings + handover document, signed by the client. Issue the as-built early so the client acknowledges the wiring layout before handover."
                             canManage={canCollect}
                             withSignoff
                             maxColumns={6}
