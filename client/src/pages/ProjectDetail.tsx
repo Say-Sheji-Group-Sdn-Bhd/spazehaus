@@ -3842,16 +3842,14 @@ function LifecycleTab({
                             projectId={projectId}
                             section="design-commission-contract"
                             defaultDateToday
-                            title="Design Commission Contract sign-off"
-                            description="Upload the signed design commission contract. Add a column per signatory with their sign-off and the signed copy."
+                            title="Design Commission Contract — client sign-off"
+                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed contract if you have it."
                             canManage={canCollect}
                             withSignoff
-                            maxColumns={4}
-                            labelPlaceholder="Signatory"
-                            addLabel="Add sign-off"
+                            hideLabel
+                            singleSignoff
                             signoffPlaceholder="Client's name"
                             accept="application/pdf,image/*"
-                            emptyHint="No commission sign-offs yet."
                           />
                         </div>
                       )}
