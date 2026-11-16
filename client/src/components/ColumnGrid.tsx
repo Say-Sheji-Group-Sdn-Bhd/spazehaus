@@ -68,6 +68,7 @@ export default function ColumnGrid({
   signoffPlaceholder = "Signed by (client)",
   collectable = false,
   uploadLabel = "Upload file (optional)",
+  hideLabel = false,
   accept,
   emptyHint,
 }: {
@@ -89,6 +90,8 @@ export default function ColumnGrid({
   collectable?: boolean;
   /** Label for the file-upload button (e.g. "Upload invoice / receipt (optional)"). */
   uploadLabel?: string;
+  /** Hide the per-column name field (for a single fixed sign-off / date entry). */
+  hideLabel?: boolean;
   accept?: string;
   emptyHint?: string;
 }) {
@@ -210,6 +213,7 @@ export default function ColumnGrid({
               collectable={collectable}
               isNextDue={collectable && col.id === nextDueId}
               uploadLabel={uploadLabel}
+              hideLabel={hideLabel}
               accept={accept}
             />
           ))}
@@ -240,6 +244,7 @@ function ColumnCard({
   collectable,
   isNextDue,
   uploadLabel,
+  hideLabel,
   accept,
 }: {
   col: ProjectColumn;
@@ -254,6 +259,7 @@ function ColumnCard({
   collectable: boolean;
   isNextDue: boolean;
   uploadLabel: string;
+  hideLabel: boolean;
   accept?: string;
 }) {
   const updateColumn = useUpdateColumn();
@@ -451,7 +457,9 @@ function ColumnCard({
       >
         {/* Label (staff-named) + delete */}
         <div className="flex items-center gap-1.5">
-          {canManage ? (
+          {hideLabel ? (
+            <div className="flex-1" />
+          ) : canManage ? (
             <input
               type="text"
               defaultValue={col.label}
