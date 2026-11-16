@@ -1249,6 +1249,7 @@ export default function ProjectDetail() {
                 projectName={project.name}
                 budget={project.budget}
                 canManage={canEdit}
+                onOpenReports={() => setActiveTab("Reports")}
               />
             )}
 
@@ -2722,6 +2723,7 @@ function LifecycleTab({
   projectName,
   budget = 0,
   canManage = false,
+  onOpenReports,
 }: {
   projectId: string;
   clientName?: string;
@@ -2729,6 +2731,7 @@ function LifecycleTab({
   projectName?: string;
   budget?: number;
   canManage?: boolean;
+  onOpenReports?: () => void;
 }) {
   const { data: lc, isLoading } = useProjectLifecycle(projectId);
   const { data: project } = useProject(projectId);
@@ -2846,42 +2849,8 @@ function LifecycleTab({
           ),
       }
     );
-  const setWarrantyDate = (
-    which: "warranty6MonthDate" | "warranty12MonthDate",
-    iso: string
-  ) =>
-    updateProjectMeta.mutate(
-      { projectId, [which]: iso || null },
-      {
-        onError: e =>
-          toast.error(
-            `Couldn't save date: ${e instanceof Error ? e.message : "unknown error"}`
-          ),
-      }
-    );
-
-  // Flow 2 (Phase 5, note §6.3): auto-fill the 6- and 12-month warranty check-ins
-  // from the handover date (the handover document's signed date, else today), in
-  // ONE write. Staff can still override either date by hand.
-  const autoFillWarranty = () => {
-    const localISO = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const m = sigByKey["handover"]?.signedDate?.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    const base = m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : new Date();
-    const d6 = new Date(base);
-    d6.setMonth(d6.getMonth() + 6);
-    const d12 = new Date(base);
-    d12.setMonth(d12.getMonth() + 12);
-    updateProjectMeta.mutate(
-      { projectId, warranty6MonthDate: localISO(d6), warranty12MonthDate: localISO(d12) },
-      {
-        onError: e =>
-          toast.error(
-            `Couldn't save dates: ${e instanceof Error ? e.message : "unknown error"}`
-          ),
-      }
-    );
-  };
+  // (Warranty follow-up dates moved to a free-form ColumnGrid — 16 Nov; the fixed
+  //  6/12-month setters + handover auto-fill were removed.)
 
   // Phase 2 — set a milestone/checkpoint's estimated date. Routes by source:
   // milestones → project_stage_dates; payments → due_date; signatures →
@@ -3597,62 +3566,24 @@ function LifecycleTab({
                               </div>
                             )
                           )}
-                          {/* Flow 2 — Warranty follow-up check-ins: 6-month and
-                              12-month review dates (replaces the plain Defect
-                              Period with scheduled follow-ups). */}
+                          {/* Flow 2 — Warranty follow-up check-ins: free-form dates
+                              (client 16 Nov: add as many as needed, no fixed 6/12). */}
                           {stage.id === "defect-period" && workDelivered && (
-                            <>
-                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {(
-                                [
-                                  ["warranty6MonthDate", "6-month check-in"],
-                                  ["warranty12MonthDate", "12-month check-in"],
-                                ] as const
-                              ).map(([field, label]) => (
-                                <label
-                                  key={field}
-                                  className="flex flex-col gap-1 text-[10px] font-label"
-                                  style={{
-                                    color: "var(--t-5)",
-                                    letterSpacing: "0.03em",
-                                  }}
-                                >
-                                  {label.toUpperCase()}
-                                  <input
-                                    type="date"
-                                    value={project?.[field] ?? ""}
-                                    disabled={
-                                      !canCollect || updateProjectMeta.isPending
-                                    }
-                                    onChange={e =>
-                                      setWarrantyDate(field, e.target.value)
-                                    }
-                                    className="text-[11px] rounded-md px-2 py-1.5"
-                                    style={{
-                                      background: "var(--s-2)",
-                                      border: "1px solid var(--b-strong)",
-                                      color: "var(--t-2)",
-                                    }}
-                                  />
-                                </label>
-                              ))}
+                            <div className="mt-3">
+                              <ColumnGrid
+                                projectId={projectId}
+                                section="warranty-followup"
+                                defaultDateToday
+                                title="Warranty follow-up check-ins"
+                                description="Add each follow-up date — 6-month, 12-month, or any ad-hoc check-in, as many as you need. Attach a report if you have one."
+                                canManage={canCollect}
+                                maxColumns={12}
+                                labelPlaceholder="Check-in (e.g. 6-month)"
+                                addLabel="Add date"
+                                accept="application/pdf,image/*"
+                                emptyHint="No check-ins scheduled yet."
+                              />
                             </div>
-                            {canCollect && (
-                              <button
-                                type="button"
-                                onClick={autoFillWarranty}
-                                disabled={updateProjectMeta.isPending}
-                                className="mt-2 text-[10px] font-label px-2.5 py-1 rounded-md"
-                                style={{
-                                  background: "oklch(0.62 0.09 68 / 10%)",
-                                  border: "1px solid oklch(0.62 0.09 68 / 25%)",
-                                  color: "var(--acc-ink)",
-                                }}
-                              >
-                                Auto-fill from handover (+6 / +12 months)
-                              </button>
-                            )}
-                            </>
                           )}
                           {stage.id === "defect-period" &&
                             workDelivered &&
@@ -3835,47 +3766,49 @@ function LifecycleTab({
                         </div>
                       )}
 
-                      {/* Work Schedule — signed PDF, by BOTH the PM and the owner.
-                          One column per signatory captures each sign-off. */}
+                      {/* Site Report — jump to the Reports tab (weekly reports
+                          build automatically from site photos). */}
+                      {stage.id === "site-report" && onOpenReports && (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={onOpenReports}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-label"
+                            style={{
+                              background: "var(--acc)",
+                              color: "oklch(1 0 0)",
+                              letterSpacing: "0.03em",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <FileText size={14} /> Open site reports →
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Site Work Schedule — single CLIENT sign-off (no revisions). */}
                       {stage.id === "work-schedule" && (
                         <div className="mt-3">
                           <ColumnGrid
                             projectId={projectId}
                             section="work-schedule"
                             defaultDateToday
-                            title="Work Schedule sign-off"
-                            description="Upload the work-schedule PDF, signed by BOTH the Project Manager and the owner. Add a column per signatory with their sign-off and the signed copy."
+                            title="Site Work Schedule — client sign-off"
+                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed schedule if you have it."
                             canManage={canCollect}
                             withSignoff
-                            maxColumns={4}
-                            labelPlaceholder="Signatory (PM / Owner)"
-                            addLabel="Add sign-off"
+                            hideLabel
+                            maxColumns={1}
+                            signoffPlaceholder="Client's name"
+                            addLabel="Add client sign-off"
                             accept="application/pdf,image/*"
-                            emptyHint="No work-schedule sign-offs yet."
+                            emptyHint="No client sign-off yet."
                           />
                         </div>
                       )}
 
-                      {/* Contractor Briefing — sign-off sheet confirming contractors
-                          attended and understood scope + timeline. */}
-                      {stage.id === "contractor-brief" && (
-                        <div className="mt-3">
-                          <ColumnGrid
-                            projectId={projectId}
-                            section="contractor-brief"
-                            defaultDateToday
-                            title="Contractor Briefing sign-off"
-                            description="Attach the signed briefing sheet (with its date) confirming all contractors attended and understood the scope + timeline — so this isn't marked done before they were actually briefed."
-                            canManage={canCollect}
-                            withSignoff
-                            maxColumns={6}
-                            labelPlaceholder="Briefing / trade"
-                            addLabel="Add sign-off"
-                            accept="application/pdf,image/*"
-                            emptyHint="No briefing sign-offs yet."
-                          />
-                        </div>
-                      )}
+                      {/* Contractor Briefing — estimated date + status only
+                          (client 16 Nov: no sign-off sheet needed). */}
 
                       {/* Flow 2 · Design-side Progressive Payment — instalments on
                           the Design project (mirrors the build-side grid). */}
@@ -3980,23 +3913,24 @@ function LifecycleTab({
                         </div>
                       )}
 
-                      {/* Flow 2 · Renovation Commission Contract — commission sign-off. */}
+                      {/* Flow 2 · Renovation Commission Contract — single client
+                          sign-off (est. date + sign; no multi-column sign-offs). */}
                       {stage.id === "reno-commission-contract" && (
                         <div className="mt-3">
                           <ColumnGrid
                             projectId={projectId}
                             section="reno-commission-contract"
                             defaultDateToday
-                            title="Renovation Commission Contract sign-off"
-                            description="Upload the signed renovation commission contract. Add a column per signatory with their sign-off and the signed copy."
+                            title="Renovation Commission Contract — client sign-off"
+                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed contract if you have it."
                             canManage={canCollect}
                             withSignoff
-                            maxColumns={4}
-                            labelPlaceholder="Signatory"
-                            addLabel="Add sign-off"
+                            hideLabel
+                            maxColumns={1}
                             signoffPlaceholder="Client's name"
+                            addLabel="Add client sign-off"
                             accept="application/pdf,image/*"
-                            emptyHint="No commission sign-offs yet."
+                            emptyHint="No client sign-off yet."
                           />
                         </div>
                       )}
@@ -4020,24 +3954,8 @@ function LifecycleTab({
                         </div>
                       )}
 
-                      {/* Flow 2 · Project PO — confirm within 2 weeks; upload. */}
-                      {stage.id === "project-po" && (
-                        <div className="mt-3">
-                          <ColumnGrid
-                            projectId={projectId}
-                            section="project-po"
-                            defaultDateToday
-                            title="Project PO"
-                            description="Confirm the project PO within two weeks. Attach the PO document(s)."
-                            canManage={canCollect}
-                            maxColumns={4}
-                            labelPlaceholder="PO"
-                            addLabel="Add PO"
-                            accept="application/pdf,image/*"
-                            emptyHint="No PO uploaded yet."
-                          />
-                        </div>
-                      )}
+                      {/* Flow 2 · Project PO — estimated date + status only
+                          (client 16 Nov: no "Add PO" upload needed). */}
 
                       {/* Flow 2 · Handover Document / As-Built — client-signed. */}
                       {stage.id === "handover" && (
