@@ -3881,14 +3881,14 @@ function LifecycleTab({
                             projectId={projectId}
                             section="3d-design"
                             defaultDateToday
-                            title="3D Design submissions"
-                            description="Flow 2 merges 3D drawing, 3D meeting and revised 3D into one checkpoint. Add a column per submission (V1, Revision 1…); the stage's sign-off locks the final visual."
+                            title="3D Design revisions"
+                            description="Add each revision (R1, R2…), set its date and attach the file; the stage's sign-off locks the final visual."
                             canManage={canCollect}
                             maxColumns={10}
-                            labelPlaceholder="Submission (e.g. V1)"
-                            addLabel="Add submission"
+                            labelPlaceholder="Revision (e.g. R1, Revision 1)"
+                            addLabel="Add revision"
                             accept="application/pdf,image/*"
-                            emptyHint="No 3D submissions yet."
+                            emptyHint="No 3D revisions yet."
                           />
                         </div>
                       )}
