@@ -71,58 +71,52 @@ export type LifecycleStage = {
  * payment / signature checkpoints flip to completed.
  */
 export const LIFECYCLE_STAGES: LifecycleStage[] = [
-  // —— INQUIRY (Design project, ID26) ——
+  // —— PROPOSAL (Design project, ID26) ——
   { id: "new-inquiry",          order: 1,  label: "New Inquiry",                  type: "milestone", phase: "Proposal", serviceType: "Design" },
   { id: "inquiry-form",         order: 2,  label: "Fill In Inquiry Form",         type: "milestone", phase: "Proposal", serviceType: "Design" },
   { id: "showroom-meet",        order: 3,  label: "First Meet-Up",                type: "milestone", phase: "Proposal", serviceType: "Design" },
-
-  // —— PROPOSAL (cont.) — deposit + design proposal (client: these live in Proposal) ——
   { id: "proposal-deposit",     order: 4,  label: "Proposal Deposit Collected",   type: "payment",   phase: "Proposal", serviceType: "Design", paymentGate: 1, description: "Triggers design work" },
-  { id: "design-proposal",      order: 5,  label: "Design Proposal",              type: "milestone", phase: "Proposal", serviceType: "Design", description: "Supports multiple revisions" },
+  { id: "design-proposal",      order: 5,  label: "Design Proposal",              type: "milestone", phase: "Proposal", serviceType: "Design", description: "Supports multiple revisions, each with an amount" },
+  { id: "proposal-meeting",     order: 6,  label: "Design Proposal Meeting",      type: "milestone", phase: "Proposal", serviceType: "Design", description: "Revisions — date + remark note each" },
 
   // —— DESIGN ——
-  { id: "design-quotation",     order: 6,  label: "Design Quotation",             type: "milestone", phase: "Design", serviceType: "Design" },
-  { id: "proposal-meeting",     order: 7,  label: "Design Proposal Meeting",      type: "milestone", phase: "Design", serviceType: "Design", description: "Loop back to Revised Design Proposal if not accepted" },
-  { id: "design-contract",      order: 8,  label: "Design Contract Signed",       type: "contract-sign", phase: "Design", serviceType: "Design", signatureKey: "design-contract", paymentGate: 2, description: "Document sign + Payment ② · mints SD26 (Phase 4)" },
-  { id: "design-commission-contract", order: 9, label: "Design Commission Contract Signed", type: "milestone", phase: "Design", serviceType: "Design", description: "Commission sign-off" },
-  { id: "design-progressive-pay", order: 10, label: "Progressive Payment",       type: "milestone", phase: "Design", serviceType: "Design", description: "Design side instalments (Mark as paid)" },
-  { id: "storage-handbook",     order: 11, label: "Storage Handbook From Client", type: "milestone", phase: "Design", serviceType: "Design", description: "Optional upload" },
+  { id: "design-contract",      order: 7,  label: "Design Contract Signed",       type: "contract-sign", phase: "Design", serviceType: "Design", signatureKey: "design-contract", description: "Sign + amount · mints SD26" },
+  { id: "design-commission-contract", order: 8, label: "Design Commission Contract Signed", type: "milestone", phase: "Design", serviceType: "Design", description: "Commission sign-off" },
+  { id: "design-progressive-pay", order: 9, label: "Progressive Payment",        type: "milestone", phase: "Design", serviceType: "Design", description: "Design side instalments (Mark as paid)" },
+  { id: "storage-handbook",     order: 10, label: "Storage Handbook From Client", type: "milestone", phase: "Design", serviceType: "Design", description: "Optional upload" },
+  { id: "revised-3d",           order: 11, label: "3D Design — Signed",           type: "drawing-sign", phase: "Design", serviceType: "Design", signatureKey: "revised-3d", description: "Merged 3D drawing + meeting + revised 3D; multiple submissions" },
 
   // —— PRE BUILD (design-side deliverables + design closeout) ——
-  { id: "revised-3d",           order: 12, label: "3D Design — Signed",           type: "drawing-sign", phase: "Pre build", serviceType: "Design", signatureKey: "revised-3d", description: "Merged 3D drawing + meeting + revised 3D; multiple submissions" },
-  { id: "reno-quotation",       order: 13, label: "Renovation Quotation",         type: "milestone", phase: "Pre build", serviceType: "Design", description: "Supports multiple revisions" },
-  { id: "shopping-list",        order: 14, label: "Shopping List",                type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side shopping list" },
-  { id: "2d-shopping",          order: 15, label: "2D Drawings & Material Board — Signed", type: "drawing-sign", phase: "Pre build", serviceType: "Design", signatureKey: "2d-shopping", description: "Merged material selection + 2D; sign-off kicks off Renovation" },
-  { id: "design-site-marking",  order: 16, label: "Site Marking",                 type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side site marking" },
-  { id: "design-contractor-brief", order: 17, label: "Contractor Briefing",       type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side contractor briefing" },
-  { id: "design-completion",    order: 18, label: "Design Project Completion",    type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side completion" },
-  { id: "design-commission-release", order: 19, label: "Design Project Commission Release", type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side commission release" },
+  { id: "reno-quotation",       order: 12, label: "Renovation Quotation",         type: "milestone", phase: "Pre build", serviceType: "Design", description: "Supports multiple revisions" },
+  { id: "shopping-list",        order: 13, label: "Shopping List",                type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side shopping list" },
+  { id: "2d-shopping",          order: 14, label: "2D Drawings & Material Board — Signed", type: "drawing-sign", phase: "Pre build", serviceType: "Design", signatureKey: "2d-shopping", description: "Merged material selection + 2D; sign-off kicks off Renovation" },
+  { id: "design-site-marking",  order: 15, label: "Site Marking",                 type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side site marking" },
+  { id: "design-contractor-brief", order: 16, label: "Contractor Briefing",       type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side contractor briefing" },
+  { id: "design-completion",    order: 17, label: "Design Project Completion",    type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side completion" },
+  { id: "design-commission-release", order: 18, label: "Design Project Commission Release", type: "milestone", phase: "Pre build", serviceType: "Design", description: "Design side commission release" },
 
-  // —— PRE BUILD (renovation-side kickoff) ——
-  { id: "reno-contract",        order: 20, label: "Renovation Contract Signed",   type: "contract-sign", phase: "Pre build", serviceType: "Renovation", signatureKey: "renovation-contract", description: "Mints SR26 (Phase 4)" },
-  { id: "reno-commission-contract", order: 21, label: "Renovation Commission Contract Signed", type: "milestone", phase: "Pre build", serviceType: "Renovation" },
-  { id: "reno-deposit",         order: 22, label: "Renovation Deposit Collected", type: "payment",   phase: "Pre build", serviceType: "Renovation", paymentGate: 3 },
-  { id: "work-schedule",        order: 23, label: "Site Work Schedule",           type: "milestone", phase: "Pre build", serviceType: "Renovation" },
-
-  // —— RENOVATION (renovation execution) ——
-  { id: "cidb-authority",       order: 24, label: "CIDB / Authority / Insurance", type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "One submission step" },
-  { id: "kick-off",             order: 25, label: "Site Marking",                 type: "milestone", phase: "Renovation", serviceType: "Renovation" },
-  { id: "contractor-brief",     order: 26, label: "Contractor Briefing",          type: "milestone", phase: "Renovation", serviceType: "Renovation" },
-  { id: "project-po",           order: 27, label: "Project PO",                   type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "Confirm within 2 weeks" },
-  { id: "site-inspection",      order: 28, label: "Site Inspection",              type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "Multiple inspections" },
-  { id: "site-report",          order: 29, label: "Site Report",                  type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "To client before each payment" },
-  { id: "progressive-pay",      order: 30, label: "Progressive Payment",          type: "payment",   phase: "Renovation", serviceType: "Renovation", paymentGate: 4, description: "Repeating; staff-entered amounts" },
+  // —— RENOVATION (renovation project, SR26 — the reno project starts here; no Pre-build) ——
+  { id: "reno-contract",        order: 19, label: "Renovation Contract Signed",   type: "contract-sign", phase: "Renovation", serviceType: "Renovation", signatureKey: "renovation-contract", description: "Mints SR26" },
+  { id: "reno-commission-contract", order: 20, label: "Renovation Commission Contract Signed", type: "milestone", phase: "Renovation", serviceType: "Renovation" },
+  { id: "work-schedule",        order: 21, label: "Site Work Schedule",           type: "milestone", phase: "Renovation", serviceType: "Renovation" },
+  { id: "cidb-authority",       order: 22, label: "CIDB / Authority / Insurance", type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "One submission step" },
+  { id: "kick-off",             order: 23, label: "Site Marking",                 type: "milestone", phase: "Renovation", serviceType: "Renovation" },
+  { id: "contractor-brief",     order: 24, label: "Contractor Briefing Meeting",  type: "milestone", phase: "Renovation", serviceType: "Renovation" },
+  { id: "project-po",           order: 25, label: "Project PO",                   type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "Confirm within 2 weeks" },
+  { id: "site-inspection",      order: 26, label: "Site Inspection",              type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "Multiple inspections" },
+  { id: "site-report",          order: 27, label: "Site Report",                  type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "To client before each payment" },
+  { id: "progressive-pay",      order: 28, label: "Progressive Payment",          type: "payment",   phase: "Renovation", serviceType: "Renovation", paymentGate: 4, description: "Repeating; staff-entered amounts" },
 
   // —— HANDOVER ——
-  { id: "site-completed",       order: 31, label: "Client Site Inspection",       type: "milestone", phase: "Handover", serviceType: "Renovation" },
-  { id: "furniture-delivery",   order: 32, label: "Supplier Delivery & Installation", type: "milestone", phase: "Handover", serviceType: "Renovation" },
-  { id: "handover",             order: 33, label: "Handover Document / As-Built Drawings — Signed", type: "contract-sign", phase: "Handover", serviceType: "Renovation", signatureKey: "handover", description: "Client-signed; issue as-built early" },
-  { id: "handover-meeting",     order: 34, label: "Handover Meeting",             type: "milestone", phase: "Handover", serviceType: "Renovation" },
-  { id: "final-payment",        order: 35, label: "Final Payment",                type: "payment",   phase: "Handover", serviceType: "Renovation", paymentGate: 5 },
-  { id: "project-statement-review", order: 36, label: "Project Statement Review", type: "milestone", phase: "Handover", serviceType: "Renovation" },
-  { id: "completion",           order: 37, label: "Renovation Project Completion", type: "milestone", phase: "Handover", serviceType: "Renovation" },
-  { id: "reno-commission-release", order: 38, label: "Renovation Project Commission Release", type: "milestone", phase: "Handover", serviceType: "Renovation", description: "Commission released to the renovation team" },
-  { id: "defect-period",        order: 39, label: "Warranty Follow-Up",           type: "milestone", phase: "Handover", serviceType: "Renovation", description: "6-month & 12-month check-ins (12-month liability)" },
+  { id: "site-completed",       order: 29, label: "Client Site Inspection",       type: "milestone", phase: "Handover", serviceType: "Renovation" },
+  { id: "furniture-delivery",   order: 30, label: "Supplier Delivery & Installation", type: "milestone", phase: "Handover", serviceType: "Renovation" },
+  { id: "handover",             order: 31, label: "Handover Document / As-Built Drawings — Signed", type: "contract-sign", phase: "Handover", serviceType: "Renovation", signatureKey: "handover", description: "Client-signed; issue as-built early" },
+  { id: "handover-meeting",     order: 32, label: "Handover Meeting",             type: "milestone", phase: "Handover", serviceType: "Renovation" },
+  { id: "final-payment",        order: 33, label: "Final Payment",                type: "payment",   phase: "Handover", serviceType: "Renovation", paymentGate: 5 },
+  { id: "project-statement-review", order: 34, label: "Project Statement Review", type: "milestone", phase: "Handover", serviceType: "Renovation" },
+  { id: "completion",           order: 35, label: "Renovation Project Completion", type: "milestone", phase: "Handover", serviceType: "Renovation" },
+  { id: "reno-commission-release", order: 36, label: "Renovation Project Commission Release", type: "milestone", phase: "Handover", serviceType: "Renovation", description: "Commission released to the renovation team" },
+  { id: "defect-period",        order: 37, label: "Warranty Follow-Up",           type: "milestone", phase: "Handover", serviceType: "Renovation", description: "Free-form follow-up dates" },
 ];
 
 // —————————————————————————————————————————————————————————————

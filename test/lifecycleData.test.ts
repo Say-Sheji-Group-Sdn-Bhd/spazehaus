@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  LIFECYCLE_STAGES,
   stageOrder,
   daysFromToday,
   bucketDate,
@@ -19,16 +20,34 @@ const TODAY = new Date(2026, 5, 8);
 describe("stageOrder", () => {
   it("returns the canonical order for a known stage", () => {
     expect(stageOrder("new-inquiry")).toBe(1);
-    expect(stageOrder("design-contract")).toBe(8);   // Flow 2 Phase 3: design-prop-signed removed
-    expect(stageOrder("design-progressive-pay")).toBe(10); // Flow 2 (16 Nov): own Design stage
-    expect(stageOrder("shopping-list")).toBe(14);     // Flow 2 (16 Nov): new design-side stage
-    expect(stageOrder("design-commission-release")).toBe(19); // Flow 2 (16 Nov): design-side
-    expect(stageOrder("reno-commission-release")).toBe(38); // shifted by the new design stages
-    expect(stageOrder("defect-period")).toBe(39);     // last stage
+    expect(stageOrder("design-contract")).toBe(7);   // Phase 1 (16 Nov): design-quotation removed
+    expect(stageOrder("design-progressive-pay")).toBe(9); // own Design stage
+    expect(stageOrder("shopping-list")).toBe(13);     // Pre-build design-side
+    expect(stageOrder("design-commission-release")).toBe(18); // design-side closeout
+    expect(stageOrder("reno-commission-release")).toBe(36); // Renovation project, Handover
+    expect(stageOrder("defect-period")).toBe(37);     // last stage (37 total)
   });
   it("returns 0 for an unknown stage", () => {
     expect(stageOrder("nope")).toBe(0);
     expect(stageById("nope")).toBeUndefined();
+  });
+});
+
+describe("catalogue (Phase 1, 16 Nov) — lockstep guard", () => {
+  it("has exactly 37 stages with the two removed stages gone", () => {
+    expect(LIFECYCLE_STAGES).toHaveLength(37);
+    expect(stageById("design-quotation")).toBeUndefined();
+    expect(stageById("reno-deposit")).toBeUndefined();
+  });
+  it("has contiguous 1..37 order and no duplicate order/id", () => {
+    const orders = LIFECYCLE_STAGES.map((s) => s.order).sort((a, b) => a - b);
+    expect(orders).toEqual(Array.from({ length: 37 }, (_, i) => i + 1));
+    expect(new Set(LIFECYCLE_STAGES.map((s) => s.id)).size).toBe(37);
+  });
+  it("design-contract carries a signature but no payment gate", () => {
+    const dc = stageById("design-contract")!;
+    expect(dc.signatureKey).toBe("design-contract");
+    expect(dc.paymentGate).toBeUndefined();
   });
 });
 
