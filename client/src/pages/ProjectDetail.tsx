@@ -3839,7 +3839,7 @@ function LifecycleTab({
                             section="work-schedule"
                             defaultDateToday
                             title="Site Work Schedule — client sign-off"
-                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed schedule if you have it."
+                            description="Capture the client's sign-off (name + signed date); attach the signed schedule if you have it."
                             canManage={canCollect}
                             withSignoff
                             hideLabel
@@ -3884,7 +3884,7 @@ function LifecycleTab({
                             section="design-commission-contract"
                             defaultDateToday
                             title="Design Commission Contract — client sign-off"
-                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed contract if you have it."
+                            description="Capture the client's sign-off (name + signed date); attach the signed contract if you have it."
                             canManage={canCollect}
                             withSignoff
                             hideLabel
@@ -3963,7 +3963,7 @@ function LifecycleTab({
                             section="reno-commission-contract"
                             defaultDateToday
                             title="Renovation Commission Contract — client sign-off"
-                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed contract if you have it."
+                            description="Capture the client's sign-off (name + signed date); attach the signed contract if you have it."
                             canManage={canCollect}
                             withSignoff
                             hideLabel

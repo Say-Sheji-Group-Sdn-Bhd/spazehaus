@@ -233,6 +233,7 @@ export default function ColumnGrid({
               isNextDue={collectable && col.id === nextDueId}
               uploadLabel={uploadLabel}
               hideLabel={hideLabel}
+              hideDate={singleSignoff}
               accept={accept}
             />
           ))}
@@ -264,6 +265,7 @@ function ColumnCard({
   isNextDue,
   uploadLabel,
   hideLabel,
+  hideDate,
   accept,
 }: {
   col: ProjectColumn;
@@ -279,6 +281,7 @@ function ColumnCard({
   isNextDue: boolean;
   uploadLabel: string;
   hideLabel: boolean;
+  hideDate: boolean;
   accept?: string;
 }) {
   const updateColumn = useUpdateColumn();
@@ -551,25 +554,28 @@ function ColumnCard({
             ))}
         </div>
 
-        {/* Date */}
-        <label
-          className="flex items-center gap-1.5 text-[11px]"
-          style={{ color: "var(--t-5)" }}
-        >
-          <CalendarClock size={12} />
-          <input
-            type="date"
-            defaultValue={col.col_date ?? ""}
-            disabled={lockEdits}
-            onBlur={e => saveDate(e.target.value)}
-            className="flex-1 text-[11px] rounded-md px-1.5 py-1"
-            style={{
-              background: "var(--s-2)",
-              border: "1px solid var(--b-strong)",
-              color: "var(--t-2)",
-            }}
-          />
-        </label>
+        {/* Date — hidden for single sign-off docs, where the est-date pill
+            (planned) + signed-date (actual) already cover the meaningful dates. */}
+        {!hideDate && (
+          <label
+            className="flex items-center gap-1.5 text-[11px]"
+            style={{ color: "var(--t-5)" }}
+          >
+            <CalendarClock size={12} />
+            <input
+              type="date"
+              defaultValue={col.col_date ?? ""}
+              disabled={lockEdits}
+              onBlur={e => saveDate(e.target.value)}
+              className="flex-1 text-[11px] rounded-md px-1.5 py-1"
+              style={{
+                background: "var(--s-2)",
+                border: "1px solid var(--b-strong)",
+                color: "var(--t-2)",
+              }}
+            />
+          </label>
+        )}
 
         {/* Amount (progressive payment only) */}
         {withAmount && (
