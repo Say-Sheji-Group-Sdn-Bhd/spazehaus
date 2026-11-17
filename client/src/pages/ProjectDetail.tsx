@@ -3882,15 +3882,12 @@ function LifecycleTab({
                           <ColumnGrid
                             projectId={projectId}
                             section="design-commission-contract"
-                            defaultDateToday
-                            title="Design Commission Contract — client sign-off"
-                            description="Capture the client's sign-off (name + signed date); attach the signed contract if you have it."
+                            title="Design Commission Contract"
+                            description="Set the estimated date in the header, then SIGN once the commission contract is signed."
                             canManage={canCollect}
-                            withSignoff
                             hideLabel
                             singleSignoff
-                            signoffPlaceholder="Client's name"
-                            accept="application/pdf,image/*"
+                            signOnly
                           />
                         </div>
                       )}
@@ -3961,15 +3958,12 @@ function LifecycleTab({
                           <ColumnGrid
                             projectId={projectId}
                             section="reno-commission-contract"
-                            defaultDateToday
-                            title="Renovation Commission Contract — client sign-off"
-                            description="Capture the client's sign-off (name + signed date); attach the signed contract if you have it."
+                            title="Renovation Commission Contract"
+                            description="Set the estimated date in the header, then SIGN once the commission contract is signed."
                             canManage={canCollect}
-                            withSignoff
                             hideLabel
                             singleSignoff
-                            signoffPlaceholder="Client's name"
-                            accept="application/pdf,image/*"
+                            signOnly
                           />
                         </div>
                       )}

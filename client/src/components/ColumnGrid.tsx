@@ -70,6 +70,7 @@ export default function ColumnGrid({
   uploadLabel = "Upload file (optional)",
   hideLabel = false,
   singleSignoff = false,
+  signOnly = false,
   accept,
   emptyHint,
 }: {
@@ -95,6 +96,9 @@ export default function ColumnGrid({
   hideLabel?: boolean;
   /** Exactly ONE fixed sign-off entry: no "Add" button, no extra columns, no delete. */
   singleSignoff?: boolean;
+  /** Stripped sign-off: no upload box, no client name/date fields — just a SIGN
+      button that stamps the signed date (est. date lives in the stage header). */
+  signOnly?: boolean;
   accept?: string;
   emptyHint?: string;
 }) {
@@ -234,6 +238,7 @@ export default function ColumnGrid({
               uploadLabel={uploadLabel}
               hideLabel={hideLabel}
               hideDate={singleSignoff}
+              signOnly={signOnly}
               accept={accept}
             />
           ))}
@@ -266,6 +271,7 @@ function ColumnCard({
   uploadLabel,
   hideLabel,
   hideDate,
+  signOnly,
   accept,
 }: {
   col: ProjectColumn;
@@ -282,6 +288,7 @@ function ColumnCard({
   uploadLabel: string;
   hideLabel: boolean;
   hideDate: boolean;
+  signOnly: boolean;
   accept?: string;
 }) {
   const updateColumn = useUpdateColumn();
@@ -699,7 +706,9 @@ function ColumnCard({
             )
           ) : null)}
 
-        {/* File */}
+        {/* File — hidden in sign-only mode (commission contracts: just a SIGN). */}
+        {!signOnly && (
+          <>
         <input
           ref={fileRef}
           type="file"
@@ -805,9 +814,67 @@ function ColumnCard({
             No file
           </p>
         )}
+          </>
+        )}
+
+        {/* Sign-only: a single SIGN button that stamps the signed date (no upload,
+            no client name/date sheet). Est. date lives in the stage header chip. */}
+        {signOnly &&
+          (col.signed_date ? (
+            <div
+              className="rounded-md px-2 py-1.5 flex items-center gap-2"
+              style={{ background: "var(--s-2)", border: "1px solid var(--b-1)" }}
+            >
+              <BadgeCheck size={13} style={{ color: "var(--acc-ink)" }} />
+              <span className="text-[11px] flex-1" style={{ color: "var(--t-2)" }}>
+                Signed · {new Date(col.signed_date).toLocaleDateString("en-GB")}
+              </span>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => saveSignedDate("")}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1 text-[10px] font-label px-1.5 py-1 rounded-md"
+                  style={{
+                    color: "var(--t-5)",
+                    border: "1px solid var(--b-strong)",
+                    cursor: busy ? "default" : "pointer",
+                  }}
+                >
+                  <RotateCcw size={11} /> Undo
+                </button>
+              )}
+            </div>
+          ) : canManage ? (
+            <button
+              type="button"
+              onClick={() =>
+                saveSignedDate(new Date().toISOString().slice(0, 10))
+              }
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-[12px] font-label"
+              style={{
+                background: "var(--acc-ink)",
+                color: "var(--acc-contrast, #fff)",
+                cursor: busy ? "default" : "pointer",
+                letterSpacing: "0.03em",
+              }}
+            >
+              {busy ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <PenSquare size={13} />
+              )}
+              SIGN
+            </button>
+          ) : (
+            <p className="text-[11px] italic" style={{ color: "var(--t-6)" }}>
+              Awaiting client signature
+            </p>
+          ))}
 
         {/* Client sign-off (Variation Order): who signed + when, before work proceeds. */}
-        {withSignoff && (
+        {withSignoff && !signOnly && (
           <div
             className="rounded-md px-2 py-2 flex flex-col gap-1.5"
             style={{ background: "var(--s-2)", border: "1px solid var(--b-1)" }}
