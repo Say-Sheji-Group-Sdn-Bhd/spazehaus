@@ -3680,8 +3680,14 @@ function LifecycleTab({
                           canSign={canSign}
                           staffById={staffById}
                           onSetDate={d => setSignatureDate(signature.id, d)}
-                          showAmount={signature.key === "design-contract"}
-                          hideDate={signature.key === "design-contract"}
+                          showAmount={
+                            signature.key === "design-contract" ||
+                            signature.key === "renovation-contract"
+                          }
+                          hideDate={
+                            signature.key === "design-contract" ||
+                            signature.key === "renovation-contract"
+                          }
                           onSetAmount={amt =>
                             setSignatureAmount(signature.id, amt)
                           }
