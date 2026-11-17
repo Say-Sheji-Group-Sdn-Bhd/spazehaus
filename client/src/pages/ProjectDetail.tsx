@@ -3829,7 +3829,7 @@ function LifecycleTab({
                               cursor: "pointer",
                             }}
                           >
-                            <FileText size={16} /> Open site reports &amp; add update →
+                            <FileText size={16} /> Open site reports →
                           </button>
                           <p className="text-[10px] mt-1.5" style={{ color: "var(--t-5)" }}>
                             Weekly reports build automatically from site photos; open the Reports tab to add or update them.
