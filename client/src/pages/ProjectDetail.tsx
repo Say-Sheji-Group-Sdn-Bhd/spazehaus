@@ -4089,10 +4089,9 @@ function LifecycleTab({
             section="variation-order"
             defaultDateToday
             title="Variation Orders"
-            description="One column per VO: describe the change, set the date, attach the VO quotation/invoice, and record the client's sign-off before work proceeds."
+            description="One column per VO: describe the change, set the date, and attach the VO quotation/invoice."
             canManage={canCollect}
             maxColumns={10}
-            withSignoff
             labelPlaceholder="Describe the VO (e.g. 2 extra plug points)"
             addLabel="Add VO"
             accept="application/pdf,image/*"
