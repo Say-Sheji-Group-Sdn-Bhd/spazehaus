@@ -1822,6 +1822,41 @@ export type UpdateSignatureArgs = {
   amount?: number | null;             // agreed amount (Design Contract)
 };
 
+/**
+ * Ensure a signature_record exists for (project, key) — used to lazily promote
+ * stages that became true signatures after seeding (Design/Renovation Commission
+ * Contract, 17 Nov). Insert-if-missing via the (project_id, signature_key) unique
+ * constraint; never overwrites an existing (possibly signed) row. Ops-tier only
+ * (RLS `signatures_write_ops`).
+ */
+export function useEnsureSignature() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      projectId: string;
+      signatureKey: SignatureKey;
+      label: string;
+      group: "contract" | "drawing";
+    }): Promise<void> => {
+      const { error } = await supabase
+        .from("signature_records")
+        .upsert(
+          {
+            project_id: args.projectId,
+            signature_key: args.signatureKey,
+            label: args.label,
+            group_name: args.group,
+            status: "pending",
+          },
+          { onConflict: "project_id,signature_key", ignoreDuplicates: true }
+        );
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) =>
+      qc.invalidateQueries({ queryKey: qk.projectLifecycle(args.projectId) }),
+  });
+}
+
 export function useUpdateSignature() {
   const qc = useQueryClient();
 

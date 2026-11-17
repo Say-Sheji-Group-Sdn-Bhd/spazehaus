@@ -104,6 +104,7 @@ import {
   useProjectColumns,
   useUpdatePayment,
   useUpdateSignature,
+  useEnsureSignature,
   useRevertPayment,
   useRevertSignature,
   type RevertResult,
@@ -2797,12 +2798,38 @@ function LifecycleTab({
     !!project && project.flowVersion === 2 && project.serviceType === "Design" && !project.siblingProjectId;
   const updatePayment = useUpdatePayment();
   const updateSignature = useUpdateSignature();
+  const ensureSignature = useEnsureSignature();
   const revertPayment = useRevertPayment();
   const revertSignature = useRevertSignature();
   const { staff: me } = useAuth();
   // Phase 5 — OPS tier OR a member of this project's team may collect/sign/edit.
   const canCollect = canEditPayments(me?.role) || canManage;
   const canSign = canEditSignatures(me?.role) || canManage;
+
+  // Lazily promote the two Commission Contract stages to true signatures
+  // (17 Nov): older projects were seeded before these became signature_records,
+  // so create the missing row (status pending) the first time an ops user opens
+  // the project. Insert-if-missing — never touches an already-signed row.
+  useEffect(() => {
+    if (!project || !lc || !canSign || ensureSignature.isPending) return;
+    const existing = new Set(lc.signatures.map(s => s.key));
+    const sideOk = (serviceType: "Design" | "Renovation") =>
+      project.flowVersion !== 2 || project.serviceType === serviceType;
+    const wanted = [
+      { key: "design-commission-contract" as const, label: "Design Commission Contract", serviceType: "Design" as const },
+      { key: "reno-commission-contract" as const, label: "Renovation Commission Contract", serviceType: "Renovation" as const },
+    ].filter(w => sideOk(w.serviceType) && !existing.has(w.key));
+    for (const w of wanted) {
+      ensureSignature.mutate({
+        projectId: project.id,
+        signatureKey: w.key,
+        label: w.label,
+        group: "contract",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, project?.flowVersion, project?.serviceType, lc?.signatures, canSign]);
+
   // Resolve audit-trail staff ids → names for the checkpoint rows (Phase 1).
   const staffById: Record<string, string> = {};
   const staffByAvatar: Record<string, string> = {};
@@ -3872,21 +3899,8 @@ function LifecycleTab({
                         </div>
                       )}
 
-                      {/* Flow 2 · Design Commission Contract — commission sign-off. */}
-                      {stage.id === "design-commission-contract" && (
-                        <div className="mt-3">
-                          <ColumnGrid
-                            projectId={projectId}
-                            section="design-commission-contract"
-                            title="Design Commission Contract"
-                            description="Set the estimated date in the header, then SIGN once the commission contract is signed."
-                            canManage={canCollect}
-                            hideLabel
-                            singleSignoff
-                            signOnly
-                          />
-                        </div>
-                      )}
+                      {/* Design Commission Contract is a true signature (17 Nov) —
+                          renders via the shared SignatureRow above, like the contracts. */}
 
                       {/* Flow 2 · Storage Handbook from client — optional upload. */}
                       {stage.id === "storage-handbook" && (
@@ -3947,22 +3961,8 @@ function LifecycleTab({
                         </div>
                       )}
 
-                      {/* Flow 2 · Renovation Commission Contract — single client
-                          sign-off (est. date + sign; no multi-column sign-offs). */}
-                      {stage.id === "reno-commission-contract" && (
-                        <div className="mt-3">
-                          <ColumnGrid
-                            projectId={projectId}
-                            section="reno-commission-contract"
-                            title="Renovation Commission Contract"
-                            description="Set the estimated date in the header, then SIGN once the commission contract is signed."
-                            canManage={canCollect}
-                            hideLabel
-                            singleSignoff
-                            signOnly
-                          />
-                        </div>
-                      )}
+                      {/* Renovation Commission Contract is a true signature (17 Nov) —
+                          renders via the shared SignatureRow above, like the contracts. */}
 
                       {/* Flow 2 · CIDB / Authority / Insurance — submissions upload. */}
                       {stage.id === "cidb-authority" && (

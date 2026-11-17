@@ -40,7 +40,9 @@ export type PaymentGate = 1 | 2 | 3 | 4 | 5;
 
 export type SignatureKey =
   | "design-contract"
+  | "design-commission-contract"
   | "renovation-contract"
+  | "reno-commission-contract"
   | "handover"
   | "revised-3d"
   | "material-selection"
@@ -81,7 +83,7 @@ export const LIFECYCLE_STAGES: LifecycleStage[] = [
 
   // —— DESIGN ——
   { id: "design-contract",      order: 7,  label: "Design Contract Signed",       type: "contract-sign", phase: "Design", serviceType: "Design", signatureKey: "design-contract", description: "Sign + amount · mints SD26" },
-  { id: "design-commission-contract", order: 8, label: "Design Commission Contract Signed", type: "milestone", phase: "Design", serviceType: "Design", description: "Commission sign-off" },
+  { id: "design-commission-contract", order: 8, label: "Design Commission Contract Signed", type: "contract-sign", phase: "Design", serviceType: "Design", signatureKey: "design-commission-contract", description: "Commission sign-off" },
   { id: "design-progressive-pay", order: 9, label: "Progressive Payment",        type: "milestone", phase: "Design", serviceType: "Design", description: "Design side instalments (Mark as paid)" },
   { id: "storage-handbook",     order: 10, label: "Storage Handbook From Client", type: "milestone", phase: "Design", serviceType: "Design", description: "Optional upload" },
   { id: "revised-3d",           order: 11, label: "3D Design — Signed",           type: "drawing-sign", phase: "Design", serviceType: "Design", signatureKey: "revised-3d", description: "Merged 3D drawing + meeting + revised 3D; multiple submissions" },
@@ -97,7 +99,7 @@ export const LIFECYCLE_STAGES: LifecycleStage[] = [
 
   // —— RENOVATION (renovation project, SR26 — the reno project starts here; no Pre-build) ——
   { id: "reno-contract",        order: 19, label: "Renovation Contract Signed",   type: "contract-sign", phase: "Renovation", serviceType: "Renovation", signatureKey: "renovation-contract", description: "Mints SR26" },
-  { id: "reno-commission-contract", order: 20, label: "Renovation Commission Contract Signed", type: "milestone", phase: "Renovation", serviceType: "Renovation" },
+  { id: "reno-commission-contract", order: 20, label: "Renovation Commission Contract Signed", type: "contract-sign", phase: "Renovation", serviceType: "Renovation", signatureKey: "reno-commission-contract" },
   { id: "work-schedule",        order: 21, label: "Site Work Schedule",           type: "milestone", phase: "Renovation", serviceType: "Renovation" },
   { id: "cidb-authority",       order: 22, label: "CIDB / Authority / Insurance", type: "milestone", phase: "Renovation", serviceType: "Renovation", description: "One submission step" },
   { id: "kick-off",             order: 23, label: "Site Marking",                 type: "milestone", phase: "Renovation", serviceType: "Renovation" },
