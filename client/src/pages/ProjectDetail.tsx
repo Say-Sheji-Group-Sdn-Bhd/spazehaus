@@ -3569,8 +3569,9 @@ function LifecycleTab({
                             </div>
                           ) : null /* milestone est-date now renders beside the Status pill (G1, 16 Nov) */}
                           {/* Flow 2 — Warranty follow-up: three fixed check-in dates
-                              (client 17 Nov: Start Date / 6 Months / 12 Months). */}
-                          {stage.id === "defect-period" && workDelivered && (
+                              (client 17 Nov: Start Date / 6 Months / 12 Months).
+                              Shown on the stage directly, not gated on workDelivered. */}
+                          {stage.id === "defect-period" && (
                             <div className="mt-3">
                               <ColumnGrid
                                 projectId={projectId}
