@@ -218,7 +218,7 @@ function StageDateControl({
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="text-[9px] rounded-md px-1.5 py-0.5"
+        className="text-[9px] rounded-full px-2 py-1"
         style={{
           background: "var(--s-2)",
           border: "1px solid var(--b-strong)",
@@ -232,16 +232,17 @@ function StageDateControl({
       type="button"
       onClick={() => canEdit && setEditing(true)}
       disabled={saving || !canEdit}
-      className="text-[9px] font-label px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 shrink-0"
+      className="text-[9px] font-label px-2 py-1 rounded-full inline-flex items-center gap-1 shrink-0"
       style={{
         background: value ? "oklch(0.62 0.09 68 / 10%)" : "transparent",
         color: value ? "var(--acc-ink)" : "var(--t-5)",
         border: `1px dashed ${value ? "oklch(0.62 0.09 68 / 30%)" : "var(--b-strong)"}`,
+        letterSpacing: "0.04em",
         cursor: canEdit ? "pointer" : "default",
       }}
       title={canEdit ? pickLabel : undefined}
     >
-      <CalendarClock size={9} />
+      <CalendarClock size={10} />
       {value ? `${setPrefix} ${value}` : pickLabel}
     </button>
   );
@@ -2919,6 +2920,19 @@ function LifecycleTab({
     );
   };
 
+  // Design Contract — the agreed amount is keyed on the sign row (Phase 2, 16 Nov).
+  const setSignatureAmount = (id: number, amount: number) => {
+    updateSignature.mutate(
+      { id, projectId, amount },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't set amount: ${e instanceof Error ? e.message : "unknown error"}`
+          ),
+      }
+    );
+  };
+
   // Phase 3 — editable gate amounts (status untouched).
   const setPaymentAmount = (id: number, amount: number) => {
     updatePayment.mutate(
@@ -3553,23 +3567,7 @@ function LifecycleTab({
                                   </button>
                                 ))}
                             </div>
-                          ) : (
-                            /* Estimated date for the other milestone stages (Phase 2).
-                               Payment/signature stages carry their date on the row
-                               below; the defect-period workDelivered case is handled
-                               above. */
-                            !payments &&
-                            !signature && (
-                              <div className="mt-1">
-                                <StageDateControl
-                                  value={stageDates[stage.id]}
-                                  canEdit={canCollect}
-                                  onSet={d => setMilestoneDate(stage.id, d)}
-                                  saving={setStageDate.isPending}
-                                />
-                              </div>
-                            )
-                          )}
+                          ) : null /* milestone est-date now renders beside the Status pill (G1, 16 Nov) */}
                           {/* Flow 2 — Warranty follow-up check-ins: free-form dates
                               (client 16 Nov: add as many as needed, no fixed 6/12). */}
                           {stage.id === "defect-period" && workDelivered && (
@@ -3608,13 +3606,28 @@ function LifecycleTab({
                               </p>
                             )}
                         </div>
-                        <StageStatusControl
-                          status={status}
-                          canEdit={canCollect}
-                          interactive={manualStatusStage}
-                          saving={setStageStatus.isPending}
-                          onChange={next => changeStageStatus(stage.id, next)}
-                        />
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* G1 (16 Nov): est-date sits next to the Status pill for every
+                              milestone stage (payment/signature stages carry their date on
+                              the row below; defect-period handles its own warranty date). */}
+                          {!payments &&
+                            !signature &&
+                            !(stage.id === "defect-period" && workDelivered) && (
+                              <StageDateControl
+                                value={stageDates[stage.id]}
+                                canEdit={canCollect}
+                                onSet={d => setMilestoneDate(stage.id, d)}
+                                saving={setStageDate.isPending}
+                              />
+                            )}
+                          <StageStatusControl
+                            status={status}
+                            canEdit={canCollect}
+                            interactive={manualStatusStage}
+                            saving={setStageStatus.isPending}
+                            onChange={next => changeStageStatus(stage.id, next)}
+                          />
+                        </div>
                       </div>
 
                       {/* Payment detail (one or more rows for gate 4) */}
@@ -3667,6 +3680,11 @@ function LifecycleTab({
                           canSign={canSign}
                           staffById={staffById}
                           onSetDate={d => setSignatureDate(signature.id, d)}
+                          showAmount={signature.key === "design-contract"}
+                          hideDate={signature.key === "design-contract"}
+                          onSetAmount={amt =>
+                            setSignatureAmount(signature.id, amt)
+                          }
                           onRevert={() => doRevertSignature(signature)}
                           reverting={revertSignature.isPending}
                           onSign={() =>
@@ -3739,13 +3757,33 @@ function LifecycleTab({
                             section="design-proposal"
                             defaultDateToday
                             title="Design Proposal versions"
-                            description="Track each version the client sees — Version 1, then Revision 1, Revision 2… Set the date and attach each version's file."
+                            description="Track each version the client sees — Version 1, then Revision 1, Revision 2… Set the date, the proposed amount (e.g. RM 300k / 400k / 500k), and attach each version's file."
                             canManage={canCollect}
+                            withAmount
                             maxColumns={10}
                             labelPlaceholder="Version (e.g. V1, Revision 1)"
                             addLabel="Add version"
                             accept="application/pdf,image/*"
                             emptyHint="No versions yet."
+                          />
+                        </div>
+                      )}
+
+                      {/* Proposal Meeting — revisions, each a date + a remark note. */}
+                      {stage.id === "proposal-meeting" && (
+                        <div className="mt-3">
+                          <ColumnGrid
+                            projectId={projectId}
+                            section="proposal-meeting"
+                            defaultDateToday
+                            title="Proposal meeting revisions"
+                            description="Log each proposal meeting / revision — set the date and a remark note for what was discussed or changed."
+                            canManage={canCollect}
+                            maxColumns={10}
+                            labelPlaceholder="Remark / note"
+                            addLabel="Add revision"
+                            accept="application/pdf,image/*"
+                            emptyHint="No meetings logged yet."
                           />
                         </div>
                       )}
@@ -3777,7 +3815,7 @@ function LifecycleTab({
                           <button
                             type="button"
                             onClick={onOpenReports}
-                            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-label"
+                            className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-label font-bold w-full sm:w-auto justify-center"
                             style={{
                               background: "var(--acc)",
                               color: "oklch(1 0 0)",
@@ -3785,8 +3823,11 @@ function LifecycleTab({
                               cursor: "pointer",
                             }}
                           >
-                            <FileText size={14} /> Open site reports →
+                            <FileText size={16} /> Open site reports &amp; add update →
                           </button>
+                          <p className="text-[10px] mt-1.5" style={{ color: "var(--t-5)" }}>
+                            Weekly reports build automatically from site photos; open the Reports tab to add or update them.
+                          </p>
                         </div>
                       )}
 
@@ -3798,7 +3839,7 @@ function LifecycleTab({
                             section="work-schedule"
                             defaultDateToday
                             title="Site Work Schedule — client sign-off"
-                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed schedule if you have it."
+                            description="Capture the client's sign-off (name + signed date); attach the signed schedule if you have it."
                             canManage={canCollect}
                             withSignoff
                             hideLabel
@@ -3843,7 +3884,7 @@ function LifecycleTab({
                             section="design-commission-contract"
                             defaultDateToday
                             title="Design Commission Contract — client sign-off"
-                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed contract if you have it."
+                            description="Capture the client's sign-off (name + signed date); attach the signed contract if you have it."
                             canManage={canCollect}
                             withSignoff
                             hideLabel
@@ -3922,7 +3963,7 @@ function LifecycleTab({
                             section="reno-commission-contract"
                             defaultDateToday
                             title="Renovation Commission Contract — client sign-off"
-                            description="Set the date and capture the client's sign-off (name + signed date); attach the signed contract if you have it."
+                            description="Capture the client's sign-off (name + signed date); attach the signed contract if you have it."
                             canManage={canCollect}
                             withSignoff
                             hideLabel
@@ -4667,6 +4708,9 @@ function SignatureRow({
   onRevert,
   reverting,
   staffById,
+  showAmount,
+  onSetAmount,
+  hideDate,
 }: {
   signature: DocumentSignRecord;
   canSign: boolean;
@@ -4675,6 +4719,10 @@ function SignatureRow({
   onRevert?: () => void;
   reverting?: boolean;
   staffById?: Record<string, string>;
+  /** Design Contract: key the agreed amount in on the sign row (no est-date). */
+  showAmount?: boolean;
+  onSetAmount?: (amount: number) => void;
+  hideDate?: boolean;
 }) {
   const sc = checkpointStatusConfig[signature.status];
   const isOpen =
@@ -4803,12 +4851,42 @@ function SignatureRow({
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {isOpen && onSetDate && (
+          {isOpen && onSetDate && !hideDate && (
             <StageDateControl
               value={signature.estimatedDate}
               canEdit={canSign}
               onSet={onSetDate}
             />
+          )}
+          {showAmount && (
+            <div
+              className="flex items-center gap-1 rounded-full px-2 py-1"
+              style={{
+                background: "var(--s-2)",
+                border: "1px solid var(--b-strong)",
+              }}
+            >
+              <span
+                className="text-[9px] font-label"
+                style={{ color: "var(--t-5)" }}
+              >
+                RM
+              </span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                defaultValue={signature.amount ?? ""}
+                disabled={!canSign || !onSetAmount}
+                onBlur={e => {
+                  const v = parseFloat(e.currentTarget.value);
+                  onSetAmount?.(Number.isFinite(v) && v >= 0 ? v : 0);
+                }}
+                placeholder="0"
+                className="text-[10px] w-20 bg-transparent text-right outline-none"
+                style={{ color: "var(--t-2)" }}
+              />
+            </div>
           )}
           {isCompleted && canSign && onRevert && (
             <CheckpointActionsMenu onRevert={onRevert} disabled={reverting} />

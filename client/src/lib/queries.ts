@@ -151,6 +151,7 @@ export type DocumentSignRecord = {
   documentRef?: string;
   notes?: string;
   estimatedDate?: string;    // DD/MM/YYYY — Phase 2 planned sign-off date
+  amount?: number | null;    // agreed amount keyed on the sign (Design Contract, Phase 2)
   // Audit trail (Phase 1) — staff ids; resolve to names in the UI.
   createdBy?: string;
   recordedBy?: string;
@@ -279,6 +280,7 @@ function mapSignature(row: SignatureRecordRow): DocumentSignRecord {
     documentRef: row.document_ref ?? undefined,
     notes: row.notes ?? undefined,
     estimatedDate: isoToDDMMYYYY(row.estimated_date) || undefined,
+    amount: row.amount ?? undefined,
     createdBy: row.created_by ?? undefined,
     recordedBy: row.recorded_by ?? undefined,
     createdAt: row.created_at ?? undefined,
@@ -1783,6 +1785,7 @@ export type UpdateSignatureArgs = {
   documentRef?: string | null;        // Storage path or legacy filename
   notes?: string | null;
   estimatedDate?: string | null;      // DD/MM/YYYY — planned sign-off date (null clears)
+  amount?: number | null;             // agreed amount (Design Contract)
 };
 
 export function useUpdateSignature() {
@@ -1801,6 +1804,7 @@ export function useUpdateSignature() {
       if (args.estimatedDate !== undefined) {
         payload.estimated_date = args.estimatedDate ? ddmmyyyyToIso(args.estimatedDate) : null;
       }
+      if (args.amount !== undefined) payload.amount = args.amount;
 
       // Snapshot the project's stage before the write to detect auto-advance.
       const beforeStage = await fetchProjectStage(args.projectId);

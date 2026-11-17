@@ -1317,6 +1317,7 @@ export type Database = {
       }
       signature_records: {
         Row: {
+          amount: number | null
           created_at: string
           created_by: string | null
           document_ref: string | null
@@ -1334,6 +1335,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          amount?: number | null
           created_at?: string
           created_by?: string | null
           document_ref?: string | null
@@ -1351,6 +1353,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          amount?: number | null
           created_at?: string
           created_by?: string | null
           document_ref?: string | null
