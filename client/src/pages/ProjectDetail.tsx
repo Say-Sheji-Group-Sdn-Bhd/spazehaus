@@ -3568,22 +3568,17 @@ function LifecycleTab({
                                 ))}
                             </div>
                           ) : null /* milestone est-date now renders beside the Status pill (G1, 16 Nov) */}
-                          {/* Flow 2 — Warranty follow-up check-ins: free-form dates
-                              (client 16 Nov: add as many as needed, no fixed 6/12). */}
+                          {/* Flow 2 — Warranty follow-up: three fixed check-in dates
+                              (client 17 Nov: Start Date / 6 Months / 12 Months). */}
                           {stage.id === "defect-period" && workDelivered && (
                             <div className="mt-3">
                               <ColumnGrid
                                 projectId={projectId}
                                 section="warranty-followup"
-                                defaultDateToday
-                                title="Warranty follow-up check-ins"
-                                description="Add each follow-up date — 6-month, 12-month, or any ad-hoc check-in, as many as you need. Attach a report if you have one."
+                                title="Warranty follow-up dates"
+                                description="Set the warranty start and the 6- and 12-month check-in dates."
                                 canManage={canCollect}
-                                maxColumns={12}
-                                labelPlaceholder="Check-in (e.g. 6-month)"
-                                addLabel="Add date"
-                                accept="application/pdf,image/*"
-                                emptyHint="No check-ins scheduled yet."
+                                fixedDates={["Start Date", "6 Months", "12 Months"]}
                               />
                             </div>
                           )}

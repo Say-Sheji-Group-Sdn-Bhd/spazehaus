@@ -29,6 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   useProjectColumns,
   useAddColumn,
+  useEnsureFixedColumns,
   useUpdateColumn,
   useUploadColumnFile,
   useRemoveColumnFile,
@@ -71,6 +72,7 @@ export default function ColumnGrid({
   hideLabel = false,
   singleSignoff = false,
   signOnly = false,
+  fixedDates,
   accept,
   emptyHint,
 }: {
@@ -99,6 +101,9 @@ export default function ColumnGrid({
   /** Stripped sign-off: no upload box, no client name/date fields — just a SIGN
       button that stamps the signed date (est. date lives in the stage header). */
   signOnly?: boolean;
+  /** Fixed, read-only-titled date columns (e.g. Warranty: Start Date / 6 Months /
+      12 Months). Each is just a title + a date picker — no add/delete/upload. */
+  fixedDates?: string[];
   accept?: string;
   emptyHint?: string;
 }) {
@@ -107,7 +112,23 @@ export default function ColumnGrid({
     section
   );
   const addColumn = useAddColumn();
+  const ensureFixed = useEnsureFixedColumns();
   const { staff: me } = useAuth();
+
+  // Fixed-date stages (e.g. Warranty): make sure the named columns exist, once.
+  useEffect(() => {
+    if (
+      fixedDates &&
+      fixedDates.length > 0 &&
+      canManage &&
+      !isLoading &&
+      !ensureFixed.isPending &&
+      fixedDates.some(l => !columns.some(c => c.label === l))
+    ) {
+      ensureFixed.mutate({ projectId, section, labels: fixedDates });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixedDates, canManage, isLoading, columns]);
 
   // The first still-unpaid instalment (by arrangement order) is the "next due".
   const nextDueId = collectable
@@ -171,7 +192,7 @@ export default function ColumnGrid({
             </p>
           )}
         </div>
-        {canManage && !singleSignoff && (
+        {canManage && !singleSignoff && !fixedDates && (
           <button
             type="button"
             onClick={handleAdd}
@@ -190,7 +211,26 @@ export default function ColumnGrid({
         )}
       </div>
 
-      {isLoading ? (
+      {fixedDates && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {fixedDates.map(label => {
+            const col = columns.find(c => c.label === label);
+            return (
+              <FixedDateCard
+                key={label}
+                label={label}
+                col={col}
+                projectId={projectId}
+                section={section}
+                canManage={canManage}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {!fixedDates &&
+        (isLoading ? (
         <div
           className="rounded-xl p-6 text-center text-xs"
           style={{
@@ -243,9 +283,9 @@ export default function ColumnGrid({
             />
           ))}
         </div>
-      )}
+      ))}
 
-      {canManage && !singleSignoff && columns.length > 0 && (
+      {canManage && !singleSignoff && !fixedDates && columns.length > 0 && (
         <p className="text-[10px]" style={{ color: "var(--t-6)" }}>
           {columns.length}/{maxColumns} columns
           {minColumns > 0 ? ` · at least ${minColumns} required` : ""} · files
@@ -914,5 +954,67 @@ function ColumnCard({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * One fixed-title date card (Warranty follow-up: Start Date / 6 Months /
+ * 12 Months). Read-only title on top, a date picker below. The row is created
+ * by the parent's ensure-fixed effect; until it exists the picker is disabled.
+ */
+function FixedDateCard({
+  label,
+  col,
+  projectId,
+  section,
+  canManage,
+}: {
+  label: string;
+  col?: ProjectColumn;
+  projectId: string;
+  section: string;
+  canManage: boolean;
+}) {
+  const updateColumn = useUpdateColumn();
+  const saveDate = (v: string) => {
+    if (!col) return;
+    updateColumn.mutate(
+      { id: col.id, projectId, section, colDate: inputDateToDDMM(v) },
+      {
+        onError: e =>
+          toast.error(
+            `Couldn't save date: ${e instanceof Error ? e.message : "error"}`
+          ),
+      }
+    );
+  };
+  return (
+    <div
+      className="rounded-xl p-3 flex flex-col gap-2"
+      style={{ background: "var(--s-card)", border: "1px solid var(--b-1)" }}
+    >
+      <p className="text-sm font-medium" style={{ color: "var(--t-1)" }}>
+        {label}
+      </p>
+      <label
+        className="flex items-center gap-1.5 text-[11px]"
+        style={{ color: "var(--t-5)" }}
+      >
+        <CalendarClock size={12} />
+        <input
+          type="date"
+          key={col?.col_date ?? "empty"}
+          defaultValue={col?.col_date ?? ""}
+          disabled={!canManage || !col}
+          onBlur={e => saveDate(e.target.value)}
+          className="flex-1 text-[11px] rounded-md px-1.5 py-1"
+          style={{
+            background: "var(--s-2)",
+            border: "1px solid var(--b-strong)",
+            color: "var(--t-2)",
+          }}
+        />
+      </label>
+    </div>
   );
 }

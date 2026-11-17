@@ -1233,6 +1233,40 @@ export function useAddColumn() {
   });
 }
 
+/**
+ * Ensure a fixed set of labelled columns exists for a section, in order.
+ * Used by date-grid stages (e.g. Warranty follow-up: Start Date / 6 Months /
+ * 12 Months) — inserts only the labels that are missing, never duplicates.
+ */
+export function useEnsureFixedColumns() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { projectId: string; section: string; labels: string[] }): Promise<void> => {
+      const { data, error } = await supabase
+        .from("project_columns")
+        .select("label")
+        .eq("project_id", args.projectId)
+        .eq("section", args.section);
+      if (error) throw error;
+      const existing = new Set((data ?? []).map(r => r.label));
+      const missing = args.labels
+        .map((label, i) => ({ label, sort_order: i + 1 }))
+        .filter(m => !existing.has(m.label));
+      if (missing.length === 0) return;
+      const { error: insErr } = await supabase.from("project_columns").insert(
+        missing.map(m => ({
+          project_id: args.projectId,
+          section: args.section,
+          label: m.label,
+          sort_order: m.sort_order,
+        }))
+      );
+      if (insErr) throw insErr;
+    },
+    onSuccess: (_v, args) => invalidateColumns(qc, args.projectId, args.section),
+  });
+}
+
 /** Patch a column's label / date / amount (status-free metadata). */
 export function useUpdateColumn() {
   const qc = useQueryClient();
