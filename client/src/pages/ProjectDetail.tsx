@@ -3630,26 +3630,48 @@ function LifecycleTab({
                             )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {/* G1 (16 Nov): est-date sits next to the Status pill for every
-                              milestone stage (payment/signature stages carry their date on
-                              the row below; defect-period handles its own warranty date). */}
-                          {!payments &&
-                            !signature &&
-                            !(stage.id === "defect-period" && workDelivered) && (
-                              <StageDateControl
-                                value={stageDates[stage.id]}
+                          {/* Site Report (client 18 Nov): no est-date / status —
+                              just the jump to the Reports tab, here on the right. */}
+                          {stage.id === "site-report" ? (
+                            onOpenReports && (
+                              <button
+                                type="button"
+                                onClick={onOpenReports}
+                                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-label font-bold shrink-0"
+                                style={{
+                                  background: "var(--acc)",
+                                  color: "oklch(1 0 0)",
+                                  letterSpacing: "0.03em",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <FileText size={13} /> Open site reports →
+                              </button>
+                            )
+                          ) : (
+                            <>
+                              {/* G1 (16 Nov): est-date sits next to the Status pill for every
+                                  milestone stage (payment/signature stages carry their date on
+                                  the row below; defect-period handles its own warranty date). */}
+                              {!payments &&
+                                !signature &&
+                                !(stage.id === "defect-period" && workDelivered) && (
+                                  <StageDateControl
+                                    value={stageDates[stage.id]}
+                                    canEdit={canCollect}
+                                    onSet={d => setMilestoneDate(stage.id, d)}
+                                    saving={setStageDate.isPending}
+                                  />
+                                )}
+                              <StageStatusControl
+                                status={status}
                                 canEdit={canCollect}
-                                onSet={d => setMilestoneDate(stage.id, d)}
-                                saving={setStageDate.isPending}
+                                interactive={manualStatusStage}
+                                saving={setStageStatus.isPending}
+                                onChange={next => changeStageStatus(stage.id, next)}
                               />
-                            )}
-                          <StageStatusControl
-                            status={status}
-                            canEdit={canCollect}
-                            interactive={manualStatusStage}
-                            saving={setStageStatus.isPending}
-                            onChange={next => changeStageStatus(stage.id, next)}
-                          />
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -3831,24 +3853,11 @@ function LifecycleTab({
                         </div>
                       )}
 
-                      {/* Site Report — jump to the Reports tab (weekly reports
-                          build automatically from site photos). */}
+                      {/* Site Report — the "Open site reports" button now sits on the
+                          stage row's right side (client 18 Nov); keep the context note. */}
                       {stage.id === "site-report" && onOpenReports && (
                         <div className="mt-3">
-                          <button
-                            type="button"
-                            onClick={onOpenReports}
-                            className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-label font-bold w-full sm:w-auto justify-center"
-                            style={{
-                              background: "var(--acc)",
-                              color: "oklch(1 0 0)",
-                              letterSpacing: "0.03em",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <FileText size={16} /> Open site reports →
-                          </button>
-                          <p className="text-[10px] mt-1.5" style={{ color: "var(--t-5)" }}>
+                          <p className="text-[10px]" style={{ color: "var(--t-5)" }}>
                             Weekly reports build automatically from site photos; open the Reports tab to add or update them.
                           </p>
                         </div>
@@ -3964,24 +3973,9 @@ function LifecycleTab({
                       {/* Renovation Commission Contract is a true signature (17 Nov) —
                           renders via the shared SignatureRow above, like the contracts. */}
 
-                      {/* Flow 2 · CIDB / Authority / Insurance — submissions upload. */}
-                      {stage.id === "cidb-authority" && (
-                        <div className="mt-3">
-                          <ColumnGrid
-                            projectId={projectId}
-                            section="cidb-authority"
-                            defaultDateToday
-                            title="CIDB / Authority / Insurance"
-                            description="One step for CIDB, management/authority submission and insurance. Add a column per submission with its date and document."
-                            canManage={canCollect}
-                            maxColumns={6}
-                            labelPlaceholder="Submission (CIDB / Authority / Insurance)"
-                            addLabel="Add submission"
-                            accept="application/pdf,image/*"
-                            emptyHint="No submissions logged yet."
-                          />
-                        </div>
-                      )}
+                      {/* CIDB / Authority Submission / Insurance — split into three
+                          plain milestone stages (client 18 Nov); each renders with just
+                          its est-date + status, like Site Marking (no column grid). */}
 
                       {/* Flow 2 · Project PO — estimated date + status only
                           (client 16 Nov: no "Add PO" upload needed). */}

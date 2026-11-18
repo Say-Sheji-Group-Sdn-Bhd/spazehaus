@@ -24,8 +24,11 @@ describe("stageOrder", () => {
     expect(stageOrder("design-progressive-pay")).toBe(9); // own Design stage
     expect(stageOrder("shopping-list")).toBe(13);     // Pre-build design-side
     expect(stageOrder("design-commission-release")).toBe(18); // design-side closeout
-    expect(stageOrder("reno-commission-release")).toBe(36); // Renovation project, Handover
-    expect(stageOrder("defect-period")).toBe(37);     // last stage (37 total)
+    expect(stageOrder("cidb")).toBe(22);              // CIDB/Authority/Insurance split (18 Nov)
+    expect(stageOrder("authority-submission")).toBe(23);
+    expect(stageOrder("insurance")).toBe(24);
+    expect(stageOrder("reno-commission-release")).toBe(38); // Renovation project, Handover
+    expect(stageOrder("defect-period")).toBe(39);     // last stage (39 total)
   });
   it("returns 0 for an unknown stage", () => {
     expect(stageOrder("nope")).toBe(0);
@@ -34,15 +37,20 @@ describe("stageOrder", () => {
 });
 
 describe("catalogue (Phase 1, 16 Nov) — lockstep guard", () => {
-  it("has exactly 37 stages with the two removed stages gone", () => {
-    expect(LIFECYCLE_STAGES).toHaveLength(37);
+  it("has exactly 39 stages with removed + split stages reconciled", () => {
+    expect(LIFECYCLE_STAGES).toHaveLength(39);
     expect(stageById("design-quotation")).toBeUndefined();
     expect(stageById("reno-deposit")).toBeUndefined();
+    // CIDB/Authority/Insurance split (18 Nov): combined stage gone, three in its place.
+    expect(stageById("cidb-authority")).toBeUndefined();
+    expect(stageById("cidb")).toBeDefined();
+    expect(stageById("authority-submission")).toBeDefined();
+    expect(stageById("insurance")).toBeDefined();
   });
-  it("has contiguous 1..37 order and no duplicate order/id", () => {
+  it("has contiguous 1..39 order and no duplicate order/id", () => {
     const orders = LIFECYCLE_STAGES.map((s) => s.order).sort((a, b) => a - b);
-    expect(orders).toEqual(Array.from({ length: 37 }, (_, i) => i + 1));
-    expect(new Set(LIFECYCLE_STAGES.map((s) => s.id)).size).toBe(37);
+    expect(orders).toEqual(Array.from({ length: 39 }, (_, i) => i + 1));
+    expect(new Set(LIFECYCLE_STAGES.map((s) => s.id)).size).toBe(39);
   });
   it("design-contract carries a signature but no payment gate", () => {
     const dc = stageById("design-contract")!;

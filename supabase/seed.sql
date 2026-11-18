@@ -24,7 +24,7 @@ truncate table
   lifecycle_stages, audit_log
   restart identity cascade;
 
--- ── (1) lifecycle_stages — 37 stages (Flow 2, Phase 1 16 Nov; required reference data) ──
+-- ── (1) lifecycle_stages — 39 stages (CIDB/Authority/Insurance split 18 Nov; required reference data) ──
 insert into lifecycle_stages (order_index, id, label, phase, stage_type, payment_gate, signature_key, service_type) values
   (1,  'new-inquiry',                'New Inquiry',                             'Proposal',   'milestone',     null, null,                  'Design'),
   (2,  'inquiry-form',               'Fill In Inquiry Form',                    'Proposal',   'milestone',     null, null,                  'Design'),
@@ -47,22 +47,24 @@ insert into lifecycle_stages (order_index, id, label, phase, stage_type, payment
   (19, 'reno-contract',              'Renovation Contract Signed',              'Renovation', 'contract-sign', null, 'renovation-contract', 'Renovation'),
   (20, 'reno-commission-contract',   'Renovation Commission Contract Signed',   'Renovation', 'milestone',     null, null,                  'Renovation'),
   (21, 'work-schedule',              'Site Work Schedule',                      'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (22, 'cidb-authority',             'CIDB / Authority / Insurance',            'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (23, 'kick-off',                   'Site Marking',                            'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (24, 'contractor-brief',           'Contractor Briefing Meeting',             'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (25, 'project-po',                 'Project PO',                              'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (26, 'site-inspection',            'Site Inspection',                         'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (27, 'site-report',                'Site Report',                             'Renovation', 'milestone',     null, null,                  'Renovation'),
-  (28, 'progressive-pay',            'Progressive Payment',                     'Renovation', 'payment',       4,    null,                  'Renovation'),
-  (29, 'site-completed',             'Client Site Inspection',                  'Handover',   'milestone',     null, null,                  'Renovation'),
-  (30, 'furniture-delivery',         'Supplier Delivery & Installation',        'Handover',   'milestone',     null, null,                  'Renovation'),
-  (31, 'handover',                   'Handover Document / As-Built Drawings — Signed', 'Handover', 'contract-sign', null, 'handover',       'Renovation'),
-  (32, 'handover-meeting',           'Handover Meeting',                        'Handover',   'milestone',     null, null,                  'Renovation'),
-  (33, 'final-payment',              'Final Payment',                           'Handover',   'payment',       5,    null,                  'Renovation'),
-  (34, 'project-statement-review',   'Project Statement Review',                'Handover',   'milestone',     null, null,                  'Renovation'),
-  (35, 'completion',                 'Renovation Project Completion',           'Handover',   'milestone',     null, null,                  'Renovation'),
-  (36, 'reno-commission-release',    'Renovation Project Commission Release',   'Handover',   'milestone',     null, null,                  'Renovation'),
-  (37, 'defect-period',              'Warranty Follow-Up',                      'Handover',   'milestone',     null, null,                  'Renovation');
+  (22, 'cidb',                       'CIDB',                                    'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (23, 'authority-submission',       'Authority Submission',                    'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (24, 'insurance',                  'Insurance',                               'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (25, 'kick-off',                   'Site Marking',                            'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (26, 'contractor-brief',           'Contractor Briefing Meeting',             'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (27, 'project-po',                 'Project PO',                              'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (28, 'site-inspection',            'Site Inspection',                         'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (29, 'site-report',                'Site Report',                             'Renovation', 'milestone',     null, null,                  'Renovation'),
+  (30, 'progressive-pay',            'Progressive Payment',                     'Renovation', 'payment',       4,    null,                  'Renovation'),
+  (31, 'site-completed',             'Client Site Inspection',                  'Handover',   'milestone',     null, null,                  'Renovation'),
+  (32, 'furniture-delivery',         'Supplier Delivery & Installation',        'Handover',   'milestone',     null, null,                  'Renovation'),
+  (33, 'handover',                   'Handover Document / As-Built Drawings — Signed', 'Handover', 'contract-sign', null, 'handover',       'Renovation'),
+  (34, 'handover-meeting',           'Handover Meeting',                        'Handover',   'milestone',     null, null,                  'Renovation'),
+  (35, 'final-payment',              'Final Payment',                           'Handover',   'payment',       5,    null,                  'Renovation'),
+  (36, 'project-statement-review',   'Project Statement Review',                'Handover',   'milestone',     null, null,                  'Renovation'),
+  (37, 'completion',                 'Renovation Project Completion',           'Handover',   'milestone',     null, null,                  'Renovation'),
+  (38, 'reno-commission-release',    'Renovation Project Commission Release',   'Handover',   'milestone',     null, null,                  'Renovation'),
+  (39, 'defect-period',              'Warranty Follow-Up',                      'Handover',   'milestone',     null, null,                  'Renovation');
 
 -- ── (2a) staff — one per tier, 2 admins, a same-initials pair (JT) ───────────
 -- auth_user_id is null: each links on first magic-link login by email.
