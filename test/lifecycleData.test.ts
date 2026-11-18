@@ -6,6 +6,7 @@ import {
   bucketDate,
   effectivePaymentStatus,
   stageStatus,
+  NON_GATING_STAGE_IDS,
   paymentSummary,
   signatureSummary,
   stageById,
@@ -51,6 +52,19 @@ describe("catalogue (Phase 1, 16 Nov) — lockstep guard", () => {
     const orders = LIFECYCLE_STAGES.map((s) => s.order).sort((a, b) => a - b);
     expect(orders).toEqual(Array.from({ length: 39 }, (_, i) => i + 1));
     expect(new Set(LIFECYCLE_STAGES.map((s) => s.id)).size).toBe(39);
+  });
+  it("non-gating stages exist, carry no payment/signature, and aren't the terminal stage", () => {
+    // Site Report (18 Nov) has no status control, so it must never gate progression
+    // or completion — otherwise current_stage_id parks there and workDelivered never
+    // becomes true. Guard that every non-gating id is a real, action-free milestone.
+    expect(NON_GATING_STAGE_IDS.has("site-report")).toBe(true);
+    for (const id of NON_GATING_STAGE_IDS) {
+      const s = stageById(id);
+      expect(s, `${id} must be a real stage`).toBeDefined();
+      expect(s!.paymentGate, `${id} must not gate a payment`).toBeUndefined();
+      expect(s!.signatureKey, `${id} must not gate a signature`).toBeUndefined();
+      expect(s!.order, `${id} must not be New Inquiry`).toBeGreaterThan(1);
+    }
   });
   it("design-contract carries a signature but no payment gate", () => {
     const dc = stageById("design-contract")!;

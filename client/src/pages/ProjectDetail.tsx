@@ -76,6 +76,7 @@ import {
   paymentSummary,
   signatureSummary,
   stageStatus,
+  NON_GATING_STAGE_IDS,
   phaseColors,
   checkpointStatusConfig,
   MANUAL_STAGE_STATUSES,
@@ -3137,6 +3138,7 @@ function LifecycleTab({
     s =>
       s.order > 1 &&
       s.id !== lastStageId &&
+      !NON_GATING_STAGE_IDS.has(s.id) &&
       stageStatus(s, stageStatuses) !== "completed"
   );
   const nextPayments = currentStage?.paymentGate
@@ -3162,6 +3164,7 @@ function LifecycleTab({
     s =>
       s.order === 1 ||
       (hasWarrantyStage && s.id === lastStageId) ||
+      NON_GATING_STAGE_IDS.has(s.id) ||
       stageStatus(s, stageStatuses) === "completed"
   );
   // Stages (after New Inquiry, before Defect Period) not yet marked Completed —
@@ -3170,6 +3173,7 @@ function LifecycleTab({
     s =>
       s.order > 1 &&
       s.id !== lastStageId &&
+      !NON_GATING_STAGE_IDS.has(s.id) &&
       stageStatus(s, stageStatuses) !== "completed"
   );
   const projectComplete = workDelivered && (!hasWarrantyStage || defectDone);

@@ -245,6 +245,17 @@ export function stageStatus(
   return statusMap[stage.id] ?? "pending";
 }
 
+/**
+ * Stages that carry NO manual status control, so they must NEVER gate
+ * progression or project completion — they are informational. Currently just
+ * Site Report, whose lifecycle row is only a link to the Reports tab (client
+ * 18 Nov): with no status selector it can never be marked Completed, so if it
+ * gated it would park `current_stage_id` and block `workDelivered` forever.
+ * KEEP IN LOCKSTEP with recompute_current_stage_from_status (it skips the same
+ * ids in SQL).
+ */
+export const NON_GATING_STAGE_IDS: ReadonlySet<string> = new Set(["site-report"]);
+
 // —————————————————————————————————————————————————————————————
 // Date helpers — used by Checkpoints buckets + queries.ts
 // —————————————————————————————————————————————————————————————
