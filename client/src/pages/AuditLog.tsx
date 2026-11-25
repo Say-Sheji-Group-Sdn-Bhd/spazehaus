@@ -16,11 +16,11 @@
  *   • `audit_log_read_own` lets any user read their own actions
  *   The page redirects non-admin users back to /company.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import {
-  ShieldCheck, Filter, ChevronDown, ChevronUp, Activity,
+  ShieldCheck, Filter, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Activity,
   Users, ArrowLeft, Database, PlusCircle, PencilLine, Trash2, Clock,
   Search, Loader2,
 } from "lucide-react";
@@ -30,7 +30,8 @@ import { summarizeAudit, relativeTime } from "@/lib/activityFeed";
 import { useAuth } from "@/contexts/AuthContext";
 import type { AuditAction } from "@/lib/dbTypes";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 50;   // how many events we fetch from the server per batch
+const PER_PAGE = 18;    // how many events we show per page in the UI
 
 // ─── Table filter options ───────────────────────────────────────────────────
 
@@ -129,6 +130,46 @@ export default function AuditLog() {
     const actors = new Set(entries.map((e) => e.actor?.id ?? e.changed_by ?? "unknown")).size;
     return { todayCount, weekCount, actors };
   }, [entries]);
+
+  // ─── Client-side pagination over the loaded events ──────────────────────────
+  const [page, setPage] = useState(1);
+
+  // Reset to the first page whenever a filter changes.
+  useEffect(() => { setPage(1); }, [table, action, daysBack, rowIdApplied]);
+
+  const totalPages = Math.max(1, Math.ceil(entries.length / PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  // If the list shrank (narrower filter), clamp the page back into range.
+  useEffect(() => { if (page !== safePage) setPage(safePage); }, [page, safePage]);
+
+  const visible = useMemo(
+    () => entries.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE),
+    [entries, safePage],
+  );
+
+  // Paging past the loaded events fetches the next server batch, then auto-advances
+  // to the freshly-loaded page once it arrives.
+  const wantAdvanceRef = useRef(false);
+  const prevLenRef = useRef(entries.length);
+  useEffect(() => {
+    if (wantAdvanceRef.current && entries.length > prevLenRef.current) {
+      wantAdvanceRef.current = false;
+      setPage((p) => p + 1);
+    }
+    prevLenRef.current = entries.length;
+  }, [entries.length]);
+
+  const listTopRef = useRef<HTMLDivElement>(null);
+  const goToPage = (p: number) => {
+    setPage(p);
+    listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const goPrev = () => { if (safePage > 1) goToPage(safePage - 1); };
+  const goNext = () => {
+    if (safePage < totalPages) { goToPage(safePage + 1); return; }
+    if (hasNextPage && !isFetchingNextPage) { wantAdvanceRef.current = true; fetchNextPage(); }
+  };
+  const canNext = safePage < totalPages || hasNextPage;
 
   return (
     <div className="mobile-container" style={{ background: "var(--s-page)" }}>
@@ -252,13 +293,13 @@ export default function AuditLog() {
         </div>
 
         {/* Event list */}
-        <div>
+        <div ref={listTopRef} style={{ scrollMarginTop: "80px" }}>
           <div className="flex items-center justify-between mb-3">
             <p className="font-label text-xs" style={{ color: "var(--t-2)", letterSpacing: "0.10em", fontWeight: 700 }}>
               EVENTS
             </p>
             <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
-              {entries.length} loaded{hasNextPage ? " · more available" : ""}
+              Page {safePage} of {totalPages}{hasNextPage ? "+" : ""} · {entries.length} loaded
             </span>
           </div>
 
@@ -282,41 +323,29 @@ export default function AuditLog() {
           )}
 
           {!isLoading && entries.length > 0 && (
-            <div className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-2 lg:items-start xl:grid-cols-3">
-              {entries.map((entry) => (
+            <div className="grid grid-cols-1 gap-2 items-start md:grid-cols-2 lg:grid-cols-3">
+              {visible.map((entry) => (
                 <AuditEventCard key={entry.id} entry={entry} />
               ))}
             </div>
           )}
 
-          {!isLoading && entries.length > 0 && hasNextPage && (
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="w-full mt-3 rounded-xl py-2.5 flex items-center justify-center gap-2 disabled:opacity-60"
-              style={{
-                background: "var(--s-card)",
-                border: "1px solid oklch(0.62 0.09 68 / 35%)",
-                boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
-              }}
-            >
-              {isFetchingNextPage ? (
-                <>
-                  <Loader2 size={13} className="animate-spin" style={{ color: "var(--acc-ink)" }} />
-                  <span className="text-xs font-label" style={{ color: "var(--acc-ink)", letterSpacing: "0.04em", fontWeight: 700 }}>
-                    LOADING…
-                  </span>
-                </>
-              ) : (
-                <span className="text-xs font-label" style={{ color: "var(--acc-ink)", letterSpacing: "0.04em", fontWeight: 700 }}>
-                  LOAD {PAGE_SIZE} MORE
-                </span>
-              )}
-            </motion.button>
+          {/* Pagination — 18 per page, with prev/next. Paging past the loaded set
+              pulls the next server batch automatically. */}
+          {!isLoading && entries.length > 0 && (
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <PagerButton dir="prev" onClick={goPrev} disabled={safePage <= 1} />
+              <span
+                className="text-[11px] font-label text-center"
+                style={{ color: "var(--t-3)", letterSpacing: "0.04em", fontWeight: 700, minWidth: "6.5rem" }}
+              >
+                Page {safePage} of {totalPages}{hasNextPage ? "+" : ""}
+              </span>
+              <PagerButton dir="next" onClick={goNext} disabled={!canNext} loading={isFetchingNextPage} />
+            </div>
           )}
 
-          {!isLoading && entries.length > 0 && !hasNextPage && (
+          {!isLoading && entries.length > 0 && safePage >= totalPages && !hasNextPage && (
             <p className="text-[10px] text-center mt-3" style={{ color: "var(--t-5)" }}>
               End of results
             </p>
@@ -361,7 +390,7 @@ function AuditEventCard({ entry }: { entry: AuditEntry }) {
     >
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-3 py-3 flex items-start gap-3 text-left lg:items-center"
+        className="w-full px-3 py-3 flex items-start gap-3 text-left"
       >
         {/* Action icon */}
         <div
@@ -371,10 +400,10 @@ function AuditEventCard({ entry }: { entry: AuditEntry }) {
           <Icon size={14} style={{ color: visual.tint }} />
         </div>
 
-        {/* On mobile: stacked; on lg: flex row with fixed column widths */}
-        <div className="flex-1 min-w-0 lg:flex lg:items-center lg:gap-4">
-          {/* Action badge + table — fixed width column on lg */}
-          <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap lg:w-36 lg:shrink-0">
+        {/* Stacked card content — consistent at every column width */}
+        <div className="flex-1 min-w-0">
+          {/* Action badge + table */}
+          <div className="flex items-center gap-2 flex-wrap">
             <span
               className="text-[9px] font-label px-1.5 py-0.5 rounded-md"
               style={{ background: visual.bg, color: visual.tint, border: `1px solid ${visual.border}`, letterSpacing: "0.04em", fontWeight: 700 }}
@@ -386,24 +415,22 @@ function AuditEventCard({ entry }: { entry: AuditEntry }) {
             </span>
           </div>
 
-          {/* Summary — flex-grows to fill available space */}
-          <p className="text-sm font-semibold mt-1 leading-snug lg:mt-0 lg:flex-1 lg:min-w-0 lg:truncate" style={{ color: "var(--t-1)" }}>
+          {/* Summary */}
+          <p className="text-sm font-semibold mt-1 leading-snug" style={{ color: "var(--t-1)" }}>
             {summary}
           </p>
 
-          {/* Row ID + actor + timestamp — right-aligned metadata on lg */}
-          <div className="flex items-center gap-2 mt-1 flex-wrap lg:mt-0 lg:flex-nowrap lg:shrink-0 lg:gap-3">
+          {/* Row ID · actor · timestamp */}
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
             <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
               {entry.row_id || "—"}
             </span>
-            <span className="text-[10px] hidden lg:inline" style={{ color: "var(--t-7)" }}>·</span>
+            <span className="text-[10px]" style={{ color: "var(--t-7)" }}>·</span>
             <span className="text-[10px]" style={{ color: "var(--t-5)" }}>
               {entry.actor?.name ?? (entry.changed_by ? "Unknown user" : "System")}
             </span>
-            <span className="text-[10px] hidden lg:inline" style={{ color: "var(--t-7)" }}>·</span>
-            <span className="text-[10px] hidden lg:inline" style={{ color: "var(--t-5)" }}>{rel}</span>
-            {/* Mobile: show rel inline */}
-            <span className="text-[10px] lg:hidden" style={{ color: "var(--t-5)" }}>· {rel}</span>
+            <span className="text-[10px]" style={{ color: "var(--t-7)" }}>·</span>
+            <span className="text-[10px]" style={{ color: "var(--t-5)" }}>{rel}</span>
           </div>
         </div>
 
@@ -574,6 +601,40 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       }}
     >
       {children}
+    </motion.button>
+  );
+}
+
+function PagerButton({
+  dir,
+  onClick,
+  disabled,
+  loading,
+}: {
+  dir: "prev" | "next";
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+}) {
+  const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
+  return (
+    <motion.button
+      whileTap={disabled ? undefined : { scale: 0.94 }}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === "prev" ? "Previous page" : "Next page"}
+      className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+      style={{
+        background: "var(--s-card)",
+        border: "1px solid oklch(0.62 0.09 68 / 35%)",
+        boxShadow: "0 1px 8px oklch(0 0 0 / 0.04)",
+      }}
+    >
+      {loading ? (
+        <Loader2 size={14} className="animate-spin" style={{ color: "var(--acc-ink)" }} />
+      ) : (
+        <Icon size={16} style={{ color: "var(--acc-ink)" }} />
+      )}
     </motion.button>
   );
 }
