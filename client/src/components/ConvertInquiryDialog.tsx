@@ -170,6 +170,8 @@ export default function ConvertInquiryDialog({
   // Derived validation
   const budgetNum = parseFloat(form.budget) || 0;
   const depositNum = parseFloat(form.proposalDeposit) || 0;
+  // Renovation convert has no Design-phase proposal deposit or showroom meet-up.
+  const isReno = form.serviceType === "Renovation";
   const errors: string[] = [];
   if (!form.projectName.trim()) errors.push("Project name is required.");
   if (!form.designerStaffId) errors.push("Assign a designer.");
@@ -205,7 +207,7 @@ export default function ConvertInquiryDialog({
           .split(",")
           .map(s => s.trim())
           .filter(Boolean),
-        proposalDeposit: depositNum,
+        proposalDeposit: isReno ? 0 : depositNum,
         serviceType: form.serviceType,
         assignedToAvatar: inquiry.assignedTo,
       });
@@ -239,7 +241,7 @@ export default function ConvertInquiryDialog({
       }
       // Start-choice: if the showroom meet-up already happened, mark that stage done
       // (manual-status model — staff drive everything else from here).
-      if (form.showroomDone) {
+      if (!isReno && form.showroomDone) {
         try {
           await setStageStatus.mutateAsync({
             projectId: newId,
@@ -440,17 +442,19 @@ export default function ConvertInquiryDialog({
                 />
               </FieldGroup>
 
-              <FieldGroup
-                label="① PROPOSAL DEPOSIT (collected today)"
-                icon={Coins}
-              >
-                <NumberInput
-                  value={form.proposalDeposit}
-                  onChange={v => setForm({ ...form, proposalDeposit: v })}
-                  prefix="RM"
-                  hint="Booking fee for the design phase. Sets gate ① as collected."
-                />
-              </FieldGroup>
+              {!isReno && (
+                <FieldGroup
+                  label="① PROPOSAL DEPOSIT (collected today)"
+                  icon={Coins}
+                >
+                  <NumberInput
+                    value={form.proposalDeposit}
+                    onChange={v => setForm({ ...form, proposalDeposit: v })}
+                    prefix="RM"
+                    hint="Booking fee for the design phase. Sets gate ① as collected."
+                  />
+                </FieldGroup>
+              )}
 
               <FieldGroup label="SERVICE TYPE">
                 <div className="grid grid-cols-2 gap-2">
@@ -571,35 +575,38 @@ export default function ConvertInquiryDialog({
                 </button>
               </FieldGroup>
 
-              {/* Start-choice — has the showroom meet-up already happened? */}
-              <FieldGroup label="STARTING POINT">
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { done: false, label: "Start at New Inquiry" },
-                    { done: true, label: "Showroom meet-up done" },
-                  ].map(opt => {
-                    const active = form.showroomDone === opt.done;
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        onClick={() =>
-                          setForm({ ...form, showroomDone: opt.done })
-                        }
-                        className="rounded-xl px-3 py-2.5 text-xs font-label"
-                        style={{
-                          background: active ? "var(--acc)" : "var(--s-2)",
-                          color: active ? "oklch(1 0 0)" : "var(--t-3)",
-                          border: active ? "none" : "1px solid var(--b-strong)",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </FieldGroup>
+              {/* Start-choice — has the showroom meet-up already happened?
+                  Design-only; a Renovation convert opens at Renovation Contract. */}
+              {!isReno && (
+                <FieldGroup label="STARTING POINT">
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { done: false, label: "Start at New Inquiry" },
+                      { done: true, label: "Showroom meet-up done" },
+                    ].map(opt => {
+                      const active = form.showroomDone === opt.done;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onClick={() =>
+                            setForm({ ...form, showroomDone: opt.done })
+                          }
+                          className="rounded-xl px-3 py-2.5 text-xs font-label"
+                          style={{
+                            background: active ? "var(--acc)" : "var(--s-2)",
+                            color: active ? "oklch(1 0 0)" : "var(--t-3)",
+                            border: active ? "none" : "1px solid var(--b-strong)",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FieldGroup>
+              )}
 
               {/* Preview card */}
               <div
@@ -621,16 +628,22 @@ export default function ConvertInquiryDialog({
                   WHAT HAPPENS ON CONVERT
                 </p>
                 <Bullet text="A new project is created at status “Assigned”." />
-                <Bullet
-                  text={
-                    form.showroomDone
-                      ? "Lifecycle starts with Showroom Meet-up marked done; staff set the rest."
-                      : "Lifecycle starts at New Inquiry; staff set each stage's status."
-                  }
-                />
-                <Bullet
-                  text={`Gate ① Proposal Deposit (${formatRM(depositNum)}) marked collected today.`}
-                />
+                {isReno ? (
+                  <Bullet text="Lifecycle starts at Renovation Contract; staff set each stage's status." />
+                ) : (
+                  <Bullet
+                    text={
+                      form.showroomDone
+                        ? "Lifecycle starts with Showroom Meet-up marked done; staff set the rest."
+                        : "Lifecycle starts at New Inquiry; staff set each stage's status."
+                    }
+                  />
+                )}
+                {!isReno && (
+                  <Bullet
+                    text={`Gate ① Proposal Deposit (${formatRM(depositNum)}) marked collected today.`}
+                  />
+                )}
                 <Bullet
                   text={`Inquiry ${inquiry.id} flips to “Awarded” and links to the new project.`}
                 />
