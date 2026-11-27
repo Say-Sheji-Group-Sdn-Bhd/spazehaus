@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
   Search, Sparkles, TrendingUp, Users, Clock, ChevronDown, Trash2,
-  StickyNote, Loader2, MessageSquare, Phone, Mail, Hammer, UserRound,
+  StickyNote, Loader2, MessageSquare, Phone, Mail, Hammer, UserRound, Cake,
 } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import { usePagination } from "@/hooks/usePagination";
@@ -459,6 +459,14 @@ function ResultCard({
                         </a>
                       )}
                     </div>
+                    {row.date_of_birth && (
+                      <div className="flex items-center gap-2">
+                        <Cake size={13} style={{ color: "var(--t-6)" }} />
+                        <span className="text-xs" style={{ color: "var(--t-4)" }}>
+                          Date of birth: <b style={{ color: "var(--t-2)" }}>{formatDob(row.date_of_birth)}</b>
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <Hammer size={13} style={{ color: "var(--t-6)" }} />
                       <span className="text-xs" style={{ color: "var(--t-4)" }}>
@@ -761,6 +769,19 @@ function formatDuration(ms: number): string {
   const s = Math.round(ms / 1000);
   if (s < 60) return `${s}s`;
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+}
+
+/** A date-only value ('YYYY-MM-DD') as DD/MM/YYYY plus the current age. */
+function formatDob(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number) => String(n).padStart(2, "0");
+  const date = `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age >= 0 && age < 140 ? `${date} · age ${age}` : date;
 }
 
 /** Relative for the last day, then DD/MM/YYYY HH:mm — the Spazehaus convention. */
