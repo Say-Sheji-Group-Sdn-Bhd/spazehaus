@@ -1498,6 +1498,7 @@ export type Database = {
           answer_count: number
           answers: Json
           created_at: string
+          date_of_birth: string | null
           duration_ms: number | null
           email: string | null
           id: string
@@ -1526,6 +1527,7 @@ export type Database = {
           answer_count?: number
           answers?: Json
           created_at?: string
+          date_of_birth?: string | null
           duration_ms?: number | null
           email?: string | null
           id: string
@@ -1554,6 +1556,7 @@ export type Database = {
           answer_count?: number
           answers?: Json
           created_at?: string
+          date_of_birth?: string | null
           duration_ms?: number | null
           email?: string | null
           id?: string
